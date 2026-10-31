@@ -207,7 +207,7 @@ function runBotTurns() {
   for (const bot of players.values()) {
     if (!bot.isBot || bot.left || !bot.houseId) continue;
     const house = findHouse(bot.houseId);
-    if (!house || house.lockedUntilRound >= round || round === 1) continue;
+    if (!house || house.lockedUntilRound >= round) continue;
     const amount = Math.min(2, Math.floor(house.money / house.infantryCost));
     if (amount < 1) continue;
     house.money -= amount * house.infantryCost;
@@ -728,7 +728,7 @@ io.on('connection', socket => {
     if (!Number.isInteger(amount) || amount < 1 || amount > 10) return fail('Choose a whole number of units between 1 and 10.');
     if (!['infantry', 'navy'].includes(unit)) return fail('That unit type is not available.');
     const cost = unit === 'infantry' ? h.infantryCost : h.navyCost;
-    const total = round === 1 ? 0 : cost * amount;
+    const total = cost * amount;
     if (h.money < total) return fail(`This purchase costs ${total} gold, but your house has ${h.money}.`);
     h.money -= total;
     h[unit] += amount;
@@ -760,7 +760,7 @@ io.on('connection', socket => {
     if (!target || target.id === h.id) return fail('Choose another house as your target.');
     const spend = Number(payload.spend ?? 8);
     if (!Number.isInteger(spend) || spend < 2 || spend > 20) return fail('Spend between 2 and 20 gold on a spy mission.');
-    const spendCost = round === 1 ? 0 : spend;
+    const spendCost = spend;
     if (h.money < spendCost) return fail(`You chose to spend ${spend} gold, but your house only has ${h.money}.`);
     h.money -= spendCost;
     note(h, 'gold', -spendCost, `Spy mission against House ${target.name}`);

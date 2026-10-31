@@ -240,7 +240,7 @@
       const houseControl = own ? `<button class="lobby-banner-button ${lobbyCanChangeHouse ? '' : 'is-locked'}" type="button" data-action="edit-player" data-edit-kind="house" aria-label="Change your house"${lockAttr(lobbyCanChangeHouse ? '' : 'There are no other houses available right now.')}>${banner}</button>` : banner;
       const nameEdit = own ? '<button class="player-edit-name" type="button" data-action="edit-player" data-edit-kind="name" aria-label="Edit your name">✎</button>' : '';
       const botControls = p.isBot && state.isHost && state.phase === 'LOBBY' ? `<button class="player-edit-name" type="button" data-action="edit-bot" data-bot-id="${escapeHtml(p.id)}" aria-label="Edit ${escapeHtml(p.username)}">✎</button><button class="player-edit-name player-remove-bot" type="button" data-action="remove-bot" data-bot-id="${escapeHtml(p.id)}" aria-label="Remove ${escapeHtml(p.username)}">✕</button>` : '';
-      return `<div class="player-row ${p.left ? 'player-left' : ''} ${own ? 'player-row-own' : ''}" ${own && house?.color ? `style="--house-color:${escapeHtml(house.color)}"` : ''}><span class="online-dot ${p.connected && !p.left ? 'online' : ''} ${p.isBot ? 'bot-dot' : ''}"></span>${houseControl}<div class="player-row-info"><strong>${escapeHtml(p.username)}${p.isBot ? ' <em class="bot-tag">BOT</em>' : ''}${p.id === state.hostId ? ' <em class="host-tag">SERVER OWNER</em>' : ''}${nameEdit}${botControls}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'Joining · house not chosen'} · ${status}</small></div></div>`;
+      return `<div class="player-row ${p.left ? 'player-left' : ''} ${own ? 'player-row-own' : ''}" ${own && house?.color ? `style="--house-color:${escapeHtml(house.color)}"` : ''}><img class="player-icon ${p.isBot || (p.connected && !p.left && p.houseId) ? '' : 'player-away'}" src="./assets/ui-${p.isBot ? 'bot' : p.connected && !p.left && p.houseId ? 'player' : 'dead'}.png?v=1" alt="">${houseControl}<div class="player-row-info"><strong>${escapeHtml(p.username)}${p.isBot ? ' <em class="bot-tag">BOT</em>' : ''}${p.id === state.hostId ? ' <em class="host-tag">SERVER OWNER</em>' : ''}${nameEdit}${botControls}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'Joining · house not chosen'} · ${status}</small></div></div>`;
     }).join('') : '<p class="muted">The hall is quiet. Be the first to join.</p>';
     const canStart = state.isHost && state.phase === 'LOBBY';
     const hasBaratheon = state.players.some(p => p.connected && p.houseId === 'baratheon');
@@ -349,6 +349,26 @@
       el.dataset.capital = cap.id;
       el.style.setProperty('--cap-color', owner?.color || '#7d2a14');
       el.classList.toggle('is-contested', Boolean(cap.contested));
+      const idle = !owner || (owner.type === 'minor' && !(owner.players || []).some(p => !p.left));
+      el.classList.toggle('is-idle', idle);
+      if (idle) el.style.setProperty('--cap-color', '#8d8d8d');
+      const pos = !idle && owner ? HOUSE_SPRITE_POSITION[owner.id] : null;
+      const pop = el.querySelector('.cap-pop');
+      let flag = el.querySelector('.cap-banner');
+      if (pos && pop) {
+        const col = Math.round(parseFloat(pos[0]) / 33.333), row = pos[1] === '100%' ? 1 : 0;
+        if (!flag) {
+          const NS = 'http://www.w3.org/2000/svg';
+          flag = document.createElementNS(NS, 'g');
+          flag.setAttribute('class', 'cap-banner'); flag.setAttribute('transform', 'translate(-7.5 -22.5) scale(0.0457)');
+          const clip = document.createElementNS(NS, 'g'); clip.setAttribute('clip-path', 'url(#bannerClip)');
+          const img = document.createElementNS(NS, 'image');
+          img.setAttribute('href', './assets/house-banners.png'); img.setAttribute('width', '1312'); img.setAttribute('height', '760');
+          clip.appendChild(img); flag.appendChild(clip); pop.insertBefore(flag, pop.firstChild);
+        }
+        const flagImg = flag.querySelector('image');
+        flagImg.setAttribute('x', String(-col * 328)); flagImg.setAttribute('y', String(-row * 380));
+      } else if (flag) flag.remove();
       const sub = el.querySelector('.cap-sub');
       if (sub) sub.textContent = cap.contested ? 'Contested' : owner ? `House ${capName(owner.name)}` : '';
       el.classList.toggle('is-target', pickingTarget && state.myHouse && !warTargetProblem(cap));
@@ -426,7 +446,7 @@
       const o = spyOddsFor(spend, $('spyTarget').value, $('spyMission').value);
       $('spyOdds').textContent = `Success ${Math.round(o.success * 100)}% · caught if failed ${Math.round(o.caught * 100)}%`;
     } else $('spyOdds').textContent = 'Spend between 2 and 20 gold.';
-    lock($('spyForm').querySelector('button'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : state.round > 1 && house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
+    lock($('spyForm').querySelector('button'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
   }
   $('spyGold').addEventListener('input', updateSpyForm);
   $('spyMission').addEventListener('change', updateSpyForm);
@@ -449,7 +469,7 @@
     lock(button, state.phase !== 'ACTION' ? 'Recruiting is only possible during the action phase.'
       : house.lockedByEmbargo ? 'A royal embargo blocks your recruitment this round.'
       : !Number.isInteger(amount) || amount < 1 || amount > 10 ? 'Choose a whole number of units between 1 and 10.'
-      : state.round > 1 && cost * amount > house.money ? `That costs ${cost * amount} gold, but your house only has ${house.money}.` : '');
+      : cost * amount > house.money ? `That costs ${cost * amount} gold, but your house only has ${house.money}.` : '');
   }
 
   function renderRoundOverview() {
@@ -630,7 +650,19 @@
   }
 
   const HUBS = { money: ['YOUR TREASURY', 'Money', 'hubMoney'], relations: ['COURT & DIPLOMACY', 'Relations', 'hubRelations'], army: ['FORCES & WAR', 'Army', 'hubArmy'] };
-  function openHub(kind) {
+  const SUB_LABEL = { alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', recruit: 'Recruit & disband', spies: 'Spies', war: 'Go to war' };
+  let currentSub = null;
+  function showSub(name) {
+    currentSub = name || null;
+    const pane = currentHub ? $(HUBS[currentHub][2]) : null;
+    if (!pane) return;
+    pane.querySelectorAll('.sub-menu').forEach(menu => { menu.hidden = Boolean(currentSub); });
+    pane.querySelectorAll('.sub-page').forEach(page => { page.hidden = page.dataset.sub !== currentSub; });
+    $('hubTitle').textContent = HUBS[currentHub][1] + (currentSub ? ` · ${SUB_LABEL[currentSub]}` : '');
+    $('hubOverlay').querySelector('.hub-sheet-body').scrollTop = 0;
+    updateBadges();
+  }
+  function openHub(kind, sub = null) {
     const cfg = HUBS[kind];
     if (!cfg) return;
     $('hubEyebrow').textContent = cfg[0];
@@ -638,8 +670,7 @@
     for (const [key, value] of Object.entries(HUBS)) $(value[2]).hidden = key !== kind;
     currentHub = kind;
     $('hubOverlay').hidden = false;
-    $('hubOverlay').querySelector('.hub-sheet-body').scrollTop = 0;
-    updateBadges();
+    showSub(sub);
     document.body.classList.add('hub-open');
   }
   function closeHub() {
@@ -647,6 +678,7 @@
     markHubSeen(currentHub);
     $('hubOverlay').hidden = true;
     currentHub = null;
+    currentSub = null;
     document.body.classList.remove('hub-open');
     updateBadges();
   }
@@ -704,6 +736,7 @@
     $('relationsPhaseNote').textContent = diploOpen() ? '' : 'Alliances, treaties, decrees and war councils open during the action and court phases. Messages can be sent at any time.';
     // King's ledger
     $('kingTools').hidden = !state.isKing;
+    $('kingDecrees').hidden = !state.isKing;
     if (state.isKing) {
       const others = state.players.filter(p => !p.left && p.id !== state.me?.id);
       $('traitorList').innerHTML = others.length ? others.map(p => {
@@ -881,8 +914,7 @@
     const h = state?.myHouse;
     if (!h || !state.me || !kind) return;
     const n = noteLists();
-    if (kind === 'relations') { markSeen(seenNotes.offers, n.offers); markSeen(seenNotes.treaties, n.treaties); markSeen(seenNotes.decrees, n.decrees); markSeen(seenNotes.war, n.war); markSeen(seenNotes.pub, activeChatTab === 'public' ? n.pub : []); markSeen(seenNotes.sec, activeChatTab === 'secret' ? n.sec : []); }
-    if (kind === 'army') markSeen(seenNotes.battles, n.battles);
+    // Relations and army pages count as seen when you open them (see updateBadges), not when you close the menu.
     if (kind === 'money') seenNotes.gold = h.money;
   }
   function updateBadges() {
@@ -895,14 +927,21 @@
       seenNotes.ready = true;
     }
     // The chat tab you are reading counts as seen straight away.
-    if (currentHub === 'relations') markSeen(activeChatTab === 'public' ? seenNotes.pub : seenNotes.sec, activeChatTab === 'public' ? n.pub : n.sec);
+    if (currentHub === 'relations' && currentSub === 'messages') markSeen(activeChatTab === 'public' ? seenNotes.pub : seenNotes.sec, activeChatTab === 'public' ? n.pub : n.sec);
+    if (currentHub === 'relations' && currentSub === 'alliances') markSeen(seenNotes.offers, n.offers);
+    if (currentHub === 'relations' && currentSub === 'treaties') { markSeen(seenNotes.treaties, n.treaties); markSeen(seenNotes.decrees, n.decrees); }
+    if (currentHub === 'army' && currentSub === 'war') { markSeen(seenNotes.war, n.war); markSeen(seenNotes.battles, n.battles); }
     if (h.money < seenNotes.gold) seenNotes.gold = h.money;
     const count = (list, set) => list.filter(item => !set.has(item.id)).length;
     const unPub = count(n.pub, seenNotes.pub), unSec = count(n.sec, seenNotes.sec), unOffers = count(n.offers, seenNotes.offers), unTreaties = count(n.treaties, seenNotes.treaties), unDecrees = count(n.decrees, seenNotes.decrees), unWar = count(n.war, seenNotes.war), unBattles = count(n.battles, seenNotes.battles);
     const gain = Math.max(0, h.money - seenNotes.gold);
     const text = value => (value ? String(Math.min(value, 99)) : '');
-    setBadge('badgeRelations', text(unPub + unSec + unOffers + unTreaties + unDecrees + unWar));
-    setBadge('badgeArmy', text(unBattles));
+    setBadge('badgeRelations', text(unPub + unSec + unOffers + unTreaties + unDecrees));
+    setBadge('badgeArmy', text(unBattles + unWar));
+    setBadge('badgeSubAlliances', text(unOffers));
+    setBadge('badgeSubTreaties', text(unTreaties + unDecrees));
+    setBadge('badgeSubMessages', text(unPub + unSec));
+    setBadge('badgeSubWar', text(unWar + unBattles));
     setBadge('badgeMoney', gain ? `+${gain}` : '');
     setBadge('badgeTabPublic', text(unPub));
     setBadge('badgeTabSecret', text(unSec));
@@ -1326,13 +1365,15 @@
     if (action === 'remove-bot-dialog') { $('botEditDialog').close(); removeBot(editingBotId); return; }
     if (action === 'close-bot-dialog') { $('botEditDialog').close(); return; }
     if (action === 'open-hub') { openHub(button.dataset.hub); return; }
+    if (action === 'open-sub') { showSub(button.dataset.sub); return; }
+    if (action === 'sub-back') { showSub(null); return; }
     if (action === 'close-hub') { closeHub(); return; }
     if (action === 'close-announce') { closeAnnouncement(); return; }
     if (action === 'toggle-traitor') { emitAction('mark-traitor', { playerId: button.dataset.playerId, traitor: button.dataset.traitor === 'true' }); return; }
     if (action === 'toggle-ledger') { ledgerAll = !ledgerAll; renderHub(); return; }
     if (action === 'close-decree-popup') { $('decreeOverlay').hidden = true; return; }
     if (action === 'pick-target') { startPick(); return; }
-    if (action === 'go-to-war') { openHub('army'); startPick(); return; }
+    if (action === 'go-to-war') { openHub('army', 'war'); startPick(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
     if (action === 'close-map') { setMapOpen(false); return; }
     if (action === 'change-house') {

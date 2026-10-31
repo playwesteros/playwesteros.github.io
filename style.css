@@ -714,3 +714,19 @@ body.house-themed .footer { border-color: var(--line); }
 .hs-banner-art { border: 0; background-color: transparent; box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,.6)); border-radius: 0; }
 
 .return-actions { display:flex; gap:10px; justify-content:center; margin-top:14px; }
+
+.sub-menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.sub-menu[hidden], .sub-page[hidden] { display: none; }
+.sub-button { padding: 22px 16px; gap: 12px; }
+.sub-button img { width: clamp(52px, 6vw, 84px); }
+.sub-button h3 { font-size: clamp(15px, 1.7vw, 20px); }
+.sub-page > * + * { margin-top: 16px; }
+.sub-back { margin-bottom: 2px; }
+.unit-icon { width: 18px; height: 18px; margin-right: 8px; vertical-align: -4px; }
+.player-icon { width: 26px; height: 26px; flex: 0 0 auto; object-fit: contain; }
+.player-icon.player-away { opacity: .75; }
+.cap-banner { overflow: hidden; pointer-events: none; filter: drop-shadow(0 1px 1.5px rgba(30,15,5,.6)); }
+.map-cap.is-idle .cap-dot, .map-cap.is-idle:hover .cap-dot, .map-cap.is-idle:focus-visible .cap-dot, .map-cap.is-idle.is-active .cap-dot { fill: #8d8d8d; }
+.map-cap.is-idle .cap-ring, .map-cap.is-idle:hover .cap-ring, .map-cap.is-idle:focus-visible .cap-ring { stroke: #8d8d8d; }
+.map-cap.is-idle .cap-name, .map-cap.is-idle .cap-sub { fill: #6f6f6f; }
+@media (max-width: 700px) { .sub-menu { grid-template-columns: 1fr; } .sub-button { flex-direction: row; padding: 12px 14px; } .sub-button img { width: 48px; } }
