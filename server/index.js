@@ -466,6 +466,11 @@ io.on('connection', socket => {
     ack(callback, { ...ok('Joined the game.'), pin });
   });
 
+  socket.on('check-room', ({ pin: requestedPin } = {}, callback) => {
+    const pin = String(requestedPin || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+    ack(callback, gameRooms.has(pin) ? ok('Game found.') : fail('Game not found.'));
+  });
+
   socket.on('request-state', () => {
     const roomCode = socket.data.gameCode;
     if (!roomCode) return socket.emit('state', viewFor(null));

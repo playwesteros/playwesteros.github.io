@@ -712,3 +712,5 @@ body.house-themed .footer { border-color: var(--line); }
 .announce-card[data-tone="good"] h2 { color: var(--gold-bright); }
 
 .hs-banner-art { border: 0; background-color: transparent; box-shadow: none; filter: drop-shadow(0 1px 4px rgba(0,0,0,.6)); border-radius: 0; }
+
+.return-actions { display:flex; gap:10px; justify-content:center; margin-top:14px; }

@@ -12,7 +12,8 @@
   let showHostSetup = false;
   let changingLobbyHouse = false;
   let lobbyCanChangeHouse = false;
-  let gameCode = localStorage.getItem(roomCodeKey)?.toUpperCase() || '';
+  let gameCode = '';
+  let savedCode = localStorage.getItem(roomCodeKey)?.toUpperCase() || '';
   try { pickedHouse = JSON.parse(localStorage.getItem(pickedHouseKey) || 'null'); } catch { pickedHouse = null; }
   const hashHouse = /^#house=([a-z\-]{2,40})$/i.exec(location.hash);
   if (hashHouse) {
@@ -1072,8 +1073,35 @@
     setConnection(false, 'Socket.IO failed to load');
     $('loginError').textContent = 'The realtime client library did not load. Check your internet connection or CDN access.';
   } else {
+    const forgetSaved = () => { savedCode = ''; localStorage.removeItem(roomCodeKey); localStorage.removeItem(usernameKey); };
+    const offerReturn = () => {
+      if (!savedCode || gameCode) return;
+      const code = savedCode;
+      let answered = false;
+      socket.emit('check-room', { pin: code }, result => {
+        answered = true;
+        if (!result?.ok) return forgetSaved();
+        $('returnCode').textContent = code;
+        $('returnOverlay').hidden = false;
+      });
+      setTimeout(() => { if (!answered) forgetSaved(); }, 4000);
+    };
+    $('returnYes').addEventListener('click', () => {
+      $('returnOverlay').hidden = true;
+      gameCode = savedCode; savedCode = '';
+      setThronePage('house');
+      if (socket.connected) socket.emit('join-game-room', { pin: gameCode, clientToken }, result => {
+        if (!result?.ok) { gameCode = ''; forgetSaved(); setThronePage('entry'); render(); showToast(result?.message || 'That game is no longer available.', 'error'); return; }
+        socket.emit('request-state');
+        const savedName = localStorage.getItem(usernameKey);
+        if (savedName) socket.emit('login', { username: savedName, clientToken }, r => { if (!r?.ok) showToast(r?.message || 'Could not restore your session.', 'error'); });
+      });
+      render();
+    });
+    $('returnNo').addEventListener('click', () => { $('returnOverlay').hidden = true; forgetSaved(); });
     socket.on('connect', () => {
       setConnection(true, 'Connected to server');
+      if (!gameCode) offerReturn();
       const restoreSession = () => {
         socket.emit('request-state');
         const savedName = gameCode ? localStorage.getItem(usernameKey) : null;

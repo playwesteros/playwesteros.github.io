@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="./style.css?v=36">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=38" defer></script>
+  <script src="./app.js?v=39" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -39,7 +39,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v1.7.0</span>
+  <span id="gameVersion" class="version-tag" hidden>v1.7.1</span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -357,6 +357,13 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </main>
+  <div id="returnOverlay" class="announce-overlay" role="alertdialog" aria-labelledby="returnTitle" hidden>
+    <div class="announce-card decree-pop">
+      <h2 id="returnTitle">Return to your game?</h2>
+      <p>Game <b id="returnCode"></b> is still running.</p>
+      <div class="return-actions"><button type="button" id="returnYes" class="button button-primary">Return</button><button type="button" id="returnNo" class="button button-secondary">Main menu</button></div>
+    </div>
+  </div>
   <div id="decreeOverlay" class="announce-overlay" role="alertdialog" aria-labelledby="decreePopTitle" hidden>
     <div id="decreePop" class="announce-card decree-pop"></div>
   </div>
