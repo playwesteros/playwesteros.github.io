@@ -127,6 +127,8 @@
   }
 
   function setConnection(connected, label) {
+    const dot = $('serverDot');
+    if (dot) { dot.classList.toggle('is-on', connected); dot.classList.toggle('is-off', !connected); dot.title = dot.ariaLabel = `Server ${connected ? 'connected' : 'offline'}`; }
     const pill = $('connectionPill');
     if (!pill) return;
     pill.className = `status-pill ${connected ? 'status-online' : 'status-offline'}`;

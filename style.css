@@ -793,3 +793,6 @@ body.house-themed .footer { border-color: var(--line); }
 #dragonSetup { display: grid; gap: 6px; }
 #dragonSetup[hidden] { display: none; }
 #dragonRoundsInput { width: 100%; padding: 10px 12px; border: 1px solid var(--line, #3a3d44); border-radius: 6px; background: #14161a; color: var(--text); font: inherit; }
+
+.server-dot { display: inline-block; width: 5px; height: 5px; margin-left: 5px; border-radius: 50%; vertical-align: 1px; background: #d0453a; box-shadow: 0 0 4px #d0453a; }
+.server-dot.is-on { background: #4cc272; box-shadow: 0 0 4px #4cc272; }
