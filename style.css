@@ -777,3 +777,17 @@ body.house-themed .footer { border-color: var(--line); }
 .header-pin { margin-inline: auto; }
 .header-pin { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0; }
 @media (max-width: 760px) { .header-pin { position: static; transform: none; margin-inline: auto; } }
+
+/* House dropdowns */
+.hdrop-native { display: none !important; }
+.hdrop { position: relative; }
+.hdrop-btn { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 12px; border: 1px solid var(--line-bright); border-left-width: 4px; border-radius: 8px; background: #101318; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.hdrop-btn::after { content: '▾'; margin-left: auto; color: var(--muted); }
+.hdrop.has-house .hdrop-btn { border-color: var(--house-color); background: color-mix(in srgb, var(--house-color) 14%, #101318); box-shadow: 0 0 0 1px color-mix(in srgb, var(--house-color) 55%, transparent); }
+.hdrop-btn:disabled { opacity: .5; cursor: not-allowed; }
+.hdrop-list { display: none; position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px); max-height: 300px; overflow-y: auto; padding: 4px; border: 1px solid var(--line-bright); border-radius: 9px; background: #14171d; box-shadow: 0 14px 34px #000c; }
+.hdrop.open .hdrop-list { display: block; }
+.hdrop-item { display: flex; align-items: center; gap: 10px; margin: 2px 0; padding: 6px 10px; border-left: 4px solid var(--house-color, #888); border-radius: 6px; background: color-mix(in srgb, var(--house-color, #888) 10%, transparent); cursor: pointer; }
+.hdrop-item:hover, .hdrop-item.sel { background: color-mix(in srgb, var(--house-color, #888) 30%, #14171d); }
+.hdrop-item[data-disabled] { opacity: .45; cursor: default; }
+.hdrop-item .msg-banner, .hdrop-btn .msg-banner { width: 24px; height: 29px; flex-basis: 24px; }

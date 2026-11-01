@@ -271,7 +271,7 @@
       return `<option value="${escapeHtml(player.id)}">${escapeHtml(player.username)}${playerHouse ? ` · House ${escapeHtml(playerHouse.name)}` : ''}${player.connected ? '' : ' · reconnecting'}</option>`;
     }).join('');
     $('handPlayerSelect').disabled = !candidates.length;
-    lock($('handSelectionForm').querySelector('button'), 'Choose a player to appoint first.');
+    lock($('handSelectionForm').querySelector('button[type="submit"]'), 'Choose a player to appoint first.');
   }
 
   function renderVotePanel() {
@@ -283,7 +283,7 @@
     candidateSelect.disabled = !state.me || state.me.vote !== null || state.voteCandidates.length === 0;
     $('voteProgress').textContent = `${state.votesCast}/${state.voteTotal} votes cast`;
     $('voteStatus').textContent = state.me?.vote ? `Your vote has been recorded for ${escapeHtml(playerName(state.me.vote))}.` : state.runoff ? 'Runoff election: only the tied candidates can receive votes.' : 'Your vote is private until the election closes.';
-    lock($('voteForm').querySelector('button'), candidateSelect.disabled ? (state.me?.vote ? 'Your vote has already been cast.' : 'There is no candidate to vote for yet.') : '');
+    lock($('voteForm').querySelector('button[type="submit"]'), candidateSelect.disabled ? (state.me?.vote ? 'Your vote has already been cast.' : 'There is no candidate to vote for yet.') : '');
   }
 
   // ---- War: the target is chosen on the map ----
@@ -446,7 +446,7 @@
       const o = spyOddsFor(spend, $('spyTarget').value, $('spyMission').value);
       $('spyOdds').textContent = `Success ${Math.round(o.success * 100)}% · caught if failed ${Math.round(o.caught * 100)}%`;
     } else $('spyOdds').textContent = 'Spend between 2 and 20 gold.';
-    lock($('spyForm').querySelector('button'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
+    lock($('spyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
   }
   $('spyGold').addEventListener('input', updateSpyForm);
   $('spyMission').addEventListener('change', updateSpyForm);
@@ -456,10 +456,10 @@
     const house = state?.myHouse;
     if (!house) return;
     const unit = $('disbandUnit').value, amount = Number($('disbandAmount').value);
-    lock($('disbandForm').querySelector('button'), state.phase !== 'ACTION' ? 'Units can be disbanded during the action phase.' : !Number.isInteger(amount) || amount < 1 ? 'Choose how many units to disband.' : amount > house[unit] ? `You only have ${house[unit]} ${unit === 'navy' ? 'ships' : unit}.` : '');
+    lock($('disbandForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Units can be disbanded during the action phase.' : !Number.isInteger(amount) || amount < 1 ? 'Choose how many units to disband.' : amount > house[unit] ? `You only have ${house[unit]} ${unit === 'navy' ? 'ships' : unit}.` : '');
   }
   function updateRecruitButton() {
-    const button = $('recruitForm')?.querySelector('button');
+    const button = $('recruitForm')?.querySelector('button[type="submit"]');
     if (!button) return;
     const house = state?.myHouse;
     if (!house) return lock(button, 'Choose a house first.');
@@ -565,11 +565,11 @@
     const handHouseId = state.hand ? state.players.find(p => p.id === state.hand.id)?.houseId : null;
     $('decreeTarget').innerHTML = '<option value="">All houses</option>' + withPlayers.filter(h => h.id !== handHouseId).map(h => `<option value="${escapeHtml(h.id)}">House ${escapeHtml(capName(h.name))}</option>`).join('');
     const closedMsg = 'Diplomacy is open during the action and court phases.';
-    lock($('allianceForm').querySelector('button'), !mine ? 'Choose a house first.' : !open ? closedMsg : !withPlayers.length ? 'No other house has a player yet.' : !proposable.length ? 'Every house with a player is already your ally or has a pending offer.' : '');
-    lock($('treatyForm').querySelector('button'), !mine ? 'Choose a house first.' : !open ? closedMsg : !withPlayers.length ? 'No other house has a player yet.' : '');
+    lock($('allianceForm').querySelector('button[type="submit"]'), !mine ? 'Choose a house first.' : !open ? closedMsg : !withPlayers.length ? 'No other house has a player yet.' : !proposable.length ? 'Every house with a player is already your ally or has a pending offer.' : '');
+    lock($('treatyForm').querySelector('button[type="submit"]'), !mine ? 'Choose a house first.' : !open ? closedMsg : !withPlayers.length ? 'No other house has a player yet.' : '');
     // Decrees exist only for the king.
     $('decreeForm').hidden = !state.isKing;
-    lock($('decreeForm').querySelector('button'), !state.isKing ? '' : !open ? closedMsg : mine?.commandUsedRound === state.round ? 'You have already issued a decree this round.' : '');
+    lock($('decreeForm').querySelector('button[type="submit"]'), !state.isKing ? '' : !open ? closedMsg : mine?.commandUsedRound === state.round ? 'You have already issued a decree this round.' : '');
     const incoming = (state.decrees || []).filter(d => !d.isIssuer && d.myState);
     $('kingBadge').textContent = state.king ? `King: ${state.king.username}` : 'No king';
 
@@ -611,7 +611,7 @@
   }
 
   const selectedRecipients = new Set();
-  const chatOthers = () => (state?.players || []).filter(p => !p.left && !p.isBot && p.id !== state.me?.id);
+  const chatOthers = () => (state?.players || []).filter(p => !p.left && !p.isBot && p.id !== state.me?.id).sort((x, y) => houseIndex(x.houseId) - houseIndex(y.houseId));
 
   function messageMarkup(messages, isPrivate = false) {
     const myId = state.me?.id;
@@ -646,7 +646,7 @@
       }).join('')}`
       : '<p class="muted small-text">No other players are at court yet.</p>';
     $('chatMessage').disabled = !state.myHouse;
-    lock($('chatForm').querySelector('button'), state.myHouse ? '' : 'Choose a house before you speak at court.');
+    lock($('chatForm').querySelector('button[type="submit"]'), state.myHouse ? '' : 'Choose a house before you speak at court.');
     $('chatMessage').placeholder = isPrivate ? 'Whisper to the chosen players…' : 'Speak before the court…';
   }
 
@@ -747,14 +747,14 @@
       const keep = $('newHandSelect').value;
       $('newHandSelect').innerHTML = state.players.filter(p => !p.left && p.id !== state.me?.id).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.username)}${p.id === state.hand?.id ? ' (current Hand)' : ''}</option>`).join('');
       if (keep) $('newHandSelect').value = keep;
-      lock($('newHandForm').querySelector('button'), !diploOpen() ? 'A new Hand can be named during the action and court phases.' : !$('newHandSelect').value ? 'There is no one else at court.' : $('newHandSelect').value === state.hand?.id ? 'That player is already the Hand.' : '');
+      lock($('newHandForm').querySelector('button[type="submit"]'), !diploOpen() ? 'A new Hand can be named during the action and court phases.' : !$('newHandSelect').value ? 'There is no one else at court.' : $('newHandSelect').value === state.hand?.id ? 'That player is already the Hand.' : '');
     }
     if (state.isHand) {
       const all = state.decrees || [];
       $('handLedger').innerHTML = all.length ? all.map(d => `<article class="tax-entry"><strong>Round ${d.round} · King ${escapeHtml(d.kingName)}${d.message ? ` · “${escapeHtml(d.message)}”` : ''}</strong>${(d.gold || d.infantry || d.navy) ? `<div class="tax-row"><span>Demanded</span><span>${[d.gold && `${d.gold} gold`, d.infantry && `${d.infantry} infantry`, d.navy && `${d.navy} ships`].filter(Boolean).join(' · ')}</span></div>` : ''}${(d.recipients || []).map(x => `<div class="tax-row"><span class="row-who">${bannerOf(x.houseId)}House ${escapeHtml(capName(prettyHouse(x.houseId)))}</span><span class="${x.state === 'sent' ? 'tax-paid' : x.state === 'noted' ? 'tax-none' : 'tax-short'}">${x.state === 'sent' ? `Paid${[d.gold && ` ${d.gold} gold`, d.infantry && ` ${d.infantry} infantry`, d.navy && ` ${d.navy} ships`].filter(Boolean).join(',')}` : x.state === 'noted' ? 'Delivered' : 'Not yet paid'}</span></div>`).join('')}</article>`).join('') : '<p class="muted small-text">The king has issued no decrees yet.</p>';
     }
     if (state.isKing) {
-      const others = state.players.filter(p => !p.left && p.id !== state.me?.id);
+      const others = state.players.filter(p => !p.left && p.id !== state.me?.id).sort((x, y) => houseIndex(x.houseId) - houseIndex(y.houseId));
       $('traitorList').innerHTML = others.length ? others.map(p => {
         const house = state.houses.find(item => item.id === p.houseId);
         return `<div class="alliance-row house-row" style="--house-color:${escapeHtml(house?.color || '#888')}"><div class="row-who">${houseBanner(house, 'msg-banner')}<div><strong>${escapeHtml(p.username)}${p.traitor ? ' <em class="traitor-tag">TRAITOR</em>' : ''}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'No house'}</small></div></div><button class="button ${p.traitor ? 'button-quiet' : 'button-danger'} button-small" type="button" data-action="toggle-traitor" data-player-id="${escapeHtml(p.id)}" data-traitor="${p.traitor ? 'false' : 'true'}">${p.traitor ? 'Pardon' : 'Label traitor'}</button></div>`;
@@ -1099,25 +1099,44 @@
     setTimeout(showNextAnnouncement, 350);
   }
 
-  const BANNER_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget', 'newHandSelect', 'handPlayerSelect'];
+  // House dropdowns: the real <select> stays hidden (value + change events), a custom list shows each house's banner and colour, ordered by house.
+  const HOUSE_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget', 'newHandSelect', 'handPlayerSelect'];
+  const houseIndex = id => { const i = (state?.houses || []).findIndex(h => h.id === id); return i < 0 ? 99 : i; };
+  const houseOfValue = value => {
+    const house = state.houses.find(x => x.id === value);
+    if (house) return house;
+    const player = state.players.find(x => x.id === value);
+    return player ? state.houses.find(x => x.id === player.houseId) || null : null;
+  };
+  function closeHouseDrops(except) { document.querySelectorAll('.hdrop.open').forEach(d => { if (d !== except) d.classList.remove('open'); }); }
+  document.addEventListener('click', event => { if (!event.target.closest('.hdrop')) closeHouseDrops(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeHouseDrops(); });
   function updateSelectBanners() {
-    for (const id of BANNER_SELECTS) {
+    if (!state?.houses) return;
+    for (const id of HOUSE_SELECTS) {
       const sel = $(id); if (!sel) continue;
-      let slot = sel.previousElementSibling?.classList?.contains('select-banner') ? sel.previousElementSibling : null;
-      if (!slot) {
-        const wrap = document.createElement('div'); wrap.className = 'select-row';
-        slot = document.createElement('span'); slot.className = 'select-banner';
-        sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(slot); wrap.appendChild(sel);
-        sel.addEventListener('change', updateSelectBanners);
-        slot = wrap.firstChild;
+      let dd = sel.nextElementSibling?.classList?.contains('hdrop') ? sel.nextElementSibling : null;
+      if (!dd) {
+        dd = document.createElement('div'); dd.className = 'hdrop';
+        dd.innerHTML = '<button type="button" class="hdrop-btn" aria-haspopup="listbox"></button><div class="hdrop-list" role="listbox"></div>';
+        sel.classList.add('hdrop-native'); sel.after(dd);
+        dd.querySelector('.hdrop-btn').addEventListener('click', () => { if (sel.disabled) return; const open = !dd.classList.contains('open'); closeHouseDrops(dd); dd.classList.toggle('open', open); });
+        dd.querySelector('.hdrop-list').addEventListener('click', event => {
+          const item = event.target.closest('.hdrop-item'); if (!item || item.dataset.disabled) return;
+          sel.value = item.dataset.value; sel.dispatchEvent(new Event('change', { bubbles: true })); dd.classList.remove('open'); updateSelectBanners();
+        });
       }
-      const pl = state.players?.find(p => p.id === sel.value);
-      const houseId = pl ? pl.houseId : sel.value;
-      const house = state.houses?.find(h => h.id === houseId);
-      slot.innerHTML = house ? bannerOf(house.id) : '';
-      const wrap = slot.parentNode;
-      wrap.classList.toggle('has-house', Boolean(house));
-      if (house) wrap.style.setProperty('--house-color', house.color || '#c8a86c');
+      const items = [...sel.options].map(o => ({ o, house: houseOfValue(o.value) }));
+      items.sort((x, y) => (x.house ? 1 : 0) - (y.house ? 1 : 0) || (x.house ? houseIndex(x.house.id) - houseIndex(y.house.id) : 0));
+      const row = ({ o, house }) => `${house ? houseBanner(house, 'msg-banner') : ''}<span>${escapeHtml(o.textContent)}</span>`;
+      const cur = sel.selectedOptions[0];
+      const curHouse = cur ? houseOfValue(cur.value) : null;
+      const btn = dd.querySelector('.hdrop-btn');
+      btn.innerHTML = cur ? row({ o: cur, house: curHouse }) : '<span class="muted">—</span>';
+      btn.disabled = sel.disabled;
+      dd.style.setProperty('--house-color', curHouse?.color || '');
+      dd.classList.toggle('has-house', Boolean(curHouse));
+      dd.querySelector('.hdrop-list').innerHTML = items.map(it => `<div class="hdrop-item ${it.o.value === sel.value ? 'sel' : ''}" role="option" data-value="${escapeHtml(it.o.value)}"${it.o.disabled ? ' data-disabled="1"' : ''} style="--house-color:${escapeHtml(it.house?.color || '#888')}">${row(it)}</div>`).join('');
     }
   }
   function render() {
@@ -1339,7 +1358,7 @@
     emitAction('appoint-hand', { playerId: $('handPlayerSelect').value });
   });
   $('handPlayerSelect').addEventListener('change', event => {
-    lock($('handSelectionForm').querySelector('button'), event.target.value ? '' : 'Choose a player to appoint first.');
+    lock($('handSelectionForm').querySelector('button[type="submit"]'), event.target.value ? '' : 'Choose a player to appoint first.');
   });
   $('lobbyNameForm').addEventListener('submit', event => {
     event.preventDefault();
