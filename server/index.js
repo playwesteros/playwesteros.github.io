@@ -308,7 +308,7 @@ function viewFor(playerId) {
     notices: myHouse ? notices.filter(n => n.playerIds.includes(me.id) || n.houseIds.includes(myHouse.id)).slice(0, 30).map(n => ({ id: n.id, round: n.round, kind: n.kind, title: n.title, text: n.text, banners: [...n.banners] })) : [],
     decrees: myHouse ? taxLedger.filter(d => d.kingPlayerId === me.id || me.id === handPlayerId || d.recipients.some(r => r.houseId === myHouse.id)).slice(0, 20).map(d => {
       const issuer = d.kingPlayerId === me.id;
-      return { id: d.id, round: d.round, kingName: d.kingName, kingHouseId: d.kingHouseId, message: d.message, gold: d.gold, infantry: d.infantry, navy: d.navy, isIssuer: issuer, myState: d.recipients.find(r => r.houseId === myHouse.id)?.state || null, recipients: issuer || me.id === handPlayerId ? d.recipients.map(r => ({ ...r })) : undefined };
+      return { id: d.id, round: d.round, kingName: d.kingName, kingHouseId: d.kingHouseId, message: d.message, gold: d.gold, infantry: d.infantry, navy: d.navy, isIssuer: issuer, myState: d.recipients.find(r => r.houseId === myHouse.id)?.state || null, recipients: me.id === handPlayerId ? d.recipients.map(r => ({ ...r })) : undefined };
     }) : [],
     capitals: capitals.map(c => ({ ...c })),
     minorHousesUnlocked: Number(gameSettings.maxPlayers) >= 7,
@@ -953,8 +953,9 @@ io.on('connection', socket => {
     const message = String(payload.message || '').trim().slice(0, 300);
     if (!message && gold + infantry + navy === 0) return fail('Write a decree or name a demand.');
     const wanted = Array.isArray(payload.targetHouseIds) ? payload.targetHouseIds.map(String) : [];
-    const targets = houses.filter(x => x.id !== h.id && houseMembers(x.id).length && (!wanted.length || wanted.includes(x.id)));
-    if (!targets.length) return fail('No other house has a player to receive the decree.');
+    const handHouseId = handPlayerId ? players.get(handPlayerId)?.houseId : null;
+    const targets = houses.filter(x => x.id !== h.id && x.id !== handHouseId && houseMembers(x.id).length && (!wanted.length || wanted.includes(x.id)));
+    if (!targets.length) return fail(wanted.length && wanted.every(id => id === handHouseId) ? 'The Hand’s house does not pay decrees.' : 'No other house has a player to receive the decree.');
     taxLedger.unshift({ id: randomUUID(), round, kingPlayerId: player.id, kingName: player.username, kingHouseId: h.id, message, gold, infantry, navy, recipients: targets.map(x => ({ houseId: x.id, state: gold + infantry + navy === 0 ? 'noted' : 'pending' })) });
     if (taxLedger.length > 20) taxLedger.length = 20;
     h.commandUsedRound = round;

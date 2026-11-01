@@ -779,3 +779,9 @@ body.house-themed .footer { border-color: var(--line); }
 .select-banner:empty { display: none; }
 .select-banner .msg-banner { width: 26px; height: 30px; }
 .money-grid, .money-card { margin-top: 0; }
+
+.player-icon.name-icon { width: 13px; height: 13px; margin: 0 0 0 6px; vertical-align: -2px; }
+
+.header-pin { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid color-mix(in srgb, var(--gold-bright) 35%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--gold) 8%, transparent); color: var(--gold); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+.header-pin[hidden] { display: none; }
+.header-pin strong { color: var(--gold-bright); font: 700 15px Cinzel, Georgia, serif; letter-spacing: .18em; }

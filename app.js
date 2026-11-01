@@ -221,8 +221,6 @@
 
   function renderWaitingRoom() {
     if (!state?.me) return;
-    $('lobbyRoomPin').textContent = gameCode || '——';
-    $('hostRoomPin').textContent = gameCode || '——';
     const activePlayers = state.players.filter(player => !player.left);
     $('lobbyCount').textContent = `${activePlayers.length} player${activePlayers.length === 1 ? '' : 's'}`;
     const setup = state.settings || { maxPlayers: 16, gameType: 'CLASSIC' };
@@ -241,7 +239,7 @@
       const nameEdit = own ? '<button class="player-edit-name" type="button" data-action="edit-player" data-edit-kind="name" aria-label="Edit your name">✎</button>' : '';
       const kickControl = !p.isBot && state.isHost && state.phase === 'LOBBY' && !own && p.id !== state.hostId ? `<button class="player-edit-name player-remove-bot" type="button" data-action="kick-player" data-player-id="${escapeHtml(p.id)}" aria-label="Remove ${escapeHtml(p.username)}">✕</button>` : '';
       const botControls = p.isBot && state.isHost && state.phase === 'LOBBY' ? `<button class="player-edit-name" type="button" data-action="edit-bot" data-bot-id="${escapeHtml(p.id)}" aria-label="Edit ${escapeHtml(p.username)}">✎</button><button class="player-edit-name player-remove-bot" type="button" data-action="remove-bot" data-bot-id="${escapeHtml(p.id)}" aria-label="Remove ${escapeHtml(p.username)}">✕</button>` : '';
-      return `<div class="player-row ${p.left ? 'player-left' : ''} ${own ? 'player-row-own' : ''}" ${own && house?.color ? `style="--house-color:${escapeHtml(house.color)}"` : ''}>${houseControl}<div class="player-row-info"><strong><img class="player-icon name-icon ${p.isBot || (p.connected && !p.left && p.houseId) ? '' : 'player-away'}" src="./assets/ui-${p.isBot ? 'bot' : p.connected && !p.left && p.houseId ? 'player' : 'dead'}.png?v=2" alt="">${escapeHtml(p.username)}${p.id === state.hostId ? ' <em class="host-tag">SERVER OWNER</em>' : ''}${nameEdit}${botControls}${kickControl}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'Joining · house not chosen'} · ${status}</small></div></div>`;
+      return `<div class="player-row ${p.left ? 'player-left' : ''} ${own ? 'player-row-own' : ''}" ${own && house?.color ? `style="--house-color:${escapeHtml(house.color)}"` : ''}>${houseControl}<div class="player-row-info"><strong>${escapeHtml(p.username)}<img class="player-icon name-icon ${p.isBot || (p.connected && !p.left && p.houseId) ? '' : 'player-away'}" src="./assets/ui-${p.isBot ? 'bot' : p.connected && !p.left && p.houseId ? 'player' : 'dead'}.png?v=2" alt="">${p.id === state.hostId ? ' <em class="host-tag">SERVER OWNER</em>' : ''}${nameEdit}${botControls}${kickControl}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'Joining · house not chosen'} · ${status}</small></div></div>`;
     }).join('') : '<p class="muted">The hall is quiet. Be the first to join.</p>';
     const canStart = state.isHost && state.phase === 'LOBBY';
     const hasBaratheon = state.players.some(p => p.connected && p.houseId === 'baratheon');
@@ -397,6 +395,7 @@
 
   function renderRoundActions() {
     const house = state.myHouse;
+    if (!house) return;
     $('infantryCostLabel').textContent = house.infantryCost;
     $('navyCostLabel').textContent = house.navyCost;
     $('spyTarget').innerHTML = state.houses.filter(h => h.id !== house.id).map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
@@ -563,7 +562,8 @@
     const proposable = withPlayers.filter(h => !allied.has(h.id) && !offers.some(o => (o.fromHouseId === myId && o.toHouseId === h.id) || (o.fromHouseId === h.id && o.toHouseId === myId)));
     $('allianceTarget').innerHTML = proposable.map(h => `<option value="${escapeHtml(h.id)}">House ${escapeHtml(capName(h.name))}</option>`).join('');
     $('treatyTarget').innerHTML = withPlayers.map(h => `<option value="${escapeHtml(h.id)}">House ${escapeHtml(capName(h.name))}${allied.has(h.id) ? ' · ally' : ''}</option>`).join('');
-    $('decreeTarget').innerHTML = '<option value="">All houses</option>' + withPlayers.map(h => `<option value="${escapeHtml(h.id)}">House ${escapeHtml(capName(h.name))}</option>`).join('');
+    const handHouseId = state.hand ? state.players.find(p => p.id === state.hand.id)?.houseId : null;
+    $('decreeTarget').innerHTML = '<option value="">All houses</option>' + withPlayers.filter(h => h.id !== handHouseId).map(h => `<option value="${escapeHtml(h.id)}">House ${escapeHtml(capName(h.name))}</option>`).join('');
     const closedMsg = 'Diplomacy is open during the action and court phases.';
     lock($('allianceForm').querySelector('button'), !mine ? 'Choose a house first.' : !open ? closedMsg : !withPlayers.length ? 'No other house has a player yet.' : !proposable.length ? 'Every house with a player is already your ally or has a pending offer.' : '');
     lock($('treatyForm').querySelector('button'), !mine ? 'Choose a house first.' : !open ? closedMsg : !withPlayers.length ? 'No other house has a player yet.' : '');
@@ -760,7 +760,7 @@
         return `<div class="alliance-row"><div><strong>${escapeHtml(p.username)}${p.traitor ? ' <em class="traitor-tag">TRAITOR</em>' : ''}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'No house'}</small></div><button class="button ${p.traitor ? 'button-quiet' : 'button-danger'} button-small" type="button" data-action="toggle-traitor" data-player-id="${escapeHtml(p.id)}" data-traitor="${p.traitor ? 'false' : 'true'}">${p.traitor ? 'Pardon' : 'Label traitor'}</button></div>`;
       }).join('') : '<p class="muted small-text">There is no one else at court.</p>';
       const issued = (state.decrees || []).filter(d => d.isIssuer);
-      $('taxLedger').innerHTML = issued.length ? issued.map(d => `<article class="tax-entry"><strong>Round ${d.round}${d.message ? ` · “${escapeHtml(d.message)}”` : ''}</strong>${(d.gold || d.infantry || d.navy) ? `<div class="tax-row"><span>Demanded</span><span>${[d.gold && `${d.gold} gold`, d.infantry && `${d.infantry} infantry`, d.navy && `${d.navy} ships`].filter(Boolean).join(' · ')}</span></div>` : ''}${d.recipients.map(x => `<div class="tax-row"><span class="row-who">${bannerOf(x.houseId)}House ${escapeHtml(capName(prettyHouse(x.houseId)))}</span><span class="${x.state === 'sent' ? 'tax-paid' : x.state === 'noted' ? 'tax-none' : 'tax-short'}">${x.state === 'sent' ? 'Paid' : x.state === 'noted' ? 'Delivered' : 'Not yet paid'}</span></div>`).join('')}</article>`).join('') : '<p class="muted small-text">You have issued no decrees yet. Open the Relations menu and seal one.</p>';
+      $('taxLedger').innerHTML = issued.length ? issued.map(d => `<article class="tax-entry"><strong>Round ${d.round}${d.message ? ` · “${escapeHtml(d.message)}”` : ''}</strong>${(d.gold || d.infantry || d.navy) ? `<div class="tax-row"><span>Demanded</span><span>${[d.gold && `${d.gold} gold`, d.infantry && `${d.infantry} infantry`, d.navy && `${d.navy} ships`].filter(Boolean).join(' · ')}</span></div>` : ''}<small class="muted">Only the Hand sees who has paid.</small></article>`).join('') : '<p class="muted small-text">You have issued no decrees yet. Open the Relations menu and seal one.</p>';
     }
   }
 
@@ -807,10 +807,11 @@
     $('buildLabel').hidden = inGame;
     $('gameVersion').hidden = inGame;
     $('headerStats').hidden = !inGame;
+    $('headerPin').hidden = !waiting;
+    if (waiting) $('headerPinCode').textContent = gameCode || '——';
     document.body.classList.toggle('in-game', inGame);
     document.body.classList.toggle('throne-open', showThrone);
     if (hostSetup) {
-      $('hostRoomPin').textContent = gameCode || '——';
       const maxSelect = $('maxPlayersInput');
       if (!maxSelect.options.length) maxSelect.innerHTML = Array.from({ length: 15 }, (_, i) => i + 2).map(n => `<option value="${n}">${n} players</option>`).join('');
       maxSelect.value = String(state?.settings?.maxPlayers || 4);

@@ -13,10 +13,10 @@
   <meta name="description" content="A temporary multiplayer Great Houses strategy game prototype.">
   <title>War of Westeros — Multiplayer Strategy</title>
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=1">
-  <link rel="stylesheet" href="./style.css?v=39">
+  <link rel="stylesheet" href="./style.css?v=41">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=44" defer></script>
+  <script src="./app.js?v=47" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -35,11 +35,12 @@
       <span id="roundHandBadge" class="hs-item hs-role" title="You are the Hand of the King" hidden><img src="./assets/game-hand.png?v=2" alt="You are the Hand of the King"></span>
     </div>
     <div class="topbar-right">
+      <span id="headerPin" class="header-pin" title="Share this PIN with your players" hidden>Room PIN <strong id="headerPinCode">——</strong></span>
       <span id="connectionPill" class="status-pill status-offline"><i></i><span>Connecting</span></span>
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.0.2</span>
+  <span id="gameVersion" class="version-tag" hidden>v2.0.4</span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -51,7 +52,6 @@
       <p class="eyebrow">HOST ONLY · MATCH SETUP</p>
       <h1>Prepare the game</h1>
       <p class="muted">Choose how many players may join and which game type to use before opening the hall.</p>
-      <p class="room-pin-line">Room PIN <strong id="hostRoomPin">——</strong><span>Share this with your players.</span></p>
       <form id="hostSetupForm" class="host-setup-form">
         <label for="maxPlayersInput">Player limit</label>
         <select id="maxPlayersInput" name="maxPlayers" required></select>
@@ -93,7 +93,6 @@
       <p class="eyebrow">THE GREAT HALL</p>
       <h1>Those Gathered</h1>
       <p class="muted">The houses are assembling. Here are the players who have joined or are joining.</p>
-      <p class="room-pin-line">Room PIN <strong id="lobbyRoomPin">——</strong><span>Share this with your players.</span></p>
       <p id="lobbySettings" class="lobby-settings muted small-text"></p>
       <div class="lobby-roster-wrap"><div class="section-head"><h2>Players</h2><span id="lobbyCount" class="count-pill">0 players</span></div><div id="lobbyRoster" class="player-roster"></div></div>
       <button id="addBotButton" class="button button-secondary button-full" type="button" data-action="add-bot" hidden>Add bot</button>
