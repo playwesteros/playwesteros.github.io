@@ -239,8 +239,9 @@
       const own = p.id === state.me.id;
       const houseControl = own ? `<button class="lobby-banner-button ${lobbyCanChangeHouse ? '' : 'is-locked'}" type="button" data-action="edit-player" data-edit-kind="house" aria-label="Change your house"${lockAttr(lobbyCanChangeHouse ? '' : 'There are no other houses available right now.')}>${banner}</button>` : banner;
       const nameEdit = own ? '<button class="player-edit-name" type="button" data-action="edit-player" data-edit-kind="name" aria-label="Edit your name">✎</button>' : '';
+      const kickControl = !p.isBot && state.isHost && state.phase === 'LOBBY' && !own && p.id !== state.hostId ? `<button class="player-edit-name player-remove-bot" type="button" data-action="kick-player" data-player-id="${escapeHtml(p.id)}" aria-label="Remove ${escapeHtml(p.username)}">✕</button>` : '';
       const botControls = p.isBot && state.isHost && state.phase === 'LOBBY' ? `<button class="player-edit-name" type="button" data-action="edit-bot" data-bot-id="${escapeHtml(p.id)}" aria-label="Edit ${escapeHtml(p.username)}">✎</button><button class="player-edit-name player-remove-bot" type="button" data-action="remove-bot" data-bot-id="${escapeHtml(p.id)}" aria-label="Remove ${escapeHtml(p.username)}">✕</button>` : '';
-      return `<div class="player-row ${p.left ? 'player-left' : ''} ${own ? 'player-row-own' : ''}" ${own && house?.color ? `style="--house-color:${escapeHtml(house.color)}"` : ''}><img class="player-icon ${p.isBot || (p.connected && !p.left && p.houseId) ? '' : 'player-away'}" src="./assets/ui-${p.isBot ? 'bot' : p.connected && !p.left && p.houseId ? 'player' : 'dead'}.png?v=1" alt="">${houseControl}<div class="player-row-info"><strong>${escapeHtml(p.username)}${p.isBot ? ' <em class="bot-tag">BOT</em>' : ''}${p.id === state.hostId ? ' <em class="host-tag">SERVER OWNER</em>' : ''}${nameEdit}${botControls}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'Joining · house not chosen'} · ${status}</small></div></div>`;
+      return `<div class="player-row ${p.left ? 'player-left' : ''} ${own ? 'player-row-own' : ''}" ${own && house?.color ? `style="--house-color:${escapeHtml(house.color)}"` : ''}>${houseControl}<div class="player-row-info"><strong><img class="player-icon name-icon ${p.isBot || (p.connected && !p.left && p.houseId) ? '' : 'player-away'}" src="./assets/ui-${p.isBot ? 'bot' : p.connected && !p.left && p.houseId ? 'player' : 'dead'}.png?v=2" alt="">${escapeHtml(p.username)}${p.id === state.hostId ? ' <em class="host-tag">SERVER OWNER</em>' : ''}${nameEdit}${botControls}${kickControl}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'Joining · house not chosen'} · ${status}</small></div></div>`;
     }).join('') : '<p class="muted">The hall is quiet. Be the first to join.</p>';
     const canStart = state.isHost && state.phase === 'LOBBY';
     const hasBaratheon = state.players.some(p => p.connected && p.houseId === 'baratheon');
@@ -876,7 +877,7 @@
 
   function removeBot(botId) {
     const bot = state?.players?.find(p => p.id === botId && p.isBot);
-    if (bot && window.confirm(`Remove ${bot.username} from the lobby?`)) emitAction('remove-bot', { botId });
+    if (bot) emitAction('remove-bot', { botId });
   }
 
   let mapZoom = 1;
@@ -1396,6 +1397,11 @@
     if (action === 'close-name-dialog') { $('lobbyNameDialog').close(); return; }
     if (action === 'add-bot') { emitAction('add-bot'); return; }
     if (action === 'edit-bot') { openBotEditor(button.dataset.botId); return; }
+    if (action === 'kick-player') {
+      const target = state?.players?.find(p => p.id === button.dataset.playerId);
+      if (target && window.confirm(`Remove ${target.username} from the game?`)) emitAction('kick-player', { playerId: target.id });
+      return;
+    }
     if (action === 'remove-bot') { removeBot(button.dataset.botId); return; }
     if (action === 'remove-bot-dialog') { $('botEditDialog').close(); removeBot(editingBotId); return; }
     if (action === 'close-bot-dialog') { $('botEditDialog').close(); return; }

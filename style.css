@@ -751,3 +751,7 @@ body.house-themed .footer { border-color: var(--line); }
 .map-towns { display: none; }
 .map-viewport.show-towns .map-towns { display: inline; }
 .map-viewport.show-towns .map-region-names { opacity: .22; }
+.map-cap.is-idle .cap-hit { pointer-events: none; }
+.map-dialog.pick-mode .map-cap.is-idle.is-target .cap-hit { pointer-events: all; }
+
+.player-icon.name-icon { width: 17px; height: 17px; margin-right: 6px; vertical-align: -3px; display: inline-block; }

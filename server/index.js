@@ -662,6 +662,25 @@ io.on('connection', socket => {
     return ok(`${bot.username} was removed.`);
   });
 
+  action(socket, 'kick-player', (player, payload) => {
+    const check = requirePlayer(player); if (check.ok === false) return check;
+    if (!isHost(player)) return fail('Only the host can remove a player.');
+    if (phase !== 'LOBBY') return fail('Players can only be removed in the lobby.');
+    const target = players.get(String(payload.playerId || ''));
+    if (!target || target.isBot) return fail('That player is no longer in the lobby.');
+    if (target.id === player.id) return fail('You cannot remove yourself.');
+    const sock = target.socketId ? io.sockets.sockets.get(target.socketId) : null;
+    players.delete(target.id);
+    if (sock) {
+      sock.data.playerId = null;
+      sock.data.gameCode = null;
+      sock.leave(socket.data.gameCode);
+      sock.emit('game-ended', { message: 'The host removed you from the game.' });
+    }
+    addEvent('normal', `${target.username} was removed by the host.`);
+    return ok(`${target.username} was removed.`);
+  });
+
   action(socket, 'start-game', player => {
     const check = requirePlayer(player); if (check.ok === false) return check;
     if (!isHost(player)) return fail('Only the lobby host can begin the game.');
