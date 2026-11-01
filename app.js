@@ -360,7 +360,7 @@
         if (!flag) {
           const NS = 'http://www.w3.org/2000/svg';
           flag = document.createElementNS(NS, 'g');
-          flag.setAttribute('class', 'cap-banner'); flag.setAttribute('transform', 'translate(-7.5 -22.5) scale(0.0457)');
+          flag.setAttribute('class', 'cap-banner'); flag.setAttribute('transform', 'translate(-24 -76) scale(0.1463)');
           const clip = document.createElementNS(NS, 'g'); clip.setAttribute('clip-path', 'url(#bannerClip)');
           const img = document.createElementNS(NS, 'image');
           img.setAttribute('href', './assets/house-banners.png'); img.setAttribute('width', '1312'); img.setAttribute('height', '760');
@@ -879,6 +879,28 @@
     if (bot && window.confirm(`Remove ${bot.username} from the lobby?`)) emitAction('remove-bot', { botId });
   }
 
+  let mapZoom = 1;
+  function applyMapZoom(next, keepCenter = true) {
+    const vp = $('mapViewport'), svg = vp.querySelector('.realm-map');
+    const prev = mapZoom; mapZoom = Math.min(4.5, Math.max(0.6, next));
+    const cx = (vp.scrollLeft + vp.clientWidth / 2) / (vp.scrollWidth || 1), cy = (vp.scrollTop + vp.clientHeight / 2) / (vp.scrollHeight || 1);
+    svg.style.setProperty('--map-zoom', String(mapZoom));
+    vp.classList.toggle('show-towns', mapZoom >= 1.25);
+    if (keepCenter && prev !== mapZoom) { vp.scrollLeft = cx * vp.scrollWidth - vp.clientWidth / 2; vp.scrollTop = cy * vp.scrollHeight - vp.clientHeight / 2; }
+  }
+  (() => {
+    const vp = $('mapViewport'); let drag = null, moved = false;
+    vp.addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse' || e.button !== 0) return; drag = { x: e.clientX, y: e.clientY, l: vp.scrollLeft, t: vp.scrollTop }; moved = false; });
+    window.addEventListener('pointermove', e => {
+      if (!drag) return;
+      const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+      if (!moved && Math.hypot(dx, dy) > 5) { moved = true; vp.classList.add('is-dragging'); }
+      if (moved) { vp.scrollLeft = drag.l - dx; vp.scrollTop = drag.t - dy; }
+    });
+    window.addEventListener('pointerup', () => { drag = null; vp.classList.remove('is-dragging'); });
+    vp.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+    vp.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); applyMapZoom(mapZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
+  })();
   function setMapOpen(open) {
     const dialog = $('mapDialog');
     if (open) {
@@ -1388,6 +1410,8 @@
     if (action === 'pick-target') { startPick(); return; }
     if (action === 'go-to-war') { openHub('army', 'war'); startPick(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
+    if (action === 'map-zoom-in') { applyMapZoom(mapZoom * 1.4); return; }
+    if (action === 'map-zoom-out') { applyMapZoom(mapZoom / 1.4); return; }
     if (action === 'close-map') { setMapOpen(false); return; }
     if (action === 'change-house') {
       setPickedHouse(null);

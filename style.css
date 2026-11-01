@@ -731,3 +731,23 @@ body.house-themed .footer { border-color: var(--line); }
 .map-cap.is-idle .cap-name, .map-cap.is-idle .cap-sub { fill: #6f6f6f; }
 @media (max-width: 700px) { .sub-menu { grid-template-columns: 1fr; } .sub-button { flex-direction: row; padding: 12px 14px; } .sub-button img { width: 48px; } }
 .sub-button[hidden] { display: none; }
+
+/* Detailed realm map */
+.map-dialog { width: min(780px, calc(100vw - 20px)); }
+.map-tools { display: flex; gap: 6px; align-items: center; }
+.map-viewport { max-height: calc(100vh - 190px); max-height: calc(100dvh - 190px); overflow: auto; border-radius: 6px; box-shadow: 0 6px 24px #0008; background: #d9c28c; cursor: grab; overscroll-behavior: contain; }
+.map-viewport.is-dragging { cursor: grabbing; }
+.map-viewport .realm-map { width: calc(var(--map-zoom, 1) * 100%); max-width: none; max-height: none; box-shadow: none; border-radius: 0; }
+.map-cap .cap-hit { fill: transparent; pointer-events: all; }
+.map-cap .cap-name { font-size: 25px; stroke-width: 6px; }
+.map-cap .cap-sub { font-size: 17px; stroke-width: 5px; }
+.map-cap .cap-dot { stroke-width: 2.4; }
+.map-cap .cap-ring { transition: all .18s; }
+.map-cap.is-idle { pointer-events: none; }
+.map-cap.is-idle .cap-pop { transform: none !important; filter: none !important; }
+.map-cap.is-idle .cap-sub { opacity: 0 !important; }
+.map-cap.is-idle .cap-ring { stroke-width: 0 !important; fill: transparent !important; }
+.map-dialog.pick-mode .map-cap.is-idle.is-target { pointer-events: auto; }
+.map-towns { display: none; }
+.map-viewport.show-towns .map-towns { display: inline; }
+.map-viewport.show-towns .map-region-names { opacity: .22; }
