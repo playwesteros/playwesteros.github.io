@@ -13,10 +13,10 @@
   <meta name="description" content="A temporary multiplayer Great Houses strategy game prototype.">
   <title>War of Westeros — Multiplayer Strategy</title>
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=1">
-  <link rel="stylesheet" href="./style.css?v=38">
+  <link rel="stylesheet" href="./style.css?v=39">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=43" defer></script>
+  <script src="./app.js?v=44" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -39,7 +39,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.0.1</span>
+  <span id="gameVersion" class="version-tag" hidden>v2.0.2</span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -150,9 +150,9 @@
     </section>
 
     <section id="actionHub" class="action-hub" aria-label="Round menus" hidden>
-      <button class="hub-button" type="button" data-action="open-hub" data-hub="money"><span id="badgeMoney" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-coins.png?v=2" alt=""><h3>Money</h3><div class="hub-detail"><strong id="hubMoneyGold">—</strong><span id="hubMoneyIncome"></span><span id="hubMoneyCapitals"></span></div></button>
-      <button class="hub-button" type="button" data-action="open-hub" data-hub="relations"><span id="badgeRelations" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Relations</h3><div class="hub-detail"><strong id="hubRelAlliances">—</strong><span id="hubRelOffers"></span><span id="hubRelRole"></span></div></button>
-      <button class="hub-button" type="button" data-action="open-hub" data-hub="army"><span id="badgeArmy" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-swords.png?v=2" alt=""><h3>Army</h3><div class="hub-detail"><strong id="hubArmyTotal">—</strong><span id="hubArmyDetail"></span><span id="hubArmyCosts"></span></div></button>
+      <button class="hub-button" type="button" data-action="open-hub" data-hub="money" data-cat="money"><span id="badgeMoney" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-coins.png?v=2" alt=""><h3>Money</h3><div class="hub-detail"><strong id="hubMoneyGold">—</strong><span id="hubMoneyIncome"></span><span id="hubMoneyCapitals"></span></div></button>
+      <button class="hub-button" type="button" data-action="open-hub" data-hub="relations" data-cat="relations"><span id="badgeRelations" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Relations</h3><div class="hub-detail"><strong id="hubRelAlliances">—</strong><span id="hubRelOffers"></span><span id="hubRelRole"></span></div></button>
+      <button class="hub-button" type="button" data-action="open-hub" data-hub="army" data-cat="army"><span id="badgeArmy" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-swords.png?v=2" alt=""><h3>Army</h3><div class="hub-detail"><strong id="hubArmyTotal">—</strong><span id="hubArmyDetail"></span><span id="hubArmyCosts"></span></div></button>
     </section>
 
     <div id="hubOverlay" class="hub-overlay" hidden>
@@ -160,24 +160,27 @@
       <div class="hub-sheet" role="dialog" aria-modal="true" aria-labelledby="hubTitle">
         <header class="hub-sheet-head"><div><p class="eyebrow" id="hubEyebrow"></p><h2 id="hubTitle"></h2></div><button class="button button-quiet button-small" type="button" data-action="close-hub">Close</button></header>
         <div class="hub-sheet-body">
-          <div id="hubMoney" class="hub-pane" hidden>
+          <div id="hubMoney" class="hub-pane" data-cat="money" hidden>
+            <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">YOUR TREASURY</p><h2>Gold &amp; income</h2></div></div>
             <div class="money-grid">
               <article class="money-card"><span id="badgeGold" class="note-badge" hidden></span><span>YOUR GOLD</span><strong id="moneyGold">—</strong></article>
               <article class="money-card"><span>NET PER ROUND</span><strong id="moneyIncome">—</strong><small id="moneyIncomeNote"></small></article>
             </div>
-            <div><div class="subsection-title">Ledger</div><div id="ledgerTotals" class="ledger-totals"></div><div id="moneyLedger" class="ledger-list"></div><button id="ledgerToggle" class="button button-quiet button-small" type="button" data-action="toggle-ledger" hidden></button></div>
-            <div><div class="subsection-title">Capitals held</div><div id="moneyCapitals" class="event-list"></div></div>
+            </section>
+            <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">EVERY COIN AND SOLDIER</p><h2>Ledger</h2></div></div><div><div id="ledgerTotals" class="ledger-totals"></div><div id="moneyLedger" class="ledger-list"></div><button id="ledgerToggle" class="button button-quiet button-small" type="button" data-action="toggle-ledger" hidden></button></div>
+            </section>
+            <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">WHAT FEEDS THE TREASURY</p><h2>Capitals held</h2></div></div><div id="moneyCapitals" class="event-list"></div></section>
           </div>
           <div id="hubRelations" class="hub-pane" hidden>
             <p id="relationsPhaseNote" class="muted small-text"></p>
             <div class="sub-menu">
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="alliances"><span id="badgeSubAlliances" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Alliances</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="treaties"><span id="badgeSubTreaties" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-chain.png?v=2" alt=""><h3>Treaties &amp; Subsidies</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="messages"><span id="badgeSubMessages" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-raven.png?v=2" alt=""><h3>Messages</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="decrees" id="subDecrees" hidden><img src="./assets/game-throne.png?v=2" alt=""><h3>Decrees</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="hand" id="subHand" hidden><img src="./assets/game-hand.png?v=2" alt=""><h3>Hand’s Ledger</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="alliances" data-cat="alliances"><span id="badgeSubAlliances" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Alliances</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="treaties" data-cat="treaties"><span id="badgeSubTreaties" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-chain.png?v=2" alt=""><h3>Treaties &amp; Subsidies</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="messages" data-cat="messages"><span id="badgeSubMessages" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-raven.png?v=2" alt=""><h3>Messages</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="decrees" data-cat="decrees" id="subDecrees" hidden><img src="./assets/game-throne.png?v=2" alt=""><h3>Decrees</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="hand" data-cat="hand" id="subHand" hidden><img src="./assets/game-hand.png?v=2" alt=""><h3>Hand’s Ledger</h3></button>
             </div>
-            <div class="sub-page" data-sub="alliances" hidden>
+            <div class="sub-page" data-sub="alliances" data-cat="alliances" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section id="courtPanel" class="panel section-panel hub-block">
                 <div class="section-head"><div><p class="panel-kicker">THE RED KEEP</p><h2>Alliances</h2></div><span id="kingBadge" class="subtle-label">No king</span></div>
@@ -190,7 +193,7 @@
                 <div class="alliance-area"><div class="section-head"><h3>Alliances &amp; offers</h3><span id="badgeOffers" class="note-badge" hidden></span></div><div id="allianceList" class="alliance-list"></div></div>
               </section>
             </div>
-            <div class="sub-page" data-sub="treaties" hidden>
+            <div class="sub-page" data-sub="treaties" data-cat="treaties" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section class="panel section-panel hub-block">
                 <div class="section-head"><div><p class="panel-kicker">GOLD, TROOPS &amp; DECREES</p><h2>Treaties &amp; subsidies</h2></div></div>
@@ -208,7 +211,7 @@
                 <div class="alliance-area"><div class="section-head"><h3>Your treaties</h3><span id="badgeTreaties" class="note-badge" hidden></span></div><div id="treatyList" class="alliance-list"></div></div>
               </section>
             </div>
-            <div class="sub-page" data-sub="decrees" hidden>
+            <div class="sub-page" data-sub="decrees" data-cat="decrees" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section class="panel section-panel hub-block">
                 <div class="section-head"><div><p class="panel-kicker">THE CROWN</p><h2>Royal decrees</h2></div></div>
@@ -237,14 +240,14 @@
                 <div id="taxLedger" class="tax-ledger"></div>
               </section>
             </div>
-            <div class="sub-page" data-sub="hand" hidden>
+            <div class="sub-page" data-sub="hand" data-cat="hand" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section class="panel section-panel hub-block">
                 <div class="section-head"><div><p class="panel-kicker">ONLY THE HAND SEES THIS</p><h2>Subsidies &amp; decrees</h2></div></div>
                 <div id="handLedger" class="tax-ledger"></div>
               </section>
             </div>
-            <div class="sub-page" data-sub="messages" hidden>
+            <div class="sub-page" data-sub="messages" data-cat="messages" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section class="panel section-panel hub-block">
                 <div class="chat-area">
@@ -265,12 +268,12 @@
           <div id="hubArmy" class="hub-pane" hidden>
             <p id="armyPhaseNote" class="muted small-text"></p>
             <div class="sub-menu">
-              <button class="hub-button sub-button" type="button" data-action="open-map"><img src="./assets/ui-map.png?v=2" alt=""><h3>Map</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="recruit"><img src="./assets/ui-soldier.png?v=2" alt=""><h3>Recruit &amp; Disband</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="spies"><img src="./assets/game-eye.png?v=2" alt=""><h3>Spies</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="war"><span id="badgeSubWar" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-swords.png?v=2" alt=""><h3>Go to War</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-map" data-cat="map"><img src="./assets/ui-map.png?v=2" alt=""><h3>Map</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="recruit" data-cat="recruit"><img src="./assets/ui-soldier.png?v=2" alt=""><h3>Recruit &amp; Disband</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="spies" data-cat="spies"><img src="./assets/game-eye.png?v=2" alt=""><h3>Spies</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="war" data-cat="war"><span id="badgeSubWar" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-swords.png?v=2" alt=""><h3>Go to War</h3></button>
             </div>
-            <div class="sub-page" data-sub="recruit" hidden>
+            <div class="sub-page" data-sub="recruit" data-cat="recruit" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section class="panel section-panel hub-block">
                 <div class="section-head"><div><p class="panel-kicker">YOUR FORCES</p><h2>Recruit &amp; disband</h2></div></div>
@@ -290,14 +293,14 @@
                 </div>
               </section>
             </div>
-            <div class="sub-page" data-sub="spies" hidden>
+            <div class="sub-page" data-sub="spies" data-cat="spies" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section id="actionPanel" class="panel section-panel hub-block">
                 <div class="section-head"><div><p class="panel-kicker">THE WHISPERERS</p><h2>Spies</h2></div></div>
                 <div class="action-grid"><form id="spyForm" class="action-card">
               <img class="action-icon-image" src="./assets/game-eye.png?v=2" alt=""><h3>Send spies</h3><p class="muted small-text">Spend 2–20 gold. More gold means better odds.</p>
               <label for="spyTarget">Target house</label><select id="spyTarget" required></select>
-              <label for="spyMission">Mission</label><select id="spyMission"><option value="troops">Count troops · medium · high danger</option><option value="movement">Watch movements · medium · high danger</option><option value="ravens">Shoot ravens · hard · low danger</option><option value="mole">Place a mole · hard · high danger</option></select>
+              <label for="spyMission">Mission</label><select id="spyMission"><option value="troops" style="color:#e0b84f">Count troops · medium · high danger</option><option value="movement" style="color:#e0b84f">Watch movements · medium · high danger</option><option value="ravens" style="color:#e0705f">Shoot ravens · hard · low danger</option><option value="mole" style="color:#e0705f">Place a mole · hard · high danger</option></select>
               <label for="spyGold">Gold to spend (2–20)</label><input id="spyGold" type="number" min="2" max="20" value="8" inputmode="numeric">
               <p id="spyOdds" class="muted small-text"></p>
               <button class="button button-secondary button-full" type="submit">Attempt spy mission</button>
@@ -305,7 +308,7 @@
                 <div id="spyReports" class="spy-reports"></div>
               </section>
             </div>
-            <div class="sub-page" data-sub="war" hidden>
+            <div class="sub-page" data-sub="war" data-cat="war" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section class="panel section-panel hub-block">
                 <div class="section-head"><div><p class="panel-kicker">THE FIELD OF WAR</p><h2>Go to war</h2></div></div>

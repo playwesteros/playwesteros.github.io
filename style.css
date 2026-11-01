@@ -755,3 +755,27 @@ body.house-themed .footer { border-color: var(--line); }
 .map-dialog.pick-mode .map-cap.is-idle.is-target .cap-hit { pointer-events: all; }
 
 .player-icon.name-icon { width: 17px; height: 17px; margin-right: 6px; vertical-align: -3px; display: inline-block; }
+
+/* Category colours */
+[data-cat="money"] { --cat: #e0b84f; } [data-cat="relations"] { --cat: #6ea8dc; } [data-cat="army"] { --cat: #e0705f; }
+[data-cat="alliances"] { --cat: #7cc28a; } [data-cat="treaties"] { --cat: #e0b84f; } [data-cat="messages"] { --cat: #6ea8dc; }
+[data-cat="decrees"] { --cat: #b48be6; } [data-cat="hand"] { --cat: #d9a35c; }
+[data-cat="map"] { --cat: #5cbab0; } [data-cat="recruit"] { --cat: #9fb0c4; } [data-cat="spies"] { --cat: #a98be0; } [data-cat="war"] { --cat: #e0705f; }
+.hub-button[data-cat] { border-top-color: var(--cat); }
+.hub-button[data-cat]:hover, .hub-button[data-cat]:focus-visible { border-color: var(--cat); box-shadow: 0 14px 40px #000a, 0 0 0 1px color-mix(in srgb, var(--cat) 50%, transparent), 0 0 26px color-mix(in srgb, var(--cat) 22%, transparent); }
+.hub-button[data-cat] h3 { color: color-mix(in srgb, var(--cat) 65%, #fff); }
+.hub-button[data-cat] > img { filter: drop-shadow(0 4px 10px #000a) drop-shadow(0 0 10px color-mix(in srgb, var(--cat) 35%, transparent)); }
+.hub-sheet[data-cat] { border-top-color: var(--cat); }
+.hub-sheet[data-cat] .hub-sheet-head h2 { color: color-mix(in srgb, var(--cat) 65%, #fff); }
+.hub-sheet[data-cat] .hub-sheet-head .eyebrow { color: var(--cat); }
+.hub-pane[data-cat] .section-panel, .sub-page[data-cat] .section-panel { border-top: 2px solid var(--cat); }
+.hub-pane[data-cat] .panel-kicker, .sub-page[data-cat] .panel-kicker { color: var(--cat); }
+.sub-page[data-cat] .action-card { border-top: 2px solid color-mix(in srgb, var(--cat) 70%, transparent); }
+.sub-page[data-cat] .sub-back { border-color: color-mix(in srgb, var(--cat) 45%, transparent); }
+/* Banners beside selects */
+.select-row { display: flex; align-items: center; gap: 8px; }
+.select-row select { flex: 1; min-width: 0; }
+.select-banner { flex: 0 0 auto; display: inline-flex; min-width: 0; }
+.select-banner:empty { display: none; }
+.select-banner .msg-banner { width: 26px; height: 30px; }
+.money-grid, .money-card { margin-top: 0; }

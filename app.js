@@ -426,7 +426,7 @@
   function spyReportMarkup(r) {
     const mission = r.mission || 'troops';
     const status = r.success ? 'successful' : r.caught ? 'caught' : 'failed';
-    const head = `<div><b>${escapeHtml(capName(r.targetName))}</b><span>Round ${r.round} · ${escapeHtml(SPY_LABEL[mission])} · ${status}${r.spent ? ` · ${r.spent} gold` : ''}</span></div>`;
+    const head = `<div><b class="row-who">${bannerOf(r.targetHouseId)}${escapeHtml(capName(r.targetName))}</b><span>Round ${r.round} · ${escapeHtml(SPY_LABEL[mission])} · ${status}${r.spent ? ` · ${r.spent} gold` : ''}</span></div>`;
     if (!r.success) return `<article class="spy-report spy-failed">${head}<p>${r.caught ? 'Your agents were captured. The enemy knows who sent them.' : 'Your agents returned with nothing.'}</p></article>`;
     const f = r.findings || {};
     let body = '';
@@ -660,6 +660,7 @@
     pane.querySelectorAll('.sub-menu').forEach(menu => { menu.hidden = Boolean(currentSub); });
     pane.querySelectorAll('.sub-page').forEach(page => { page.hidden = page.dataset.sub !== currentSub; });
     $('hubTitle').textContent = HUBS[currentHub][1] + (currentSub ? ` · ${SUB_LABEL[currentSub]}` : '');
+    $('hubOverlay').querySelector('.hub-sheet').dataset.cat = currentSub || currentHub;
     $('hubOverlay').querySelector('.hub-sheet-body').scrollTop = 0;
     updateBadges();
   }
@@ -671,6 +672,7 @@
     for (const [key, value] of Object.entries(HUBS)) $(value[2]).hidden = key !== kind;
     currentHub = kind;
     $('hubOverlay').hidden = false;
+    $('hubOverlay').querySelector('.hub-sheet').dataset.cat = kind;
     showSub(sub);
     document.body.classList.add('hub-open');
   }
@@ -725,7 +727,7 @@
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
     $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
     const mine = state.capitals.filter(c => c.ownerHouseId === h.id);
-    $('moneyCapitals').innerHTML = mine.length ? mine.map(c => `<div class="resolution-item"><span>+${h.incomePerCapital}</span><p>${escapeHtml(c.name)}</p></div>`).join('') : '<p class="muted small-text">Your house holds no capitals, so it earns no income.</p>';
+    $('moneyCapitals').innerHTML = mine.length ? mine.map(c => `<div class="resolution-item"><span>+${h.incomePerCapital}</span><p class="row-who">${c.originalHouseId ? bannerOf(c.originalHouseId) : ''}${escapeHtml(c.name)}</p></div>`).join('') : '<p class="muted small-text">Your house holds no capitals, so it earns no income.</p>';
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
     $('armyNavy').textContent = h.navy;
@@ -1087,6 +1089,21 @@
     setTimeout(showNextAnnouncement, 350);
   }
 
+  const BANNER_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget'];
+  function updateSelectBanners() {
+    for (const id of BANNER_SELECTS) {
+      const sel = $(id); if (!sel) continue;
+      let slot = sel.previousElementSibling?.classList?.contains('select-banner') ? sel.previousElementSibling : null;
+      if (!slot) {
+        const wrap = document.createElement('div'); wrap.className = 'select-row';
+        slot = document.createElement('span'); slot.className = 'select-banner';
+        sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(slot); wrap.appendChild(sel);
+        sel.addEventListener('change', updateSelectBanners);
+        slot = wrap.firstChild;
+      }
+      slot.innerHTML = sel.value ? bannerOf(sel.value) : '';
+    }
+  }
   function render() {
     updateScreens();
     applyTheme();
@@ -1131,6 +1148,7 @@
         element.value = value;
       }
     }
+    updateSelectBanners();
     updateRecruitButton();
     if (state.myHouse) { updateAttackLock(); updateSpyForm(); updateDisbandButton(); }
     if (wasFocused) {
