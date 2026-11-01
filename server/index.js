@@ -49,7 +49,8 @@ const CAPITAL_DEFS = [
   { id: 'highgarden', name: 'Highgarden', region: 'The Reach', icon: '🌹', defense: 4, originalHouseId: 'tyrell' },
   { id: 'pyke', name: 'Pyke', region: 'The Iron Islands', icon: '⚓', defense: 4, originalHouseId: 'greyjoy' },
   { id: 'sunspear', name: 'Sunspear', region: 'Dorne', icon: '☀', defense: 4, originalHouseId: 'martell' },
-  { id: 'the-eyrie', name: 'The Eyrie', region: 'The Vale', icon: '🦅', defense: 4, originalHouseId: 'arryn' }
+  { id: 'the-eyrie', name: 'The Eyrie', region: 'The Vale', icon: '🦅', defense: 4, originalHouseId: 'arryn' },
+  { id: 'kings-landing', name: 'King’s Landing', region: 'The Crownlands', icon: '👑', defense: 6, originalHouseId: null }
 ];
 
 let players = new Map();
@@ -74,6 +75,9 @@ let runoff;
 let candidateIds;
 let voterIds;
 let gameSettings;
+let dragonIds;
+let gameOver;
+let startHouseCount;
 
 function freshHouses() {
   return HOUSE_DEFS.map(def => ({
@@ -99,7 +103,10 @@ function freshCapitals() {
 function resetWorld(keepPlayers = true) {
   phase = 'LOBBY';
   round = 1;
-  gameSettings = { configured: false, maxPlayers: 4, gameType: 'CLASSIC' };
+  gameSettings = { configured: false, maxPlayers: 4, gameType: 'CLASSIC', dragonCount: 1, dragonRounds: 5 };
+  dragonIds = [];
+  gameOver = null;
+  startHouseCount = 0;
   kingPlayerId = null;
   handPlayerId = null;
   runoff = false;
@@ -128,6 +135,7 @@ function resetWorld(keepPlayers = true) {
       p.traitor = false;
       p.isKing = false;
       p.isHand = false;
+      p.eliminated = false;
     }
   }
   addEvent('important', 'The Great Houses gather. The realm is reset and the lobby is open.');
@@ -173,10 +181,10 @@ function scheduleHostDisconnect(roomCode) {
   hostDisconnectTimers.set(roomCode, timer);
 }
 function captureWorld() {
-  return { players, tokenToPlayerId, alliances, allianceOffers, treaties, spoils, notices, publicMessages, privateMessages, taxLedger, events, houses, capitals, phase, round, hostId, kingPlayerId, handPlayerId, runoff, candidateIds, voterIds, gameSettings };
+  return { players, tokenToPlayerId, alliances, allianceOffers, treaties, spoils, notices, publicMessages, privateMessages, taxLedger, events, houses, capitals, phase, round, hostId, kingPlayerId, handPlayerId, runoff, candidateIds, voterIds, gameSettings, dragonIds, gameOver, startHouseCount };
 }
 function activateWorld(world) {
-  ({ players, tokenToPlayerId, alliances, allianceOffers, treaties, spoils, notices, publicMessages, privateMessages, taxLedger, events, houses, capitals, phase, round, hostId, kingPlayerId, handPlayerId, runoff, candidateIds, voterIds, gameSettings } = world);
+  ({ players, tokenToPlayerId, alliances, allianceOffers, treaties, spoils, notices, publicMessages, privateMessages, taxLedger, events, houses, capitals, phase, round, hostId, kingPlayerId, handPlayerId, runoff, candidateIds, voterIds, gameSettings, dragonIds, gameOver, startHouseCount } = world);
 }
 const initialWorld = structuredClone(captureWorld());
 function withWorld(roomCode, callback) {
@@ -221,7 +229,7 @@ function recalculateCapitalCounts() {
   for (const h of houses) h.capitalCount = capitals.filter(c => c.ownerHouseId === h.id).length;
 }
 function playerPublic(p) {
-  return { id: p.id, username: p.username, connected: p.connected, left: Boolean(p.left), isBot: Boolean(p.isBot), houseId: p.houseId, isKing: p.id === kingPlayerId, isHand: p.id === handPlayerId };
+  return { id: p.id, username: p.username, connected: p.connected, left: Boolean(p.left), isBot: Boolean(p.isBot), houseId: p.houseId, isKing: p.id === kingPlayerId, isHand: p.id === handPlayerId, eliminated: Boolean(p.eliminated) };
 }
 function incomePerCapital(h) { return 15 + (h.id === 'tyrell' ? 3 : 0); }
 function armySize(h) { return h.infantry + h.navy + h.dragons; }
@@ -257,7 +265,7 @@ function spyFindings(mission, target) {
   const options = [{ kind: 'wealth', gold: target.money }];
   const secret = alliances.filter(a => a.scope === 'secret' && [a.houseA, a.houseB].includes(target.id)).map(a => (a.houseA === target.id ? a.houseB : a.houseA));
   if (secret.length) options.push({ kind: 'alliance', houses: secret });
-  if (gameSettings.gameType === 'LAST_DRAGON') options.push({ kind: 'dragons', dragons: target.dragons });
+  if (gameSettings.gameType === 'LAST_DRAGON') options.push({ kind: 'dragon', houseId: target.id, hasDragon: houseMembers(target.id).some(p => dragonIds.includes(p.id)) });
   return { mole: options[randomInt(0, options.length - 1)] };
 }
 function houseIncome(h) { return capitals.filter(c => c.ownerHouseId === h.id).length * incomePerCapital(h); }
@@ -265,13 +273,13 @@ function currentHouseView(h) {
   if (!h) return null;
   const { money, infantry, navy, navyBuilding, dragons, infantryCost, navyCost, pendingAttack, hasAttackedThisRound, commandUsedRound, lockedUntilRound, spyReports, ledger, ...definition } = h;
   const members = [...players.values()].filter(p => p.houseId === h.id).map(p => ({ id: p.id, username: p.username, connected: p.connected, left: Boolean(p.left) }));
-  return { ...definition, players: members, capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length };
+  return { ...definition, players: members, capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length, fallen: houseFallen(h) };
 }
 function makePrivateHouseView(h) {
   if (!h) return null;
   const target = h.pendingAttack ? findCapital(h.pendingAttack.targetCapitalId) : null;
   return {
-    id: h.id, name: h.name, money: h.money, infantry: h.infantry, navy: h.navy, navyBuilding: h.navyBuilding || 0, dragons: h.dragons,
+    id: h.id, name: h.name, fallen: houseFallen(h), money: h.money, infantry: h.infantry, navy: h.navy, navyBuilding: h.navyBuilding || 0, dragons: h.dragons,
     infantryCost: h.infantryCost, navyCost: h.navyCost,
     capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length, incomePerCapital: incomePerCapital(h), incomePerRound: houseIncome(h), upkeepPerRound: armySize(h),
     pendingAttack: h.pendingAttack ? {
@@ -301,8 +309,10 @@ function viewFor(playerId) {
     phase, round, hostId, king: kingPlayerId && players.has(kingPlayerId) ? { id: kingPlayerId, username: players.get(kingPlayerId).username } : null,
     hand: handPlayerId && players.has(handPlayerId) ? { id: handPlayerId, username: players.get(handPlayerId).username } : null,
     settings: { ...gameSettings },
+    gameOver: gameOver ? { ...gameOver, winners: gameOver.winners } : null,
+    dragon: me && dragonIds.includes(me.id) ? { fellow: dragonList().filter(d => d.id !== me.id) } : null,
     isHost: Boolean(me && me.id === hostId), isKing: Boolean(me && me.id === kingPlayerId), isHand: Boolean(me && me.id === handPlayerId),
-    me: me ? { id: me.id, username: me.username, houseId: me.houseId, vote: me.vote, lastSpyRound: me.lastSpyRound } : null,
+    me: me ? { id: me.id, username: me.username, houseId: me.houseId, vote: me.vote, lastSpyRound: me.lastSpyRound, eliminated: Boolean(me.eliminated) } : null,
     myHouse: makePrivateHouseView(myHouse),
     houses: houses.map(currentHouseView),
     players: [...players.values()].map(p => (me && me.id === kingPlayerId ? { ...playerPublic(p), traitor: Boolean(p.traitor) } : playerPublic(p))),
@@ -355,10 +365,69 @@ function action(socket, eventName, handler) {
     }
   });
 }
+
+// ---- Win conditions -------------------------------------------------------
+function dragonSettings(payload, maxPlayers, gameType) {
+  if (gameType !== 'LAST_DRAGON') return { dragonCount: 1, dragonRounds: 5 };
+  const dragonCount = Number(payload.dragonCount ?? 1), dragonRounds = Number(payload.dragonRounds ?? 5);
+  const most = Math.max(1, Math.floor(maxPlayers / 2));
+  if (!Number.isInteger(dragonCount) || dragonCount < 1 || dragonCount > most) return { error: `Choose 1 to ${most} Dragons for a ${maxPlayers}-player game.` };
+  if (!Number.isInteger(dragonRounds) || dragonRounds < 1 || dragonRounds > 30) return { error: 'Choose how many rounds the Dragons must survive (1 to 30).' };
+  return { dragonCount, dragonRounds };
+}
+const isLastDragon = () => gameSettings.gameType === 'LAST_DRAGON';
+function holdsCapital(h) { return capitals.some(c => c.ownerHouseId === h.id || (c.contested && (c.contested.houseA === h.id || c.contested.houseB === h.id))); }
+function houseFallen(h) {
+  if (!h || ['LOBBY', 'HAND_SELECTION'].includes(phase)) return false;
+  const mem = [...players.values()].filter(p => p.houseId === h.id && !p.left);
+  return !holdsCapital(h) || (mem.length > 0 && mem.every(p => p.eliminated));
+}
+function dragonList() { return dragonIds.map(id => players.get(id)).filter(Boolean).map(p => ({ id: p.id, username: p.username, houseId: p.houseId })); }
+function dragonDefeated(id) { const p = players.get(id); return !p || p.left || p.eliminated || houseFallen(findHouse(p.houseId)); }
+function endGame(type, winnerHouseId, text) {
+  const winners = type === 'CLASSIC' ? houseMembers(winnerHouseId).map(p => p.username) : [];
+  gameOver = { type, winnerHouseId: winnerHouseId || null, text, winners, dragons: isLastDragon() ? dragonList() : [] };
+  addEvent('important', text);
+}
+// King's Landing is the Iron Throne. Whoever takes it eliminates the king and the Hand and becomes king;
+// the new king then names any Hand they like.
+function throneTaken(houseId, orderedBy) {
+  const house = findHouse(houseId); if (!house) return;
+  const members = houseMembers(houseId).filter(p => !p.eliminated);
+  const humans = members.filter(p => !p.isBot);
+  const pool = humans.length ? humans : members;
+  if (!pool.length) return;
+  const ordered = orderedBy ? players.get(orderedBy) : null;
+  const heir = ordered && pool.some(p => p.id === ordered.id) ? ordered : pool[randomInt(0, pool.length - 1)];
+  const fallen = [];
+  for (const id of [kingPlayerId, handPlayerId]) {
+    const p = id ? players.get(id) : null;
+    if (p && p.id !== heir.id && !p.eliminated) { p.eliminated = true; fallen.push(p.username); }
+  }
+  kingPlayerId = heir.id;
+  handPlayerId = null;
+  addEvent('important', `House ${capWord(house.name)} took King’s Landing. ${heir.username} is the new king${fallen.length ? `; ${fallen.join(' and ')} ${fallen.length > 1 ? 'were' : 'was'} eliminated` : ''}.`);
+  notify('battle-won', [houseId], [], 'The Iron Throne is yours', `You hold King’s Landing and wear the crown. Appoint a Hand of the King from the Relations menu.`, [houseId]);
+}
+function checkVictory(endOfRound) {
+  if (gameOver || !['ACTION', 'COURT', 'RESOLUTION'].includes(phase)) return;
+  if (isLastDragon()) {
+    if (dragonIds.length && dragonIds.every(dragonDefeated)) return endGame('REALM', null, 'The last Dragon has fallen. The realm is saved and the whole realm wins.');
+    if (dragonIds.includes(kingPlayerId)) return endGame('DRAGONS', null, `${players.get(kingPlayerId)?.username || 'A Dragon'} has taken the Iron Throne. The Dragons win.`);
+    if (endOfRound && round >= gameSettings.dragonRounds) return endGame('DRAGONS', null, `The Dragons survived ${gameSettings.dragonRounds} rounds. The Dragons win.`);
+    return;
+  }
+  if (startHouseCount < 2) return;
+  const standing = houses.filter(h => houseMembers(h.id).filter(p => !p.eliminated).length && !houseFallen(h));
+  if (standing.length === 1) endGame('CLASSIC', standing[0].id, `House ${capWord(standing[0].name)} has defeated every other house and wins the game.`);
+}
 function requirePlayer(player) { return player || fail('Enter the realm before taking that action.'); }
 function requireHouse(player) {
   if (!player) return fail('Enter the realm before taking that action.');
   const h = player.houseId ? findHouse(player.houseId) : null;
+  if (h && gameOver) return fail('The game is over.');
+  if (h && player.eliminated) return fail('You have been eliminated. You can still watch and speak at court.');
+  if (h && houseFallen(h)) return fail('Your house has fallen. You can still watch and speak at court.');
   return h || fail('Choose a house first.');
 }
 function minorSlots() { return Math.max(0, Number(gameSettings.maxPlayers) - 6); }
@@ -407,6 +476,7 @@ function forceStrength(u) { return u.infantry + u.navy + u.dragons * 5 + (u.drag
 function giveSpoil(s, winnerId, how) {
   const cap = findCapital(s.capitalId);
   if (cap) { cap.ownerHouseId = winnerId; cap.contested = null; }
+  if (cap?.id === 'kings-landing') throneTaken(winnerId, s.orderers?.[winnerId]);
   s.status = 'settled'; s.winnerId = winnerId;
   addEvent('battle', `${cap?.name || 'The captured capital'} now belongs to House ${houseName(winnerId)} ${how}.`);
 }
@@ -488,7 +558,8 @@ io.on('connection', socket => {
       const gameType = String(payload.gameType || '');
       if (!Number.isInteger(maxPlayers) || maxPlayers < 2 || maxPlayers > 16) return ack(callback, fail('Choose a player limit from 2 to 16.'));
       if (!['CLASSIC', 'LAST_DRAGON'].includes(gameType)) return ack(callback, fail('Choose Classic or Last Dragon.'));
-      gameSettings = { configured: true, maxPlayers, gameType };
+      const ds = dragonSettings(payload, maxPlayers, gameType); if (ds.error) return ack(callback, fail(ds.error));
+      gameSettings = { configured: true, maxPlayers, gameType, dragonCount: ds.dragonCount, dragonRounds: ds.dragonRounds };
       addEvent('important', `The host set up a ${gameType === 'LAST_DRAGON' ? 'Last Dragon' : 'Classic'} game for ${maxPlayers} players.`);
       broadcastState(roomCode);
       ack(callback, ok('Game prepared. Choose your house to continue.'));
@@ -581,6 +652,7 @@ io.on('connection', socket => {
     const check = requirePlayer(player); if (check.ok === false) return check;
     if (phase !== 'LOBBY') return fail('House selection is closed after the lobby.');
     const h = findHouse(String(payload.houseId || '')); if (!h) return fail('That house does not exist.');
+    if (isLastDragon() && h.id === 'targaryen') return fail('House Targaryen is not available in Last Dragon. The Dragons are hidden among the players.');
     const houseError = minorHouseError(h, player.id); if (houseError) return fail(houseError);
     const previous = player.houseId;
     player.houseId = h.id;
@@ -600,7 +672,9 @@ io.on('connection', socket => {
     if (maxPlayers < activeCount) return fail(`The player limit cannot be lower than the ${activeCount} players already joined.`);
     if (!['CLASSIC', 'LAST_DRAGON'].includes(gameType)) return fail('Choose Classic or Last Dragon.');
     if (minorPlayerCount(null) > Math.max(0, maxPlayers - 6)) return fail('That limit leaves too few minor-house places for the players already in minor houses.');
-    gameSettings = { configured: true, maxPlayers, gameType };
+    const ds = dragonSettings(payload, maxPlayers, gameType); if (ds.error) return fail(ds.error);
+    if (gameType === 'LAST_DRAGON' && [...players.values()].some(p => !p.left && p.houseId === 'targaryen')) return fail('Someone already chose House Targaryen, which is not available in Last Dragon. Ask them to pick another house first.');
+    gameSettings = { configured: true, maxPlayers, gameType, dragonCount: ds.dragonCount, dragonRounds: ds.dragonRounds };
     addEvent('important', `The host set up a ${gameType === 'LAST_DRAGON' ? 'Last Dragon' : 'Classic'} game for ${maxPlayers} players.`);
     return ok('Game setup saved. The hall is open.');
   });
@@ -696,8 +770,17 @@ io.on('connection', socket => {
       const thin = houses.filter(h => h.type === 'major' && connected.filter(p => p.houseId === h.id).length < 2);
       if (thin.length) return fail(`With minor houses in play, every major house needs at least 2 players. Still short: ${thin.map(h => h.name).join(', ')}.`);
     }
+    if (isLastDragon() && connected.some(p => p.houseId === 'targaryen')) return fail('House Targaryen is not available in Last Dragon. Ask that player to choose another house.');
     kingPlayerId = baratheons[randomInt(0, baratheons.length - 1)].id;
     const king = players.get(kingPlayerId);
+    const throne = capitals.find(c => c.id === 'kings-landing'); if (throne) throne.ownerHouseId = king?.houseId || 'baratheon';
+    startHouseCount = new Set(connected.map(p => p.houseId)).size;
+    dragonIds = [];
+    if (isLastDragon()) {
+      const pool = connected.filter(p => p.id !== kingPlayerId);
+      for (let i = 0; i < gameSettings.dragonCount && pool.length > 1; i++) dragonIds.push(pool.splice(randomInt(0, pool.length - 1), 1)[0].id);
+      addEvent('important', `${dragonIds.length} secret Dragon${dragonIds.length === 1 ? '' : 's'} walk among the players. They win by surviving ${gameSettings.dragonRounds} rounds or taking the Iron Throne.`);
+    }
     if (king?.isBot) {
       const candidates = connected.filter(candidate => candidate.id !== king.id);
       handPlayerId = candidates[randomInt(0, candidates.length - 1)].id;
@@ -726,6 +809,7 @@ io.on('connection', socket => {
     const target = players.get(String(payload.playerId || ''));
     if (!target || target.left) return fail('Choose a player who is still in the game.');
     if (target.id === player.id) return fail('The king cannot appoint themself as the Hand of the King.');
+    if (target.eliminated) return fail('That player has been eliminated.');
     if (target.id === handPlayerId) return fail(`${target.username} is already the Hand of the King.`);
     handPlayerId = target.id;
     addEvent('important', `${player.username} appointed ${target.username} as the new Hand of the King.`);
@@ -829,7 +913,7 @@ io.on('connection', socket => {
     h.navy -= units.navy;
     h.dragons -= units.dragons;
     for (const k of ['infantry', 'navy', 'dragons']) note(h, k, -units[k], `Sent to war on ${target.name}`);
-    h.pendingAttack = { targetCapitalId: target.id, targetName: target.name, orderedRound: round, resolveRound: round + 1, units };
+    h.pendingAttack = { targetCapitalId: target.id, targetName: target.name, orderedRound: round, resolveRound: round + 1, units, playerId: player.id };
     h.hasAttackedThisRound = true;
     addEvent('normal', `House ${h.name} secretly committed an attack against a capital.`);
     return ok(`Attack order placed. It will resolve after Round ${round + 1} court.`);
@@ -1013,6 +1097,7 @@ io.on('connection', socket => {
   action(socket, 'advance-phase', (player) => {
     const check = requirePlayer(player); if (check.ok === false) return check;
     if (!isHost(player)) return fail('Only the host can advance the game.');
+    if (gameOver) return fail('The game is over. Return to the lobby to play again.');
     if (phase === 'ACTION') {
       phase = 'COURT';
       addEvent('important', `Round ${round} action phase ended. Court is now in session.`);
@@ -1023,6 +1108,7 @@ io.on('connection', socket => {
       resolveDueAttacks();
       settleSpoils(true);
       addEvent('important', `Round ${round} court has concluded. The realm has entered resolution.`);
+      checkVictory(true);
       return ok('Round resolution has begun.');
     }
     if (phase === 'RESOLUTION') {
@@ -1105,7 +1191,7 @@ function fightBattle(attacker, allyHouse) {
       target.ownerHouseId = null;
       target.contested = { houseA: attacker.id, houseB: allyHouse.id };
       const claims = { [attacker.id]: null, [allyHouse.id]: null };
-      const spoil = { id: randomUUID(), capitalId: target.id, houseA: attacker.id, houseB: allyHouse.id, claims, round, deadlineRound: round + 1, plunder, status: 'open' };
+      const spoil = { id: randomUUID(), capitalId: target.id, houseA: attacker.id, houseB: allyHouse.id, claims, round, deadlineRound: round + 1, plunder, status: 'open', orderers: { [attacker.id]: order.playerId, [allyHouse.id]: allyOrder?.playerId } };
       if (houseIsBotOnly(allyHouse.id)) claims[allyHouse.id] = attacker.id;
       spoils.unshift(spoil);
       addEvent('battle', `Houses ${attacker.name} and ${allyHouse.name} stormed ${target.name} together (attack ${attackStrength} vs. defense ${defense}) and split ${plunder} gold of plunder. They must agree who will rule it, or fight for it.`);
@@ -1114,6 +1200,7 @@ function fightBattle(attacker, allyHouse) {
       settleSpoils(false);
     } else if (attackStrength >= defense) {
       target.ownerHouseId = attacker.id;
+      if (target.id === 'kings-landing') throneTaken(attacker.id, order.playerId);
       notify('battle-won', [attacker.id], [], `Victory at ${target.name}`, `House ${capWord(attacker.name)} captured ${target.name}.`, [attacker.id, defender?.id].filter(Boolean));
       if (defender) notify('attacked', [defender.id], [], `${target.name} was attacked`, `House ${capWord(attacker.name)} attacked and took ${target.name}.`, [attacker.id, defender.id]);
       addEvent('battle', `House ${attacker.name} captured ${target.name} from House ${defender?.name || 'an unknown house'} (attack ${attackStrength} vs. defense ${defense}).`);

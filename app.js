@@ -209,6 +209,7 @@
 
   // Why `house` can't be taken by player `excludeId` right now (null = available). Mirrors the server rules.
   function minorHouseReason(house, excludeId) {
+    if (house.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON') return 'Not available in Last Dragon';
     if (house.type !== 'minor') return null;
     const maxPlayers = Number(state.settings?.maxPlayers);
     if (maxPlayers < 7) return `Minor house · host must set the player limit to 7 or more (${maxPlayers || 0}/7)`;
@@ -224,7 +225,7 @@
     const activePlayers = state.players.filter(player => !player.left);
     $('lobbyCount').textContent = `${activePlayers.length} player${activePlayers.length === 1 ? '' : 's'}`;
     const setup = state.settings || { maxPlayers: 16, gameType: 'CLASSIC' };
-    const gameTypeLabel = setup.gameType === 'LAST_DRAGON' ? 'Last Dragon · rules coming later' : 'Classic';
+    const gameTypeLabel = setup.gameType === 'LAST_DRAGON' ? `Last Dragon · ${plural(setup.dragonCount || 1, 'Dragon')} · ${setup.dragonRounds || 5} rounds` : 'Classic';
     $('lobbySettings').textContent = `${gameTypeLabel} · ${activePlayers.length} of ${setup.maxPlayers} players`;
     lobbyCanChangeHouse = state.phase === 'LOBBY' && state.houses.some(h => h.id !== state.me.houseId && !minorHouseReason(h, state.me.id));
     lock(document.querySelector('[data-action="edit-menu-house"]'), lobbyCanChangeHouse ? '' : 'There are no other houses available right now.');
@@ -434,7 +435,7 @@
     else if (mission === 'ravens') body = (f.letters || []).length ? f.letters.map(l => `<p><b>${escapeHtml(l.from)}</b> to ${escapeHtml(l.to)}: “${escapeHtml(l.text)}”</p>`).join('') : '<p>No ravens were flying.</p>';
     else if (f.mole?.kind === 'wealth') body = `<p>Their treasury holds ${f.mole.gold} gold.</p>`;
     else if (f.mole?.kind === 'alliance') body = `<p>Secret alliance with ${f.mole.houses.map(id => `House ${escapeHtml(capName(prettyHouse(id)))}`).join(', ')}.</p>`;
-    else if (f.mole?.kind === 'dragons') body = `<p>${f.mole.dragons ? `They hold ${f.mole.dragons} dragon${f.mole.dragons === 1 ? '' : 's'}: one of the last.` : 'They hold no dragons.'}</p>`;
+    else if (f.mole?.kind === 'dragon') body = `<p>${f.mole.hasDragon ? 'A Dragon hides in this house.' : 'No Dragon hides in this house.'}</p>`;
     return `<article class="spy-report">${head}${body}</article>`;
   }
   function updateSpyForm() {
@@ -752,7 +753,7 @@
     if ((currentSub === 'decrees' && !state.isKing) || (currentSub === 'hand' && !state.isHand)) showSub(null);
     if (state.isKing) {
       const keep = $('newHandSelect').value;
-      $('newHandSelect').innerHTML = state.players.filter(p => !p.left && p.id !== state.me?.id).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.username)}${p.id === state.hand?.id ? ' (current Hand)' : ''}</option>`).join('');
+      $('newHandSelect').innerHTML = state.players.filter(p => !p.left && !p.eliminated && p.id !== state.me?.id).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.username)}${p.id === state.hand?.id ? ' (current Hand)' : ''}</option>`).join('');
       if (keep) $('newHandSelect').value = keep;
       lock($('newHandForm').querySelector('button[type="submit"]'), !diploOpen() ? 'A new Hand can be named during the action and court phases.' : !$('newHandSelect').value ? 'There is no one else at court.' : $('newHandSelect').value === state.hand?.id ? 'That player is already the Hand.' : '');
     }
@@ -823,6 +824,7 @@
       if (!maxSelect.options.length) maxSelect.innerHTML = Array.from({ length: 15 }, (_, i) => i + 2).map(n => `<option value="${n}">${n} players</option>`).join('');
       maxSelect.value = String(state?.settings?.maxPlayers || 4);
       $('gameTypeInput').value = state?.settings?.gameType || 'CLASSIC';
+      updateDragonSetup();
     }
     const chosen = $('chosenHouse');
     if (chosen) {
@@ -841,11 +843,12 @@
     if (!frame?.contentWindow || !state?.houses) return;
     const houses = state.houses.map(h => {
       const reason = minorHouseReason(h, state.me?.id);
+      const hiddenHouse = h.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON';
       const locked = Boolean(reason) && reason !== 'Already claimed by another player';
       const claimed = reason === 'Already claimed by another player';
       return {
         id: h.id, name: h.name, motto: h.motto, color: h.color,
-        status: locked ? 'locked' : claimed ? 'claimed' : 'open',
+        status: hiddenHouse ? 'hidden' : locked ? 'locked' : claimed ? 'claimed' : 'open',
         note: reason || (h.type === 'major' ? `Major house · ${h.players.length} sworn` : 'Minor house · one player only')
       };
     });
@@ -877,7 +880,7 @@
     if (!bot) return;
     editingBotId = botId;
     $('botNameInput').value = bot.username;
-    $('botHouseSelect').innerHTML = state.houses.map(h => {
+    $('botHouseSelect').innerHTML = state.houses.filter(h => !(h.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON')).map(h => {
       const unavailable = Boolean(minorHouseReason(h, bot.id));
       return `<option value="${escapeHtml(h.id)}" ${unavailable ? 'disabled' : ''}>${escapeHtml(h.name)}${h.type === 'minor' ? ' · Minor' : ''}</option>`;
     }).join('');
@@ -1145,6 +1148,47 @@
       dd.querySelector('.hdrop-list').innerHTML = items.map(it => `<div class="hdrop-item ${it.o.value === sel.value ? 'sel' : ''}" role="option" data-value="${escapeHtml(it.o.value)}"${it.o.disabled ? ' data-disabled="1"' : ''} style="--house-color:${escapeHtml(it.house?.color || '#888')}">${row(it)}</div>`).join('');
     }
   }
+  function updateDragonSetup() {
+    const ld = $('gameTypeInput').value === 'LAST_DRAGON';
+    $('dragonSetup').hidden = !ld;
+    const max = Math.max(1, Math.floor(Number($('maxPlayersInput').value || 4) / 2));
+    const sel = $('dragonCountInput'), keep = Number(sel.value) || Number(state?.settings?.dragonCount) || 1;
+    sel.innerHTML = Array.from({ length: max }, (_, i) => `<option value="${i + 1}">${plural(i + 1, 'Dragon')}</option>`).join('');
+    sel.value = String(Math.min(keep, max));
+    if (!$('dragonRoundsInput').dataset.set) { $('dragonRoundsInput').value = String(state?.settings?.dragonRounds || 5); $('dragonRoundsInput').dataset.set = '1'; }
+    $('gameTypeNote').textContent = ld
+      ? 'Targaryen is not a house in this mode. Secret Dragons are picked at random from the players. If they survive the set number of rounds or one takes the throne, they win. If they are all defeated first, the whole realm wins.'
+      : 'Defeat every other house to win.';
+  }
+  let gameOverShownFor = '';
+  function renderEndgame() {
+    const note = $('dragonNote');
+    const ld = state?.settings?.gameType === 'LAST_DRAGON';
+    const live = ['ACTION', 'COURT', 'RESOLUTION'].includes(state?.phase) && !state?.gameOver;
+    let text = '';
+    if (live && ld) {
+      if (state.dragon) text = `You are a secret Dragon${state.dragon.fellow.length ? ` with ${state.dragon.fellow.map(d => d.username).join(', ')}` : ''}. Survive to round ${state.settings.dragonRounds} or take the throne. If every Dragon falls, the realm wins.`;
+      else text = `${plural(state.settings.dragonCount, 'secret Dragon')} walk among you. Defeat them before round ${state.settings.dragonRounds} ends.`;
+    }
+    if (live && state.me?.eliminated) text = 'You have been eliminated when the throne fell. You can still watch and speak at court.';
+    else if (live && state.isKing && !state.hand) text = 'You hold King’s Landing and wear the crown. Appoint your Hand from Relations → Decrees.' + (text ? ' ' + text : '');
+    if (live && state.myHouse?.fallen) text = 'Your house has fallen. You can still watch and speak at court.' + (text ? ' ' + text : '');
+    note.hidden = !text; note.textContent = text;
+    const go = state?.gameOver;
+    if (!go) { gameOverShownFor = ''; $('gameOverOverlay').hidden = true; return; }
+    const key = go.type + go.text;
+    if (gameOverShownFor === key) return;
+    gameOverShownFor = key;
+    const youWon = go.type === 'REALM' ? !state.dragon : go.type === 'DRAGONS' ? Boolean(state.dragon) : go.winnerHouseId === state.me?.houseId;
+    $('gameOverEyebrow').textContent = go.type === 'DRAGONS' ? 'THE DRAGONS WIN' : go.type === 'REALM' ? 'THE REALM WINS' : 'A HOUSE WINS';
+    $('gameOverTitle').textContent = youWon ? 'Victory' : 'Defeat';
+    $('gameOverText').textContent = go.text;
+    const dr = $('gameOverDragons');
+    dr.hidden = !go.dragons?.length;
+    dr.textContent = go.dragons?.length ? `The Dragons were: ${go.dragons.map(d => `${d.username} (House ${prettyHouse(d.houseId)})`).join(', ')}.` : '';
+    $('gameOverReset').hidden = !state.isHost;
+    $('gameOverOverlay').hidden = false;
+  }
   function render() {
     updateScreens();
     applyTheme();
@@ -1162,6 +1206,7 @@
     claimPickedHouse();
 
     renderWaitingRoom();
+    renderEndgame();
     checkRoleChanges();
     checkNotices();
     if (state.phase === 'HAND_SELECTION') {
@@ -1340,10 +1385,12 @@
       socket.emit('request-state');
     });
   });
+  $('gameTypeInput').addEventListener('change', updateDragonSetup);
+  $('maxPlayersInput').addEventListener('change', updateDragonSetup);
   $('hostSetupForm').addEventListener('submit', event => {
     event.preventDefault();
     $('hostSetupError').textContent = '';
-    const settings = { maxPlayers: Number($('maxPlayersInput').value), gameType: $('gameTypeInput').value };
+    const settings = { maxPlayers: Number($('maxPlayersInput').value), gameType: $('gameTypeInput').value, dragonCount: Number($('dragonCountInput').value || 1), dragonRounds: Number($('dragonRoundsInput').value || 5) };
     socket.emit(preparingHost ? 'set-room-settings' : 'set-game-settings', preparingHost ? { ...settings, clientToken } : settings, result => {
       if (!result?.ok) $('hostSetupError').textContent = result?.message || 'Could not save game setup.';
       else {
@@ -1479,6 +1526,8 @@
     if (action === 'pick-target') { startPick(); return; }
     if (action === 'go-to-war') { openHub('army', 'war'); startPick(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
+    if (action === 'close-gameover') { $('gameOverOverlay').hidden = true; return; }
+    if (action === 'reset-game') { emitAction('reset-game'); $('gameOverOverlay').hidden = true; return; }
     if (action === 'map-zoom-reset') { applyMapZoom(1, false); const vp = $('mapViewport'); vp.scrollLeft = 0; vp.scrollTop = 0; return; }
     if (action === 'close-map') { setMapOpen(false); return; }
     if (action === 'change-house') {

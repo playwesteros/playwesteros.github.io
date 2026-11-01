@@ -87,7 +87,7 @@
   </section>
   <form id="modePinPanel" class="mode-pin-panel" hidden>
     <label for="modePinInput">ENTER GAME PIN</label>
-    <input id="modePinInput" maxlength="4" minlength="4" inputmode="text" autocomplete="one-time-code" required>
+    <input id="modePinInput" maxlength="4" minlength="4" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required>
     <div><button type="submit">Join the game</button><button id="cancelPin" type="button">Back</button></div>
     <small id="pinError" aria-live="polite"></small>
   </form>
@@ -118,7 +118,7 @@
     const escapeHtml=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     function houseAt(i){return H[i]}
     function renderHouseButtons(){
-      houseGrid.innerHTML=H.map((house,i)=>{const pos=HOUSE_SPRITES[house.key]||['0%','0%'];return `<button class="house-option" type="button" data-i="${i}" aria-label="${escapeHtml(house.name)} · ${escapeHtml(house.motto)}"><span class="banner-art" aria-hidden="true" style="--sprite-x:${pos[0]};--sprite-y:${pos[1]}"></span><strong>${escapeHtml(house.name)}</strong><small>${escapeHtml(house.motto)}</small></button>`}).join('');
+      houseGrid.innerHTML=H.map((house,i)=>{if(house.status==='hidden')return '';const pos=HOUSE_SPRITES[house.key]||['0%','0%'];return `<button class="house-option" type="button" data-i="${i}" aria-label="${escapeHtml(house.name)} · ${escapeHtml(house.motto)}"><span class="banner-art" aria-hidden="true" style="--sprite-x:${pos[0]};--sprite-y:${pos[1]}"></span><strong>${escapeHtml(house.name)}</strong><small>${escapeHtml(house.motto)}</small></button>`}).join('');
       bindHouseButtons();
     }
     function show(i){const house=houseAt(i);n.textContent=house.name;w.textContent=house.motto;root.style.setProperty('--c',house.color);if(house.status!=='open')setHint(house.note||'Not available',true);else setHint(house.note||'Choose this house')}
@@ -143,7 +143,7 @@
     addEventListener('message',ev=>{if(ev.source!==window.parent||!ev.data)return;
       if(ev.data.type==='iron-throne:set-mode'&&['entry','house'].includes(ev.data.mode))transitionMode(ev.data.mode);
       if(ev.data.type==='iron-throne:mode-error'){const message=String(ev.data.message||'Could not continue.');pinError.textContent=message;setHint(modePinPanel.hidden?message:'Choose an option to try again',true)}
-      if(ev.data.type==='iron-throne:houses'&&Array.isArray(ev.data.houses)){for(const item of ev.data.houses){const house=H.find(x=>x.key===normHouse(item.name)||x.key===normHouse(item.id));if(!house)continue;house.id=item.id;if(item.name){const nm=String(item.name).replace(/^house\s+/i,'');house.name='House '+nm.charAt(0).toUpperCase()+nm.slice(1)}if(item.motto)house.motto=String(item.motto);if(/^#[0-9a-f]{3,8}$/i.test(item.color||''))house.color=item.color;house.status=['open','locked','claimed'].includes(item.status)?item.status:'open';house.note=String(item.note||'')}if(previewed>=0&&H[previewed].status!=='open'){previewed=-1;confirmHouse.hidden=true}renderHouseButtons()}
+      if(ev.data.type==='iron-throne:houses'&&Array.isArray(ev.data.houses)){for(const item of ev.data.houses){const house=H.find(x=>x.key===normHouse(item.name)||x.key===normHouse(item.id));if(!house)continue;house.id=item.id;if(item.name){const nm=String(item.name).replace(/^house\s+/i,'');house.name='House '+nm.charAt(0).toUpperCase()+nm.slice(1)}if(item.motto)house.motto=String(item.motto);if(/^#[0-9a-f]{3,8}$/i.test(item.color||''))house.color=item.color;house.status=['open','locked','claimed','hidden'].includes(item.status)?item.status:'open';house.note=String(item.note||'')}if(previewed>=0&&H[previewed].status!=='open'){previewed=-1;confirmHouse.hidden=true}renderHouseButtons()}
       if(ev.data.type==='iron-throne:reset'){picked=-1;previewed=-1;modePinPanel.hidden=true;syncPanels();applyStatus();reset()}
     });
     renderHouseButtons();syncPanels();reset();

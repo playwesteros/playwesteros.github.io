@@ -788,3 +788,8 @@ body.house-themed .footer { border-color: var(--line); }
 .hdrop-item:hover, .hdrop-item.sel { background: color-mix(in srgb, var(--house-color, #888) 30%, #14171d); }
 .hdrop-item[data-disabled] { opacity: .45; cursor: default; }
 .hdrop-item .msg-banner, .hdrop-btn .msg-banner { width: 24px; height: 29px; flex-basis: 24px; }
+
+.dragon-note { margin: 0 0 10px; padding: 9px 12px; border: 1px solid color-mix(in srgb, #bf6258 55%, transparent); border-left-width: 3px; border-radius: 6px; background: color-mix(in srgb, #bf6258 12%, #14161a); color: var(--text); font-size: 13px; line-height: 1.4; }
+#dragonSetup { display: grid; gap: 6px; }
+#dragonSetup[hidden] { display: none; }
+#dragonRoundsInput { width: 100%; padding: 10px 12px; border: 1px solid var(--line, #3a3d44); border-radius: 6px; background: #14161a; color: var(--text); font: inherit; }

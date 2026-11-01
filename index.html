@@ -13,10 +13,10 @@
   <meta name="description" content="A temporary multiplayer Great Houses strategy game prototype.">
   <title>War of Westeros — Multiplayer Strategy</title>
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=1">
-  <link rel="stylesheet" href="./style.css?v=46">
+  <link rel="stylesheet" href="./style.css?v=47">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=51" defer></script>
+  <script src="./app.js?v=53" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -40,7 +40,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.0.8</span>
+  <span id="gameVersion" class="version-tag" hidden>v2.1.1</span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -58,9 +58,15 @@
         <label for="gameTypeInput">Game type</label>
         <select id="gameTypeInput" name="gameType" required>
           <option value="CLASSIC">Classic</option>
-          <option value="LAST_DRAGON">Last Dragon · rules coming later</option>
+          <option value="LAST_DRAGON">Last Dragon</option>
         </select>
-        <p class="muted small-text setup-note">Last Dragon is a placeholder for now; selecting it won’t change the current game rules.</p>
+        <div id="dragonSetup" hidden>
+          <label for="dragonCountInput">Secret Dragons</label>
+          <select id="dragonCountInput" name="dragonCount"></select>
+          <label for="dragonRoundsInput">Rounds the Dragons must survive</label>
+          <input id="dragonRoundsInput" name="dragonRounds" type="number" min="1" max="30" value="5" inputmode="numeric">
+        </div>
+        <p id="gameTypeNote" class="muted small-text setup-note"></p>
         <button class="button button-primary button-full" type="submit">Save setup and continue to house selection <span>→</span></button>
         <div id="hostSetupError" class="form-error" aria-live="polite"></div>
       </form>
@@ -148,6 +154,7 @@
       <div><p class="eyebrow" id="phaseEyebrow">THE COUNCIL</p><h1 id="phaseTitle">The Great Houses</h1><p id="phaseDescription" class="muted">Choose your house to begin.</p></div>
     </section>
 
+    <p id="dragonNote" class="dragon-note" hidden></p>
     <section id="actionHub" class="action-hub" aria-label="Round menus" hidden>
       <button class="hub-button" type="button" data-action="open-hub" data-hub="money" data-cat="money"><span id="badgeMoney" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-coins.png?v=2" alt=""><h3>Money</h3><div class="hub-detail"><strong id="hubMoneyGold">—</strong><span id="hubMoneyIncome"></span><span id="hubMoneyCapitals"></span></div></button>
       <button class="hub-button" type="button" data-action="open-hub" data-hub="relations" data-cat="relations"><span id="badgeRelations" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Relations</h3><div class="hub-detail"><strong id="hubRelAlliances">—</strong><span id="hubRelOffers"></span><span id="hubRelRole"></span></div></button>
@@ -431,6 +438,15 @@
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
   </main>
+  <div id="gameOverOverlay" class="announce-overlay" role="alertdialog" aria-labelledby="gameOverTitle" hidden>
+    <div class="announce-card decree-pop">
+      <p class="eyebrow" id="gameOverEyebrow">GAME OVER</p>
+      <h2 id="gameOverTitle"></h2>
+      <p id="gameOverText"></p>
+      <p id="gameOverDragons" class="muted small-text" hidden></p>
+      <div class="return-actions"><button type="button" id="gameOverReset" class="button button-primary" data-action="reset-game" hidden>Back to the lobby</button><button type="button" class="button button-secondary" data-action="close-gameover">Close</button></div>
+    </div>
+  </div>
   <div id="returnOverlay" class="announce-overlay" role="alertdialog" aria-labelledby="returnTitle" hidden>
     <div class="announce-card decree-pop">
       <h2 id="returnTitle">Return to your game?</h2>
