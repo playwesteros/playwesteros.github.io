@@ -242,7 +242,7 @@
       return `<div class="player-row ${p.left ? 'player-left' : ''} ${own ? 'player-row-own' : ''}" ${own && house?.color ? `style="--house-color:${escapeHtml(house.color)}"` : ''}>${houseControl}<div class="player-row-info"><strong>${escapeHtml(p.username)}<img class="player-icon name-icon ${p.isBot || (p.connected && !p.left && p.houseId) ? '' : 'player-away'}" src="./assets/ui-${p.isBot ? 'bot' : p.connected && !p.left && p.houseId ? 'player' : 'dead'}.png?v=2" alt="">${p.id === state.hostId ? ' <em class="host-tag">SERVER OWNER</em>' : ''}${nameEdit}${botControls}${kickControl}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'Joining · house not chosen'} · ${status}</small></div></div>`;
     }).join('') : '<p class="muted">The hall is quiet. Be the first to join.</p>';
     const canStart = state.isHost && state.phase === 'LOBBY';
-    const hasBaratheon = state.players.some(p => p.connected && p.houseId === 'baratheon');
+    const hasBaratheon = state.players.some(p => p.connected && !p.isBot && p.houseId === 'baratheon');
     const canAddBot = canStart && activePlayers.length < Number(setup.maxPlayers);
     $('addBotButton').hidden = !canStart;
     lock($('addBotButton'), canAddBot ? '' : 'The hall is full. Raise the player limit or remove someone first.');
@@ -250,9 +250,9 @@
     const connectedPlayers = activePlayers.filter(p => p.connected);
     const hasMinor = connectedPlayers.some(p => state.houses.find(h => h.id === p.houseId)?.type === 'minor');
     const thinMajors = hasMinor ? state.houses.filter(h => h.type === 'major' && connectedPlayers.filter(p => p.houseId === h.id).length < 2).map(h => h.name) : [];
-    lock($('startGameButton'), !canStart ? '' : !hasBaratheon ? 'A connected player or bot must join House Baratheon first, so the crown has someone to claim it.' : connectedPlayers.length < 2 ? 'At least 2 connected players are needed to begin.' : thinMajors.length ? `With minor houses in play, every major house needs at least 2 players. Still short: ${thinMajors.map(capName).join(', ')}.` : '');
+    lock($('startGameButton'), !canStart ? '' : !hasBaratheon ? 'A human player must join House Baratheon first. Bots cannot be king.' : connectedPlayers.length < 2 ? 'At least 2 connected players are needed to begin.' : thinMajors.length ? `With minor houses in play, every major house needs at least 2 players. Still short: ${thinMajors.map(capName).join(', ')}.` : '');
     $('lobbyHostNote').textContent = !canStart ? 'The server owner will begin the game when everyone is ready.'
-      : !hasBaratheon ? 'A connected player or bot must join House Baratheon to receive its first-king buff.'
+      : !hasBaratheon ? 'A human player must join House Baratheon to be the first king.'
       : thinMajors.length ? `With minor houses in play, every major house needs at least 2 players. Still short: ${thinMajors.join(', ')}.`
       : 'As server owner, begin when everyone is ready.';
   }
@@ -905,10 +905,19 @@
     vp.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
     vp.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); applyMapZoom(mapZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
   })();
+  function fitMap() {
+    const vp = $('mapViewport'), dlg = $('mapDialog');
+    const vh = Math.max(280, Math.min(window.innerHeight - 175, 1500));
+    const mapW = vh * 1024 / 1721;
+    dlg.style.width = Math.max(320, Math.min(window.innerWidth - 20, mapW + 40, 900)) + 'px';
+    vp.style.maxHeight = 'none'; vp.style.height = vh + 'px';
+    mapZoom = 1; applyMapZoom(1, false);
+    vp.scrollLeft = 0; vp.scrollTop = 0;
+  }
   function setMapOpen(open) {
     const dialog = $('mapDialog');
     if (open) {
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) { dialog.showModal(); fitMap(); }
     } else if (dialog.open) dialog.close();
     dialog.querySelectorAll('.map-cap.is-active').forEach(cap => cap.classList.remove('is-active'));
   }

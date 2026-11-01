@@ -689,8 +689,8 @@ io.on('connection', socket => {
     const connected = connectedPlayers();
     if (connected.length < 2) return fail('At least two players are needed so the king can appoint a Hand.');
     if (connected.some(p => !p.houseId)) return fail('Everyone connected must choose a house before the game begins.');
-    const baratheons = connected.filter(p => p.houseId === 'baratheon');
-    if (!baratheons.length) return fail('A connected player or bot must join House Baratheon to receive its first-king buff.');
+    const baratheons = connected.filter(p => p.houseId === 'baratheon' && !p.isBot);
+    if (!baratheons.length) return fail('A human player must join House Baratheon to be the first king. Bots cannot be king.');
     if (connected.some(p => findHouse(p.houseId)?.type === 'minor')) {
       const thin = houses.filter(h => h.type === 'major' && connected.filter(p => p.houseId === h.id).length < 2);
       if (thin.length) return fail(`With minor houses in play, every major house needs at least 2 players. Still short: ${thin.map(h => h.name).join(', ')}.`);
