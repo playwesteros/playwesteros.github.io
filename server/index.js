@@ -100,7 +100,9 @@ function freshHouses() {
 function freshCapitals() {
   return CAPITAL_DEFS.map(cap => ({ ...cap, ownerHouseId: cap.originalHouseId }));
 }
-function resetWorld(keepPlayers = true) {
+function resetWorld(keepPlayers = true, rematch = false) {
+  const keptSettings = rematch ? { ...gameSettings } : null;
+  const keptHouses = rematch ? new Map([...players.values()].map(p => [p.id, p.houseId])) : null;
   phase = 'LOBBY';
   round = 1;
   gameSettings = { configured: false, maxPlayers: 4, gameType: 'CLASSIC', dragonCount: 1, dragonRounds: 5 };
@@ -137,15 +139,10 @@ function resetWorld(keepPlayers = true) {
       p.isHand = false;
       p.eliminated = false;
     }
-    // Bots keep their seat: spread them over the major houses again.
-    for (const b of players.values()) {
-      if (!b.isBot || b.left) continue;
-      const count = id => [...players.values()].filter(q => !q.left && q.houseId === id).length;
-      const majors = houses.filter(h => h.type === 'major');
-      b.houseId = (count('baratheon') === 0 ? findHouse('baratheon') : majors.sort((m, n) => count(m.id) - count(n.id))[0]).id;
-    }
+    if (rematch) for (const p of players.values()) { p.houseId = keptHouses.get(p.id) || null; }
   }
-  addEvent('important', 'The Great Houses gather. The realm is reset and the lobby is open.');
+  if (rematch && keptSettings) gameSettings = keptSettings;
+  addEvent('important', rematch ? 'A new game begins. Everyone keeps their house; the host can start when ready.' : 'The Great Houses gather. The realm is reset and the lobby is open.');
 }
 resetWorld(false);
 const gameRooms = new Map();
@@ -1155,8 +1152,8 @@ io.on('connection', socket => {
   action(socket, 'reset-game', (player) => {
     const check = requirePlayer(player); if (check.ok === false) return check;
     if (!isHost(player)) return fail('Only the host can reset the game.');
-    resetWorld(true);
-    return ok('The game has been reset. All players can choose a house again.');
+    resetWorld(true, true);
+    return ok('New game ready. Everyone keeps their house; start when ready.');
   });
 });
 

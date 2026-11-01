@@ -1082,6 +1082,23 @@
     const item = announceQueue.shift();
     if (!item) { announceShowing = false; $('announceOverlay').hidden = true; return; }
     announceShowing = true;
+    if (item.reveal) {
+      const r = item.reveal;
+      const house = state.houses.find(h => h.id === r.houseId);
+      $('announceEyebrow').textContent = 'YOUR ROLE';
+      $('announceTitle').textContent = r.dragon ? 'You are a Targaryen' : `You are House ${house ? capName(house.name) : ''}`;
+      $('announceStage').classList.remove('has-old');
+      $('announceStage').classList.add('is-notice');
+      $('announceStage').innerHTML = announceBanner({ houseId: r.dragon ? 'targaryen' : r.houseId }, 'ann-new ann-first notice-banner');
+      $('announceName').innerHTML = `<span class="notice-text">${r.dragon
+        ? `A secret Dragon. Publicly you remain House ${escapeHtml(house ? capName(house.name) : '')}.${r.fellow.length ? ` Fellow Dragons: ${escapeHtml(r.fellow.map(d => d.username).join(', '))}.` : ' You are the only Dragon.'}`
+        : `You are loyal to your chosen house. ${plural(r.count, 'Dragon')} hide${r.count === 1 ? 's' : ''} among the players.`}</span>`;
+      $('announceOverlay').querySelector('.announce-card').dataset.tone = r.dragon ? 'bad' : 'good';
+      $('announceOverlay').hidden = false;
+      clearTimeout(announceTimer);
+      announceTimer = setTimeout(closeAnnouncement, 9000);
+      return;
+    }
     if (item.gameover) {
       const go = item.gameover;
       const youWon = go.type === 'REALM' ? !state.dragon : go.type === 'DRAGONS' ? Boolean(state.dragon) : go.winnerHouseId === state.me?.houseId;
@@ -1185,6 +1202,7 @@
       : 'Defeat every other house to win.';
   }
   let gameOverShownFor = '';
+  let roleRevealShown = false;
   function renderEndgame() {
     const note = $('dragonNote');
     const ld = state?.settings?.gameType === 'LAST_DRAGON';
@@ -1198,6 +1216,12 @@
     else if (live && state.isKing && !state.hand) text = 'You hold King’s Landing and wear the crown. Appoint your Hand from Relations → Decrees.' + (text ? ' ' + text : '');
     if (live && state.myHouse?.fallen) text = 'Your house has fallen. You can still watch and speak at court.' + (text ? ' ' + text : '');
     note.hidden = !text; note.textContent = text;
+    if (state?.phase === 'LOBBY') roleRevealShown = false;
+    if (ld && state?.me?.houseId && state.phase !== 'LOBBY' && !state.gameOver && !roleRevealShown) {
+      roleRevealShown = true;
+      announceQueue.push({ reveal: { dragon: Boolean(state.dragon), fellow: state.dragon?.fellow || [], houseId: state.me.houseId, count: state.settings.dragonCount } });
+      if (!announceShowing) showNextAnnouncement();
+    }
     const go = state?.gameOver;
     if (!go) { gameOverShownFor = ''; return; }
     if (live === false && go) { note.hidden = false; note.textContent = go.text; }
