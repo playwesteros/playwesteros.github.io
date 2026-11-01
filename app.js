@@ -321,6 +321,7 @@
     const inf = Number($('attackInfantry').value), nav = Number($('attackNavy').value), dr = Number($('attackDragons').value);
     if ([inf, nav, dr].some(n => !Number.isInteger(n) || n < 0)) return 'Units to send must be whole numbers, zero or more.';
     if (inf + nav + dr < 1) return 'Commit at least one unit to the war.';
+    { const t = state.capitals.find(c => c.id === warTargetId); if (nav > 0 && t?.id === 'winterfell' && t.ownerHouseId === 'stark') return 'Winterfell cannot be attacked by ships. Send land forces only.'; }
     if (inf > h.infantry || nav > h.navy || dr > h.dragons) return `You only have ${h.infantry} infantry, ${h.navy} ships and ${h.dragons} dragons to send.`;
     return '';
   }
@@ -753,7 +754,7 @@
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
     $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
     const mine = state.capitals.filter(c => c.ownerHouseId === h.id);
-    $('moneyCapitals').innerHTML = mine.length ? mine.map(c => `<div class="resolution-item"><span>+${h.incomePerCapital}</span><p class="row-who">${c.originalHouseId ? bannerOf(c.originalHouseId) : ''}${escapeHtml(c.name)}</p></div>`).join('') : '<p class="muted small-text">Your house holds no capitals, so it earns no income.</p>';
+    $('moneyCapitals').innerHTML = mine.length ? mine.map(c => `<div class="resolution-item"><span>+${c.income ?? h.incomePerCapital}</span><p class="row-who">${c.originalHouseId ? bannerOf(c.originalHouseId) : ''}${escapeHtml(c.name)}</p></div>`).join('') : '<p class="muted small-text">Your house holds no capitals, so it earns no income.</p>';
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
     $('armyNavy').textContent = h.navy + (h.navyBuilding ? ` (+${h.navyBuilding} building)` : '');
@@ -839,8 +840,8 @@
     document.body.classList.toggle('throne-open', showThrone);
     if (hostSetup) {
       const maxSelect = $('maxPlayersInput');
-      if (!maxSelect.options.length) maxSelect.innerHTML = Array.from({ length: 15 }, (_, i) => i + 2).map(n => `<option value="${n}">${n} players</option>`).join('');
-      maxSelect.value = String(state?.settings?.maxPlayers || 4);
+      if (!maxSelect.options.length) maxSelect.innerHTML = Array.from({ length: 14 }, (_, i) => i + 3).map(n => `<option value="${n}">${n} players</option>`).join('');
+      maxSelect.value = String(state?.settings?.maxPlayers || 10);
       $('gameTypeInput').value = state?.settings?.gameType || 'CLASSIC';
       updateDragonSetup();
     }
@@ -1213,7 +1214,7 @@
   function updateDragonSetup() {
     const ld = $('gameTypeInput').value === 'LAST_DRAGON';
     $('dragonSetup').hidden = !ld;
-    const max = Math.max(1, Math.floor(Number($('maxPlayersInput').value || 4) / 2));
+    const max = Math.max(1, Math.floor(Number($('maxPlayersInput').value || 10) / 2));
     const sel = $('dragonCountInput'), keep = Number(sel.value) || Number(state?.settings?.dragonCount) || 1;
     sel.innerHTML = Array.from({ length: max }, (_, i) => `<option value="${i + 1}">${plural(i + 1, 'Dragon')}</option>`).join('');
     sel.value = String(Math.min(keep, max));
