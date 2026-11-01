@@ -31,8 +31,8 @@ const io = new Server(server, {
 });
 
 const HOUSE_DEFS = [
-  { id: 'stark', name: 'Stark', type: 'major', color: '#91a8c1', sigil: '🐺', motto: 'Winter is Coming', capital: 'Winterfell', buff: 'King of the North: Winterfell cannot be attacked by ships, and gains +2 defense when attacked.', nerf: null },
-  { id: 'lannister', name: 'Lannister', type: 'major', color: '#c8a45c', sigil: '🦁', motto: 'Hear Me Roar!', capital: 'Casterly Rock', buff: 'Rich as a Lannister: Casterly Rock yields 18 gold a round instead of 15, and the house begins with 5 extra gold.', nerf: null },
+  { id: 'stark', name: 'Stark', type: 'major', color: '#91a8c1', sigil: '🐺', motto: 'Winter is Coming', capital: 'Winterfell', buff: 'King of the North: the city of Winterfell cannot be attacked by ships, and gains +2 defense when attacked.', nerf: null },
+  { id: 'lannister', name: 'Lannister', type: 'major', color: '#c8a45c', sigil: '🦁', motto: 'Hear Me Roar!', capital: 'Casterly Rock', buff: 'Rich as a Lannister: The city of Casterly Rock yields 18 gold a round instead of 15 to whoever holds it, and the house begins with 5 extra gold.', nerf: null },
   { id: 'baratheon', name: 'Baratheon', type: 'major', color: '#c7b8a0', sigil: '🦌', motto: 'Ours Is the Fury', capital: 'Storm’s End', buff: 'Royal Blood: a Baratheon always starts as king.', nerf: null },
   { id: 'targaryen', name: 'Targaryen', type: 'minor', color: '#bf6258', sigil: '🐉', motto: 'Fire and Blood', capital: 'Dragonstone', buff: 'Dragonlord: begins with 1 dragon; each dragon adds 5 battle strength and +2 siege strength.', nerf: 'The realm fears dragons: failed spy missions against this house are more likely.' },
   { id: 'tyrell', name: 'Tyrell', type: 'minor', color: '#76a77d', sigil: '🌹', motto: 'Growing Strong', capital: 'Highgarden', buff: 'The Reach: gains 2 extra gold per capital at round start.', nerf: 'Lavish courts: infantry recruitment costs 5 gold each.' },
@@ -261,7 +261,7 @@ function spyFindings(mission, target) {
   if (gameSettings.gameType === 'LAST_DRAGON') options.push({ kind: 'dragon', houseId: target.id, hasDragon: houseMembers(target.id).some(p => dragonIds.includes(p.id)) });
   return { mole: options[randomInt(0, options.length - 1)] };
 }
-function capitalIncome(c) { const h = findHouse(c.ownerHouseId); return h ? incomePerCapital(h) + (h.id === 'lannister' && c.id === 'casterly-rock' ? 3 : 0) : 0; }
+function capitalIncome(c) { const h = findHouse(c.ownerHouseId); return h ? incomePerCapital(h) + (c.id === 'casterly-rock' ? 3 : 0) : 0; }
 function houseIncome(h) { return capitals.filter(c => c.ownerHouseId === h.id).reduce((sum, c) => sum + capitalIncome(c), 0); }
 function currentHouseView(h) {
   if (!h) return null;
@@ -765,6 +765,7 @@ io.on('connection', socket => {
       const thin = houses.filter(h => h.type === 'major' && connected.filter(p => p.houseId === h.id).length < 2);
       if (thin.length) return fail(`With minor houses in play, every major house needs at least 2 players. Still short: ${thin.map(h => h.name).join(', ')}.`);
     }
+    if (isLastDragon() && connected.length < 3) return fail('Last Dragon needs at least 3 players: a king, a Dragon and someone loyal to the realm.');
     if (isLastDragon() && connected.some(p => p.houseId === 'targaryen')) return fail('House Targaryen is not available in Last Dragon. Ask that player to choose another house.');
     kingPlayerId = baratheons[randomInt(0, baratheons.length - 1)].id;
     const king = players.get(kingPlayerId);
@@ -773,7 +774,7 @@ io.on('connection', socket => {
     dragonIds = [];
     if (isLastDragon()) {
       const pool = connected.filter(p => p.id !== kingPlayerId);
-      for (let i = 0; i < gameSettings.dragonCount && pool.length > 1; i++) dragonIds.push(pool.splice(randomInt(0, pool.length - 1), 1)[0].id);
+      for (let i = 0; (i < gameSettings.dragonCount && pool.length > 1) || (i === 0 && pool.length); i++) dragonIds.push(pool.splice(randomInt(0, pool.length - 1), 1)[0].id);
       addEvent('important', `${dragonIds.length} secret Dragon${dragonIds.length === 1 ? '' : 's'} walk among the players. They win by surviving ${gameSettings.dragonRounds} rounds or taking the Iron Throne.`);
     }
     if (king?.isBot) {
@@ -902,7 +903,7 @@ io.on('connection', socket => {
     if (!target || target.contested || !target.ownerHouseId || target.ownerHouseId === h.id) return fail('Choose a capital controlled by another house.');
     if (areAllied(h.id, target.ownerHouseId)) return fail(`House ${houseName(target.ownerHouseId)} is your ally. Break the alliance before marching on their capital.`);
     const units = { infantry: Number(payload.infantry), navy: Number(payload.navy), dragons: Number(payload.dragons) };
-    if (target.id === 'winterfell' && target.ownerHouseId === 'stark' && units.navy > 0) return fail('Winterfell cannot be attacked by ships. Send land forces only.');
+    if (target.id === 'winterfell' && units.navy > 0) return fail('Winterfell cannot be attacked by ships. Send land forces only.');
     if (Object.values(units).some(n => !Number.isInteger(n) || n < 0)) return fail('Committed forces must be whole numbers of zero or greater.');
     if (units.infantry + units.navy + units.dragons < 1) return fail('Commit at least one unit to the attack.');
     if (units.infantry > h.infantry || units.navy > h.navy || units.dragons > h.dragons) return fail('Your house does not have enough uncommitted forces.');

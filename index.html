@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="./style.css?v=49">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=59" defer></script>
+  <script src="./app.js?v=60" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -42,7 +42,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.1.7<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v2.1.9<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -183,8 +183,8 @@
             <p id="relationsPhaseNote" class="muted small-text"></p>
             <div class="sub-menu">
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="alliances" data-cat="alliances"><span id="badgeSubAlliances" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Alliances</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="treaties" data-cat="treaties"><span id="badgeSubTreaties" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-chain.png?v=2" alt=""><h3>Treaties &amp; Subsidies</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="messages" data-cat="messages"><span id="badgeSubMessages" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/ui-letter.png?v=1" alt=""><h3>Messages</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="treaties" data-cat="treaties"><span id="badgeSubTreaties" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/ui-letter.png?v=1" alt=""><h3>Treaties &amp; Subsidies</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="messages" data-cat="messages"><span id="badgeSubMessages" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-raven.png?v=2" alt=""><h3>Messages</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="decrees" data-cat="decrees" id="subDecrees" hidden><img src="./assets/game-throne.png?v=2" alt=""><h3>Decrees</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="hand" data-cat="hand" id="subHand" hidden><img src="./assets/game-hand.png?v=2" alt=""><h3>Hand’s Ledger</h3></button>
             </div>
@@ -292,12 +292,12 @@
                 </tbody></table>
                 <p id="upkeepNote" class="muted small-text"></p>
                 <div class="action-grid"><form id="recruitForm" class="action-card">
-              <img class="action-icon-image" src="./assets/ui-spear.png?v=1" alt=""><h3>Build your army</h3><p class="muted small-text">Infantry costs <b id="infantryCostLabel">4</b> gold each. Navy costs <b id="navyCostLabel">5</b>.</p>
+              <img class="action-icon-image" src="./assets/ui-army.png?v=1" alt=""><h3>Build your army</h3><p class="muted small-text">Infantry costs <b id="infantryCostLabel">4</b> gold each. Navy costs <b id="navyCostLabel">5</b>.</p>
               <label for="unitSelect">Unit type</label><select id="unitSelect"><option value="infantry">Infantry</option><option value="navy">Navy</option></select>
               <label for="unitAmount">Quantity (1–10)</label><input id="unitAmount" type="number" min="1" max="10" value="2" required>
               <button class="button button-primary button-full" type="submit">Recruit units</button>
             </form>
-                  <form id="disbandForm" class="action-card"><img class="action-icon-image" src="./assets/ui-ship.png?v=2" alt=""><h3>Disband units</h3><p class="muted small-text">Send troops home to save upkeep.</p><label for="disbandUnit">Unit type</label><select id="disbandUnit"><option value="infantry">Infantry</option><option value="navy">Navy</option><option value="dragons">Dragons</option></select><label for="disbandAmount">Amount</label><input id="disbandAmount" type="number" min="1" value="1" inputmode="numeric"><button class="button button-danger button-full" type="submit">Disband</button></form>
+                  <form id="disbandForm" class="action-card"><img class="action-icon-image" src="./assets/ui-soldier.png?v=2" alt=""><h3>Disband units</h3><p class="muted small-text">Send troops home to save upkeep.</p><label for="disbandUnit">Unit type</label><select id="disbandUnit"><option value="infantry">Infantry</option><option value="navy">Navy</option><option value="dragons">Dragons</option></select><label for="disbandAmount">Amount</label><input id="disbandAmount" type="number" min="1" value="1" inputmode="numeric"><button class="button button-danger button-full" type="submit">Disband</button></form>
                 </div>
               </section>
             </div>
@@ -324,9 +324,9 @@
               <img class="action-icon-image" src="./assets/game-swords.png?v=2" alt=""><h3>Go to war</h3><p class="muted small-text">Pick a target on the map and commit units. Allies who hit the same capital fight together.</p>
               <div class="war-target"><div id="warTargetBox" class="war-target-box is-empty">No target chosen yet</div><button id="pickTargetButton" class="button button-secondary" type="button" data-action="pick-target"><img class="button-icon" src="./assets/game-castle.png?v=2" alt="">Choose target on the map</button></div>
               <div class="form-columns">
-                <div><label for="attackInfantry">Infantry to send</label><input id="attackInfantry" type="number" min="0" value="3" required></div>
-                <div><label for="attackNavy">Navy to send</label><input id="attackNavy" type="number" min="0" value="0" required></div>
-                <div><label for="attackDragons">Dragons to send</label><input id="attackDragons" type="number" min="0" value="0" required></div>
+                <div><label for="attackInfantry">Infantry to send</label><input id="attackInfantry" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                <div><label for="attackNavy">Navy to send</label><input id="attackNavy" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                <div><label for="attackDragons">Dragons to send</label><input id="attackDragons" type="number" min="0" placeholder="0" inputmode="numeric"></div>
               </div>
               <button class="button button-danger button-full" type="submit">Declare war</button>
               <div id="attackOrderStatus" class="small-text muted"></div>
