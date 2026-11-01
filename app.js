@@ -379,6 +379,54 @@
       if (sub) sub.textContent = cap.contested ? 'Contested' : owner ? `House ${capName(owner.name)}` : '';
       el.classList.toggle('is-target', pickingTarget && state.myHouse && !warTargetProblem(cap));
     });
+    renderMapUnits();
+  }
+  // Your own location, your troops at home, and any army you have on the march (other houses' armies stay secret).
+  function renderMapUnits() {
+    const svg = $('mapDialog').querySelector('.realm-map');
+    if (!svg) return;
+    const NS = 'http://www.w3.org/2000/svg';
+    let layer = svg.querySelector('#mapUnits');
+    if (!layer) { layer = document.createElementNS(NS, 'g'); layer.id = 'mapUnits'; layer.setAttribute('pointer-events', 'none'); svg.appendChild(layer); }
+    layer.innerHTML = '';
+    const h = state?.myHouse;
+    if (!h || !['ACTION', 'COURT', 'RESOLUTION'].includes(state.phase)) return;
+    const pos = new Map();
+    $('mapDialog').querySelectorAll('.map-cap').forEach(el => {
+      const m = /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(el.getAttribute('transform') || '');
+      if (m && el.dataset.capital) pos.set(el.dataset.capital, { x: Number(m[1]), y: Number(m[2]) });
+    });
+    const img = (href, x, y, w) => { const i = document.createElementNS(NS, 'image'); i.setAttribute('href', href); i.setAttribute('x', x); i.setAttribute('y', y); i.setAttribute('width', w); i.setAttribute('height', w); return i; };
+    const tag = (x, y, text, color) => { const t = document.createElementNS(NS, 'text'); t.setAttribute('x', x); t.setAttribute('y', y); t.setAttribute('font-size', '32'); t.setAttribute('font-weight', '700'); t.setAttribute('fill', color || '#f3e6c2'); t.setAttribute('stroke', '#1b1208'); t.setAttribute('stroke-width', '6'); t.setAttribute('paint-order', 'stroke'); t.setAttribute('font-family', 'Georgia, serif'); t.textContent = text; return t; };
+    const home = pos.get(h.cityId);
+    const color = (state.houses.find(x => x.id === h.id) || {}).color || '#c8a45c';
+    if (home) {
+      const g = document.createElementNS(NS, 'g');
+      const ring = document.createElementNS(NS, 'circle'); ring.setAttribute('cx', home.x); ring.setAttribute('cy', home.y); ring.setAttribute('r', '40'); ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', color); ring.setAttribute('stroke-width', '6'); ring.setAttribute('stroke-dasharray', '12 9');
+      g.appendChild(ring);
+      g.appendChild(img('./assets/ui-player.png?v=2', home.x - 78, home.y - 62, 50));
+      const home_troops = h.infantry + h.navy + h.dragons;
+      if (home_troops > 0) { g.appendChild(img('./assets/ui-army.png?v=1', home.x - 82, home.y + 2, 50)); g.appendChild(tag(home.x - 28, home.y + 44, String(home_troops))); }
+      const title = document.createElementNS(NS, 'title'); title.textContent = 'You are here'; g.appendChild(title);
+      layer.appendChild(g);
+    }
+    const o = h.pendingAttack;
+    const from = home, to = o && pos.get(o.targetCapitalId);
+    if (o && from && to) {
+      const step = (state.round - o.orderedRound) * 3 + ['ACTION', 'COURT', 'RESOLUTION'].indexOf(state.phase);
+      const t = Math.min(0.85, 0.15 + 0.14 * step);
+      const line = document.createElementNS(NS, 'line');
+      line.setAttribute('x1', from.x); line.setAttribute('y1', from.y); line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
+      line.setAttribute('stroke', color); line.setAttribute('stroke-width', '9'); line.setAttribute('stroke-dasharray', '24 16'); line.setAttribute('stroke-linecap', 'round'); line.setAttribute('opacity', '.9');
+      layer.appendChild(line);
+      const x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t;
+      const dot = document.createElementNS(NS, 'circle'); dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('r', '34'); dot.setAttribute('fill', '#1b1208'); dot.setAttribute('stroke', color); dot.setAttribute('stroke-width', '6');
+      layer.appendChild(dot);
+      layer.appendChild(img('./assets/ui-army.png?v=1', x - 24, y - 24, 48));
+      const n = o.units.infantry + o.units.navy + o.units.dragons;
+      layer.appendChild(tag(x + 38, y + 12, String(n)));
+      const title = document.createElementNS(NS, 'title'); title.textContent = `Your army marching on ${o.targetName}`; dot.appendChild(title);
+    }
   }
   function showMapHint(text) {
     const hint = $('mapHint');
