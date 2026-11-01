@@ -137,6 +137,13 @@ function resetWorld(keepPlayers = true) {
       p.isHand = false;
       p.eliminated = false;
     }
+    // Bots keep their seat: spread them over the major houses again.
+    for (const b of players.values()) {
+      if (!b.isBot || b.left) continue;
+      const count = id => [...players.values()].filter(q => !q.left && q.houseId === id).length;
+      const majors = houses.filter(h => h.type === 'major');
+      b.houseId = (count('baratheon') === 0 ? findHouse('baratheon') : majors.sort((m, n) => count(m.id) - count(n.id))[0]).id;
+    }
   }
   addEvent('important', 'The Great Houses gather. The realm is reset and the lobby is open.');
 }

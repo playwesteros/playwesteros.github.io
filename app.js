@@ -496,6 +496,13 @@
   function updateRoundPill() {
     const pill = $('roundPill');
     if (!pill || !state) return;
+    if (state.gameOver) {
+      pill.textContent = state.isHost ? 'NEW GAME →' : 'GAME OVER';
+      pill.title = state.isHost ? 'Everyone is revived and chooses a house again' : '';
+      if (state.isHost) { pill.dataset.action = 'reset-game'; pill.disabled = false; pill.classList.add('round-pill-action'); }
+      else { delete pill.dataset.action; pill.disabled = true; pill.classList.remove('round-pill-action'); }
+      return;
+    }
     const step = state.isHost ? HOST_STEPS[state.phase] : null;
     if (step) {
       pill.textContent = `ROUND ${state.round} · ${step[0]} →`;
@@ -1073,6 +1080,21 @@
     const item = announceQueue.shift();
     if (!item) { announceShowing = false; $('announceOverlay').hidden = true; return; }
     announceShowing = true;
+    if (item.gameover) {
+      const go = item.gameover;
+      const youWon = go.type === 'REALM' ? !state.dragon : go.type === 'DRAGONS' ? Boolean(state.dragon) : go.winnerHouseId === state.me?.houseId;
+      const ids = go.type === 'CLASSIC' ? [go.winnerHouseId] : go.type === 'DRAGONS' ? [...new Set((go.dragons || []).map(d => d.houseId))] : [];
+      $('announceEyebrow').textContent = go.type === 'DRAGONS' ? 'THE DRAGONS WIN' : go.type === 'REALM' ? 'THE REALM WINS' : 'A HOUSE WINS';
+      $('announceTitle').textContent = youWon ? 'Victory' : 'Defeat';
+      $('announceStage').classList.remove('has-old');
+      $('announceStage').classList.add('is-notice');
+      $('announceStage').innerHTML = ids.slice(0, 4).map(id => announceBanner({ houseId: id }, 'ann-new ann-first notice-banner')).join('');
+      $('announceName').innerHTML = `<span class="notice-text">${escapeHtml(go.text)}${go.dragons?.length ? ` The Dragons were ${escapeHtml(go.dragons.map(d => `${d.username} (House ${prettyHouse(d.houseId)})`).join(', '))}.` : ''}</span>`;
+      $('announceOverlay').querySelector('.announce-card').dataset.tone = youWon ? 'good' : 'bad';
+      $('announceOverlay').hidden = false;
+      clearTimeout(announceTimer);
+      return;
+    }
     if (item.notice) {
       const n = item.notice;
       const mid = NOTICE_MID[n.kind];
@@ -1175,19 +1197,13 @@
     if (live && state.myHouse?.fallen) text = 'Your house has fallen. You can still watch and speak at court.' + (text ? ' ' + text : '');
     note.hidden = !text; note.textContent = text;
     const go = state?.gameOver;
-    if (!go) { gameOverShownFor = ''; $('gameOverOverlay').hidden = true; return; }
+    if (!go) { gameOverShownFor = ''; return; }
+    if (live === false && go) { note.hidden = false; note.textContent = go.text; }
     const key = go.type + go.text;
     if (gameOverShownFor === key) return;
     gameOverShownFor = key;
-    const youWon = go.type === 'REALM' ? !state.dragon : go.type === 'DRAGONS' ? Boolean(state.dragon) : go.winnerHouseId === state.me?.houseId;
-    $('gameOverEyebrow').textContent = go.type === 'DRAGONS' ? 'THE DRAGONS WIN' : go.type === 'REALM' ? 'THE REALM WINS' : 'A HOUSE WINS';
-    $('gameOverTitle').textContent = youWon ? 'Victory' : 'Defeat';
-    $('gameOverText').textContent = go.text;
-    const dr = $('gameOverDragons');
-    dr.hidden = !go.dragons?.length;
-    dr.textContent = go.dragons?.length ? `The Dragons were: ${go.dragons.map(d => `${d.username} (House ${prettyHouse(d.houseId)})`).join(', ')}.` : '';
-    $('gameOverReset').hidden = !state.isHost;
-    $('gameOverOverlay').hidden = false;
+    announceQueue.push({ gameover: go });
+    if (!announceShowing) showNextAnnouncement();
   }
   function render() {
     updateScreens();
@@ -1526,8 +1542,7 @@
     if (action === 'pick-target') { startPick(); return; }
     if (action === 'go-to-war') { openHub('army', 'war'); startPick(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
-    if (action === 'close-gameover') { $('gameOverOverlay').hidden = true; return; }
-    if (action === 'reset-game') { emitAction('reset-game'); $('gameOverOverlay').hidden = true; return; }
+    if (action === 'reset-game') { emitAction('reset-game'); return; }
     if (action === 'map-zoom-reset') { applyMapZoom(1, false); const vp = $('mapViewport'); vp.scrollLeft = 0; vp.scrollTop = 0; return; }
     if (action === 'close-map') { setMapOpen(false); return; }
     if (action === 'change-house') {
