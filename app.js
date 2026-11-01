@@ -228,7 +228,8 @@
     $('lobbyCount').textContent = `${activePlayers.length} player${activePlayers.length === 1 ? '' : 's'}`;
     const setup = state.settings || { maxPlayers: 16, gameType: 'CLASSIC' };
     const gameTypeLabel = setup.gameType === 'LAST_DRAGON' ? `Last Dragon · ${plural(setup.dragonCount || 1, 'Dragon')} · ${setup.dragonRounds || 5} rounds` : 'Classic';
-    $('lobbySettings').textContent = `${gameTypeLabel} · ${activePlayers.length} of ${setup.maxPlayers} players`;
+    const ffLabel = setup.friendlyFire === false ? ' · Friendly fire off' : '';
+    $('lobbySettings').textContent = `${gameTypeLabel} · ${activePlayers.length} of ${setup.maxPlayers} players${ffLabel}`;
     lobbyCanChangeHouse = state.phase === 'LOBBY' && state.houses.some(h => h.id !== state.me.houseId && !minorHouseReason(h, state.me.id));
     lock(document.querySelector('[data-action="edit-menu-house"]'), lobbyCanChangeHouse ? '' : 'There are no other houses available right now.');
     const houseRank = id => { const i = state.houses.findIndex(h => h.id === id); return i < 0 ? state.houses.length : i; };
@@ -299,8 +300,10 @@
   function warTargetProblem(capital) {
     const mine = state.myHouse;
     if (capital.contested) return `${capital.name} is contested between two victorious allies. Wait until they settle who rules it.`;
-    if (!capital.ownerHouseId || capital.ownerHouseId === mine.id) return `${capital.name} is already yours.`;
-    if (alliesOf(mine.id).includes(capital.ownerHouseId)) return `${capital.name} belongs to your ally, House ${capName(prettyHouse(capital.ownerHouseId))}. Break the alliance before marching on it.`;
+    if (!capital.ownerHouseId || capital.ownerPlayerId === state.me?.id) return `${capital.name} is already yours.`;
+    const ff = state.settings?.friendlyFire !== false;
+    if (capital.ownerHouseId === mine.id && !ff) return `Friendly fire is off: ${capital.name} is held by your own house.`;
+    if (alliesOf(mine.id).includes(capital.ownerHouseId) && !ff) return `${capital.name} belongs to your ally, House ${capName(prettyHouse(capital.ownerHouseId))}, and friendly fire is off.`;
     return '';
   }
   function warBlockReason() {
@@ -731,7 +734,7 @@
     // Hub buttons (details are hidden on phones)
     $('hubMoneyGold').textContent = `${h.money} gold`;
     $('hubMoneyIncome').textContent = `+${h.incomePerRound} income · −${h.upkeepPerRound} upkeep`;
-    $('hubMoneyCapitals').textContent = plural(h.capitalCount, 'capital') + ' held';
+    $('hubMoneyCapitals').textContent = (h.cities || []).find(c => c.living)?.name ? `Living in ${(h.cities || []).find(c => c.living).name}` : 'You have no city';
     $('hubRelAlliances').textContent = plural(myAlliances, 'alliance');
     $('hubRelOffers').textContent = waiting ? `${plural(waiting, 'offer')} awaiting your reply` : 'No offers waiting';
     $('hubRelRole').textContent = state.isKing ? 'You wear the crown — traitors & taxes' : 'Alliances, treaties & messages';
@@ -753,8 +756,8 @@
     tog.hidden = !older;
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
     $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
-    const mine = state.capitals.filter(c => c.ownerHouseId === h.id);
-    $('moneyCapitals').innerHTML = mine.length ? mine.map(c => `<div class="resolution-item"><span>+${c.income ?? h.incomePerCapital}</span><p class="row-who">${c.originalHouseId ? bannerOf(c.originalHouseId) : ''}${escapeHtml(c.name)}</p></div>`).join('') : '<p class="muted small-text">Your house holds no capitals, so it earns no income.</p>';
+    const cities = h.cities || [];
+    $('moneyCapitals').innerHTML = cities.length ? cities.map(c => `<div class="resolution-item${c.canMove ? ' has-action' : ''}"><span>+${c.yield}</span><p class="row-who">${escapeHtml(c.name)}${c.living ? ' · you live here' : c.mine ? ' · you hold it (a fifth)' : ''}${c.residents ? ` · ${plural(c.residents, 'resident')}` : ''}</p>${c.canMove ? `<button class="button button-quiet button-small" type="button" data-action="move-city" data-city="${escapeHtml(c.id)}">Move here</button>` : ''}</div>`).join('') : '<p class="muted small-text">Your house holds no cities, so you earn no income.</p>';
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
     $('armyNavy').textContent = h.navy + (h.navyBuilding ? ` (+${h.navyBuilding} building)` : '');
@@ -844,6 +847,7 @@
       maxSelect.value = String(state?.settings?.maxPlayers || 10);
       $('gameTypeInput').value = state?.settings?.gameType || 'CLASSIC';
       updateDragonSetup();
+      $('friendlyFireInput').checked = state?.settings?.friendlyFire !== false;
     }
     const chosen = $('chosenHouse');
     if (chosen) {
@@ -1450,7 +1454,7 @@
   $('hostSetupForm').addEventListener('submit', event => {
     event.preventDefault();
     $('hostSetupError').textContent = '';
-    const settings = { maxPlayers: Number($('maxPlayersInput').value), gameType: $('gameTypeInput').value, dragonCount: Number($('dragonCountInput').value || 1), dragonRounds: Number($('dragonRoundsInput').value || 5) };
+    const settings = { maxPlayers: Number($('maxPlayersInput').value), gameType: $('gameTypeInput').value, dragonCount: Number($('dragonCountInput').value || 1), dragonRounds: Number($('dragonRoundsInput').value || 5), friendlyFire: $('friendlyFireInput').checked };
     socket.emit(preparingHost ? 'set-room-settings' : 'set-game-settings', preparingHost ? { ...settings, clientToken } : settings, result => {
       if (!result?.ok) $('hostSetupError').textContent = result?.message || 'Could not save game setup.';
       else {
@@ -1586,6 +1590,7 @@
     if (action === 'pick-target') { startPick(); return; }
     if (action === 'go-to-war') { openHub('army', 'war'); startPick(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
+    if (action === 'move-city') { emitAction('move-city', { cityId: button.dataset.city }); return; }
     if (action === 'reset-game') { emitAction('reset-game'); return; }
     if (action === 'map-zoom-reset') { applyMapZoom(1, false); const vp = $('mapViewport'); vp.scrollLeft = 0; vp.scrollTop = 0; return; }
     if (action === 'close-map') { setMapOpen(false); return; }
@@ -1643,7 +1648,7 @@
       infantry: Number($('attackInfantry').value),
       navy: Number($('attackNavy').value),
       dragons: Number($('attackDragons').value)
-    }, () => { warTargetId = null; });
+    }, () => { warTargetId = null; ['attackInfantry', 'attackNavy', 'attackDragons'].forEach(id => { $(id).value = ''; }); });
   });
   ['attackInfantry', 'attackNavy', 'attackDragons'].forEach(id => $(id).addEventListener('input', updateAttackLock));
 

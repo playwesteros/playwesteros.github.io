@@ -798,3 +798,7 @@ body.house-themed .footer { border-color: var(--line); }
 .server-dot.is-on { background: #4cc272; box-shadow: 0 0 4px #4cc272; }
 
 .map-viewport { touch-action: pan-x pan-y; }
+
+.check-row { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); }
+.check-row input { width: 18px; height: 18px; accent-color: var(--gold, #c8a45c); }
+.resolution-item.has-action { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }

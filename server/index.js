@@ -82,19 +82,8 @@ let startHouseCount;
 function freshHouses() {
   return HOUSE_DEFS.map(def => ({
     ...def,
-    money: 15 + (def.id === 'lannister' ? 5 : 0),
-    infantry: 3,
-    navy: 1,
-    navyBuilding: 0,
-    dragons: def.id === 'targaryen' ? 1 : 0,
     infantryCost: ['tyrell', 'greyjoy', 'arryn'].includes(def.id) ? 5 : def.id === 'targaryen' ? 4 : 4,
     navyCost: def.id === 'greyjoy' ? 4 : def.id === 'martell' ? 6 : 5,
-    pendingAttack: null,
-    hasAttackedThisRound: false,
-    commandUsedRound: 0,
-    lockedUntilRound: 0,
-    spyReports: [],
-    ledger: []
   }));
 }
 function freshCapitals() {
@@ -105,7 +94,7 @@ function resetWorld(keepPlayers = true, rematch = false) {
   const keptHouses = rematch ? new Map([...players.values()].map(p => [p.id, p.houseId])) : null;
   phase = 'LOBBY';
   round = 1;
-  gameSettings = { configured: false, maxPlayers: 10, gameType: 'CLASSIC', dragonCount: 1, dragonRounds: 5 };
+  gameSettings = { configured: false, maxPlayers: 10, gameType: 'CLASSIC', dragonCount: 1, dragonRounds: 5, friendlyFire: true };
   dragonIds = [];
   gameOver = null;
   startHouseCount = 0;
@@ -138,6 +127,7 @@ function resetWorld(keepPlayers = true, rematch = false) {
       p.isKing = false;
       p.isHand = false;
       p.eliminated = false;
+      delete p.w; p.cityId = null;
     }
     if (rematch) for (const p of players.values()) { p.houseId = keptHouses.get(p.id) || null; }
   }
@@ -224,6 +214,31 @@ function recalculateCapitalCounts() {
 function playerPublic(p) {
   return { id: p.id, username: p.username, connected: p.connected, left: Boolean(p.left), isBot: Boolean(p.isBot), houseId: p.houseId, isKing: p.id === kingPlayerId, isHand: p.id === handPlayerId, eliminated: Boolean(p.eliminated) };
 }
+// Every player has their own purse and army (a "wallet" that reads house details through its prototype).
+function makeWallet(p) {
+  const house = findHouse(p.houseId);
+  const w = Object.create(house);
+  Object.assign(w, { playerId: p.id, money: 15 + (house.id === 'lannister' ? 5 : 0), infantry: 3, navy: 1, navyBuilding: 0, dragons: house.id === 'targaryen' ? 1 : 0, pendingAttack: null, hasAttackedThisRound: false, commandUsedRound: 0, lockedUntilRound: 0, spyReports: [], ledger: [] });
+  p.w = w;
+  return w;
+}
+function houseWallets(houseId) { return houseMembers(houseId).map(p => p.w).filter(Boolean); }
+function houseSum(houseId, key) { return houseWallets(houseId).reduce((n, w) => n + (w[key] || 0), 0); }
+function loseInfantry(houseId, count, why) {
+  let left = count;
+  for (const w of houseWallets(houseId)) { const take = Math.min(w.infantry, left); if (!take) continue; w.infantry -= take; left -= take; note(w, 'infantry', -take, why); }
+}
+// Cities: the player who holds a city collects a fifth of its income; players living in it split the full income.
+function residentsOf(c) { return [...players.values()].filter(p => !p.left && !p.eliminated && p.cityId === c.id && p.houseId === c.ownerHouseId); }
+function yieldFor(p, c) {
+  if (p.left || p.eliminated || !c.ownerHouseId || c.contested) return 0;
+  const income = capitalIncome(c);
+  if (p.cityId === c.id && p.houseId === c.ownerHouseId) return Math.floor(income / Math.max(1, residentsOf(c).length));
+  if (c.ownerPlayerId === p.id) return Math.floor(income / 5);
+  return 0;
+}
+function playerIncome(p) { return capitals.reduce((n, c) => n + yieldFor(p, c), 0); }
+function evictResidents(c) { for (const p of players.values()) if (p.cityId === c.id && p.houseId !== c.ownerHouseId) p.cityId = null; }
 function incomePerCapital(h) { return 15 + (h.id === 'tyrell' ? 3 : 0); }
 function armySize(h) { return h.infantry + h.navy + h.dragons; }
 const SPY_MISSIONS = {
@@ -238,9 +253,10 @@ function spyOdds(spend, targetId, mission) {
   return { success: clamp(m.successBase + m.successPer * (spend - 2) - (targetId === 'targaryen' ? 0.15 : 0), 0.05, 0.95), caught: clamp(m.dangerBase - m.dangerPer * (spend - 2), 0.05, 0.9) };
 }
 function spyFindings(mission, target) {
-  if (mission === 'troops') return { infantry: target.infantry, navy: target.navy, dragons: target.dragons };
+  if (mission === 'troops') return { infantry: houseSum(target.id, 'infantry'), navy: houseSum(target.id, 'navy'), dragons: houseSum(target.id, 'dragons') };
   if (mission === 'movement') {
-    const cap = target.pendingAttack ? findCapital(target.pendingAttack.targetCapitalId) : null;
+    const moving = houseWallets(target.id).find(w => w.pendingAttack);
+    const cap = moving ? findCapital(moving.pendingAttack.targetCapitalId) : null;
     return { movingOn: cap?.name || null };
   }
   if (mission === 'ravens') {
@@ -255,7 +271,7 @@ function spyFindings(mission, target) {
     return { letters: letters.slice(-3).reverse() };
   }
   // mole
-  const options = [{ kind: 'wealth', gold: target.money }];
+  const options = [{ kind: 'wealth', gold: houseSum(target.id, 'money') }];
   const secret = alliances.filter(a => a.scope === 'secret' && [a.houseA, a.houseB].includes(target.id)).map(a => (a.houseA === target.id ? a.houseB : a.houseA));
   if (secret.length) options.push({ kind: 'alliance', houses: secret });
   if (gameSettings.gameType === 'LAST_DRAGON') options.push({ kind: 'dragon', houseId: target.id, hasDragon: houseMembers(target.id).some(p => dragonIds.includes(p.id)) });
@@ -271,20 +287,23 @@ function currentHouseView(h) {
 }
 function makePrivateHouseView(h) {
   if (!h) return null;
+  const me = h.playerId ? players.get(h.playerId) : null;
   const target = h.pendingAttack ? findCapital(h.pendingAttack.targetCapitalId) : null;
+  const cities = me ? capitals.filter(c => c.ownerHouseId === h.id && !c.contested).map(c => ({ id: c.id, name: c.name, yield: yieldFor(me, c), living: me.cityId === c.id, residents: residentsOf(c).length, mine: c.ownerPlayerId === me.id, canMove: phase === 'ACTION' && me.cityId !== c.id && !me.eliminated })) : [];
   return {
-    id: h.id, name: h.name, fallen: houseFallen(h), money: h.money, infantry: h.infantry, navy: h.navy, navyBuilding: h.navyBuilding || 0, dragons: h.dragons,
+    id: h.id, name: h.name, fallen: houseFallen(h), money: h.money || 0, infantry: h.infantry || 0, navy: h.navy || 0, navyBuilding: h.navyBuilding || 0, dragons: h.dragons || 0,
     infantryCost: h.infantryCost, navyCost: h.navyCost,
-    capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length, incomePerCapital: incomePerCapital(h), incomePerRound: houseIncome(h), upkeepPerRound: armySize(h),
+    capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length, incomePerCapital: incomePerCapital(h), incomePerRound: me ? playerIncome(me) : 0, upkeepPerRound: armySize({ infantry: h.infantry || 0, navy: h.navy || 0, dragons: h.dragons || 0 }),
+    cityId: me?.cityId || null, cities,
     pendingAttack: h.pendingAttack ? {
       ...h.pendingAttack,
       targetName: target?.name || h.pendingAttack.targetName,
       units: { ...h.pendingAttack.units }
     } : null,
     ledger: (h.ledger || []).map(e => ({ ...e })),
-    hasAttackedThisRound: h.hasAttackedThisRound,
-    commandUsedRound: h.commandUsedRound,
-    lockedByEmbargo: h.lockedUntilRound >= round,
+    hasAttackedThisRound: Boolean(h.hasAttackedThisRound),
+    commandUsedRound: h.commandUsedRound || 0,
+    lockedByEmbargo: (h.lockedUntilRound || 0) >= round,
   };
 }
 function viewFor(playerId) {
@@ -308,7 +327,7 @@ function viewFor(playerId) {
     dragon: me && dragonIds.includes(me.id) ? { fellow: dragonList().filter(d => d.id !== me.id) } : null,
     isHost: Boolean(me && me.id === hostId), isKing: Boolean(me && me.id === kingPlayerId), isHand: Boolean(me && me.id === handPlayerId),
     me: me ? { id: me.id, username: me.username, houseId: me.houseId, vote: me.vote, lastSpyRound: me.lastSpyRound, eliminated: Boolean(me.eliminated) } : null,
-    myHouse: makePrivateHouseView(myHouse),
+    myHouse: makePrivateHouseView(me?.w || myHouse),
     houses: houses.map(currentHouseView),
     players: [...players.values()].map(p => (me && me.id === kingPlayerId ? { ...playerPublic(p), traitor: Boolean(p.traitor) } : playerPublic(p))),
     notices: myHouse ? notices.filter(n => n.playerIds.includes(me.id) || n.houseIds.includes(myHouse.id)).slice(0, 30).map(n => ({ id: n.id, round: n.round, kind: n.kind, title: n.title, text: n.text, banners: [...n.banners] })) : [],
@@ -316,7 +335,7 @@ function viewFor(playerId) {
       const issuer = d.kingPlayerId === me.id;
       return { id: d.id, round: d.round, kingName: d.kingName, kingHouseId: d.kingHouseId, message: d.message, gold: d.gold, infantry: d.infantry, navy: d.navy, isIssuer: issuer, myState: d.recipients.find(r => r.houseId === myHouse.id)?.state || null, recipients: me.id === handPlayerId ? d.recipients.map(r => ({ ...r })) : undefined };
     }) : [],
-    capitals: capitals.map(c => ({ ...c, income: capitalIncome(c) })),
+    capitals: capitals.map(c => ({ ...c, income: capitalIncome(c), residents: residentsOf(c).length })),
     minorHousesUnlocked: Number(gameSettings.maxPlayers) >= 7,
     voteCandidates,
     votesCast: voterIds.filter(id => players.get(id)?.vote).length,
@@ -328,7 +347,7 @@ function viewFor(playerId) {
     spoils: myHouse ? spoils.filter(x => [x.houseA, x.houseB].includes(myHouse.id)).slice(0, 10).map(x => ({ ...x, claims: { ...x.claims }, capitalName: findCapital(x.capitalId)?.name || '' })) : [],
     publicMessages: publicMessages.map(m => ({ ...m })),
     privateMessages: privateForMe,
-    spyReports: myHouse ? myHouse.spyReports.map(r => ({ ...r })) : [],
+    spyReports: me?.w ? me.w.spyReports.map(r => ({ ...r })) : [],
     events: events.map(e => ({ ...e }))
   };
 }
@@ -401,6 +420,7 @@ function throneTaken(houseId, orderedBy) {
   }
   kingPlayerId = heir.id;
   handPlayerId = null;
+  const seat = capitals.find(c => c.id === 'kings-landing'); if (seat) seat.ownerPlayerId = heir.id;
   addEvent('important', `House ${capWord(house.name)} took King’s Landing. ${heir.username} is the new king${fallen.length ? `; ${fallen.join(' and ')} ${fallen.length > 1 ? 'were' : 'was'} eliminated` : ''}.`);
   notify('battle-won', [houseId], [], 'The Iron Throne is yours', `You hold King’s Landing and wear the crown. Appoint a Hand of the King from the Relations menu.`, [houseId]);
 }
@@ -423,7 +443,7 @@ function requireHouse(player) {
   if (h && gameOver) return fail('The game is over.');
   if (h && player.eliminated) return fail('You have been eliminated. You can still watch and speak at court.');
   if (h && houseFallen(h)) return fail('Your house has fallen. You can still watch and speak at court.');
-  return h || fail('Choose a house first.');
+  return (h && player.w) || h || fail('Choose a house first.');
 }
 function minorSlots() { return Math.max(0, Number(gameSettings.maxPlayers) - 6); }
 function minorPlayerCount(excludeId) { return [...players.values()].filter(p => !p.left && p.id !== excludeId && findHouse(p.houseId)?.type === 'minor').length; }
@@ -442,9 +462,9 @@ function houseMembers(houseId) { return [...players.values()].filter(p => p.hous
 function houseIsBotOnly(houseId) { const m = houseMembers(houseId); return m.length > 0 && m.every(p => p.isBot); }
 function areAllied(a, b) { return alliances.some(x => [x.houseA, x.houseB].includes(a) && [x.houseA, x.houseB].includes(b)); }
 function wholeNumber(value) { const n = Number(value || 0); return Number.isInteger(n) && n >= 0 ? n : null; }
-function closeTreaty(t, status) {
-  const from = findHouse(t.fromHouseId), to = findHouse(t.toHouseId);
-  const receiver = status === 'accepted' ? to : from;
+function closeTreaty(t, status, byPlayerId) {
+  const recipient = status === 'accepted' ? (players.get(byPlayerId) || houseMembers(t.toHouseId)[0]) : (players.get(t.fromPlayerId) || houseMembers(t.fromHouseId)[0]);
+  const receiver = recipient?.w;
   if (receiver) {
     receiver.money += t.gold; receiver.infantry += t.infantry; receiver.navy += t.navy;
     const why = status === 'accepted' ? `Treaty from House ${houseName(t.fromHouseId)}` : `Treaty to House ${houseName(t.toHouseId)} ${status === 'declined' ? 'declined' : 'withdrawn'}: returned`;
@@ -470,7 +490,12 @@ function notify(kind, houseIds, playerIds, title, text, banners) {
 function forceStrength(u) { return u.infantry + u.navy + u.dragons * 5 + (u.dragons ? 2 : 0); }
 function giveSpoil(s, winnerId, how) {
   const cap = findCapital(s.capitalId);
-  if (cap) { cap.ownerHouseId = winnerId; cap.contested = null; }
+  if (cap) {
+    cap.ownerHouseId = winnerId; cap.contested = null;
+    const ordered = s.orderers?.[winnerId] ? players.get(s.orderers[winnerId]) : null;
+    cap.ownerPlayerId = (ordered && ordered.houseId === winnerId ? ordered : houseMembers(winnerId)[0])?.id || null;
+    evictResidents(cap);
+  }
   if (cap?.id === 'kings-landing') throneTaken(winnerId, s.orderers?.[winnerId]);
   s.status = 'settled'; s.winnerId = winnerId;
   addEvent('battle', `${cap?.name || 'The captured capital'} now belongs to House ${houseName(winnerId)} ${how}.`);
@@ -482,12 +507,11 @@ function settleSpoils(forced) {
     if (s.claims[a] && s.claims[a] === s.claims[b]) { giveSpoil(s, s.claims[a], 'by agreement of the allies'); continue; }
     if (!forced || s.deadlineRound > round) continue;
     const ha = findHouse(a), hb = findHouse(b);
-    const sa = forceStrength({ infantry: ha.infantry, navy: ha.navy, dragons: ha.dragons }) + randomInt(0, 6);
-    const sb = forceStrength({ infantry: hb.infantry, navy: hb.navy, dragons: hb.dragons }) + randomInt(0, 6);
+    const sa = forceStrength({ infantry: houseSum(a, 'infantry'), navy: houseSum(a, 'navy'), dragons: houseSum(a, 'dragons') }) + randomInt(0, 6);
+    const sb = forceStrength({ infantry: houseSum(b, 'infantry'), navy: houseSum(b, 'navy'), dragons: houseSum(b, 'dragons') }) + randomInt(0, 6);
     const winner = sa >= sb ? ha : hb, loser = winner === ha ? hb : ha;
-    const lost = Math.ceil(loser.infantry * 0.25);
-    loser.infantry -= lost;
-    note(loser, 'infantry', -lost, 'Lost fighting an ally over the spoils');
+    const lost = Math.ceil(houseSum(loser.id, 'infantry') * 0.25);
+    loseInfantry(loser.id, lost, 'Lost fighting an ally over the spoils');
     const al = alliances.find(x => [x.houseA, x.houseB].includes(a) && [x.houseA, x.houseB].includes(b));
     if (al) alliances.splice(alliances.indexOf(al), 1);
     notify('alliance-broken', [a, b], [], 'Allies at war', `House ${capWord(winner.name)} won the fight over the spoils; House ${capWord(loser.name)} lost, and the alliance is broken.`, [winner.id, loser.id]);
@@ -554,7 +578,7 @@ io.on('connection', socket => {
       if (!Number.isInteger(maxPlayers) || maxPlayers < 3 || maxPlayers > 16) return ack(callback, fail('Choose a player limit from 3 to 16.'));
       if (!['CLASSIC', 'LAST_DRAGON'].includes(gameType)) return ack(callback, fail('Choose Classic or Last Dragon.'));
       const ds = dragonSettings(payload, maxPlayers, gameType); if (ds.error) return ack(callback, fail(ds.error));
-      gameSettings = { configured: true, maxPlayers, gameType, dragonCount: ds.dragonCount, dragonRounds: ds.dragonRounds };
+      gameSettings = { configured: true, maxPlayers, gameType, dragonCount: ds.dragonCount, dragonRounds: ds.dragonRounds, friendlyFire: payload.friendlyFire !== false };
       addEvent('important', `The host set up a ${gameType === 'LAST_DRAGON' ? 'Last Dragon' : 'Classic'} game for ${maxPlayers} players.`);
       broadcastState(roomCode);
       ack(callback, ok('Game prepared. Choose your house to continue.'));
@@ -669,7 +693,7 @@ io.on('connection', socket => {
     if (minorPlayerCount(null) > Math.max(0, maxPlayers - 6)) return fail('That limit leaves too few minor-house places for the players already in minor houses.');
     const ds = dragonSettings(payload, maxPlayers, gameType); if (ds.error) return fail(ds.error);
     if (gameType === 'LAST_DRAGON' && [...players.values()].some(p => !p.left && p.houseId === 'targaryen')) return fail('Someone already chose House Targaryen, which is not available in Last Dragon. Ask them to pick another house first.');
-    gameSettings = { configured: true, maxPlayers, gameType, dragonCount: ds.dragonCount, dragonRounds: ds.dragonRounds };
+    gameSettings = { configured: true, maxPlayers, gameType, dragonCount: ds.dragonCount, dragonRounds: ds.dragonRounds, friendlyFire: payload.friendlyFire !== false };
     addEvent('important', `The host set up a ${gameType === 'LAST_DRAGON' ? 'Last Dragon' : 'Classic'} game for ${maxPlayers} players.`);
     return ok('Game setup saved. The hall is open.');
   });
@@ -771,6 +795,9 @@ io.on('connection', socket => {
     const king = players.get(kingPlayerId);
     const throne = capitals.find(c => c.id === 'kings-landing'); if (throne) throne.ownerHouseId = king?.houseId || 'baratheon';
     startHouseCount = new Set(connected.map(p => p.houseId)).size;
+    for (const p of players.values()) if (!p.left && p.houseId) { makeWallet(p); p.cityId = capitals.find(c => c.originalHouseId === p.houseId)?.id || null; }
+    for (const c of capitals) { c.ownerPlayerId = c.originalHouseId ? (houseMembers(c.originalHouseId)[0]?.id || null) : null; }
+    if (throne) throne.ownerPlayerId = kingPlayerId;
     dragonIds = [];
     if (isLastDragon()) {
       const pool = connected.filter(p => p.id !== kingPlayerId);
@@ -892,21 +919,35 @@ io.on('connection', socket => {
     return ok(caught ? `Your spies were captured. House ${target.name} knows it was you.` : success ? `Your spies returned with intelligence from House ${target.name}.` : `Your spy mission against House ${target.name} failed.`);
   });
 
+  action(socket, 'move-city', (player, payload) => {
+    const check = requireHouse(player); if (check.ok === false) return check;
+    if (phase !== 'ACTION') return fail('You can move between cities during the action phase.');
+    const c = findCapital(String(payload.cityId || ''));
+    if (!c || c.contested || c.ownerHouseId !== player.houseId) return fail('You can only live in a city your house holds.');
+    if (player.cityId === c.id) return fail(`You already live in ${c.name}.`);
+    player.cityId = c.id;
+    addEvent('normal', `${player.username} moved to ${c.name}.`);
+    return ok(`You now live in ${c.name}.`);
+  });
+
   action(socket, 'plan-attack', (player, payload) => {
     const check = requireHouse(player); if (check.ok === false) return check;
     const h = check;
     if (phase !== 'ACTION') return fail('Attacks can only be ordered during the action phase.');
     if (round < 2) return fail('Attacks unlock after Round 1.');
-    if (h.pendingAttack) return fail('Your house already has a pending attack order.');
-    if (h.hasAttackedThisRound) return fail('Your house has already planned an attack this round.');
+    if (h.pendingAttack) return fail('You already have a pending attack order.');
+    if (h.hasAttackedThisRound) return fail('You have already planned an attack this round.');
     const target = findCapital(String(payload.targetCapitalId || ''));
-    if (!target || target.contested || !target.ownerHouseId || target.ownerHouseId === h.id) return fail('Choose a capital controlled by another house.');
-    if (areAllied(h.id, target.ownerHouseId)) return fail(`House ${houseName(target.ownerHouseId)} is your ally. Break the alliance before marching on their capital.`);
+    if (!target || target.contested || !target.ownerHouseId) return fail('Choose a city held by someone else.');
+    if (target.ownerPlayerId === player.id) return fail('That city is already yours.');
+    const sameHouse = target.ownerHouseId === h.id, allyTarget = !sameHouse && areAllied(h.id, target.ownerHouseId);
+    if (sameHouse && !gameSettings.friendlyFire) return fail('Friendly fire is off: you cannot attack a city held by your own house.');
+    if (allyTarget && !gameSettings.friendlyFire) return fail(`Friendly fire is off: House ${houseName(target.ownerHouseId)} is your ally.`);
     const units = { infantry: Number(payload.infantry), navy: Number(payload.navy), dragons: Number(payload.dragons) };
     if (target.id === 'winterfell' && units.navy > 0) return fail('Winterfell cannot be attacked by ships. Send land forces only.');
     if (Object.values(units).some(n => !Number.isInteger(n) || n < 0)) return fail('Committed forces must be whole numbers of zero or greater.');
     if (units.infantry + units.navy + units.dragons < 1) return fail('Commit at least one unit to the attack.');
-    if (units.infantry > h.infantry || units.navy > h.navy || units.dragons > h.dragons) return fail('Your house does not have enough uncommitted forces.');
+    if (units.infantry > h.infantry || units.navy > h.navy || units.dragons > h.dragons) return fail('You do not have enough uncommitted forces.');
     h.infantry -= units.infantry;
     h.navy -= units.navy;
     h.dragons -= units.dragons;
@@ -983,7 +1024,7 @@ io.on('connection', socket => {
     h.money -= gold; h.infantry -= infantry; h.navy -= navy;
     const why = `Treaty offered to House ${target.name} (held until they answer)`;
     note(h, 'gold', -gold, why); note(h, 'infantry', -infantry, why); note(h, 'navy', -navy, why);
-    const treaty = { id: randomUUID(), fromHouseId: h.id, toHouseId: target.id, gold, infantry, navy, message, round, status: 'pending' };
+    const treaty = { id: randomUUID(), fromPlayerId: player.id, fromHouseId: h.id, toHouseId: target.id, gold, infantry, navy, message, round, status: 'pending' };
     treaties.unshift(treaty);
     addEvent('normal', `House ${h.name} sent a treaty to House ${target.name}.`);
     if (houseIsBotOnly(target.id)) {
@@ -1000,7 +1041,7 @@ io.on('connection', socket => {
     const t = treaties.find(x => x.id === String(payload.treatyId || ''));
     if (!t || t.status !== 'pending' || t.toHouseId !== h.id) return fail('That treaty is no longer available to your house.');
     const accept = payload.accept === true;
-    closeTreaty(t, accept ? 'accepted' : 'declined');
+    closeTreaty(t, accept ? 'accepted' : 'declined', player.id);
     addEvent(accept ? 'important' : 'normal', `House ${h.name} ${accept ? 'accepted' : 'declined'} a treaty from House ${houseName(t.fromHouseId)}.`);
     return ok(accept ? 'Treaty accepted. The offering is yours.' : 'Treaty declined. The offering returns to its sender.');
   });
@@ -1057,7 +1098,7 @@ io.on('connection', socket => {
     const r = d?.recipients.find(x => x.houseId === h.id && x.state === 'pending');
     if (!r) return fail('That decree is no longer waiting on your house.');
     if (h.money < d.gold || h.infantry < d.infantry || h.navy < d.navy) return fail(`You cannot meet this demand: you have ${h.money} gold, ${h.infantry} infantry and ${h.navy} ships.`);
-    const king = findHouse(d.kingHouseId);
+    const king = players.get(d.kingPlayerId)?.w;
     h.money -= d.gold; h.infantry -= d.infantry; h.navy -= d.navy;
     if (king) { king.money += d.gold; king.infantry += d.infantry; king.navy += d.navy; }
     const out = `Sent to King ${d.kingName} by decree`, inn = `Decree answered by House ${h.name}`;
@@ -1116,11 +1157,15 @@ io.on('connection', socket => {
     if (phase === 'RESOLUTION') {
       round += 1;
       phase = 'ACTION';
-      for (const h of houses) {
+      for (const p of players.values()) {
+        const h = p.w;
+        if (!h || p.left) continue;
         h.hasAttackedThisRound = false;
         if (h.navyBuilding) { h.navy += h.navyBuilding; note(h, 'navy', h.navyBuilding, 'Ships finished building'); h.navyBuilding = 0; }
-        h.money += houseIncome(h);
-        note(h, 'gold', houseIncome(h), 'Capital income');
+        if (p.eliminated) continue;
+        const income = playerIncome(p);
+        h.money += income;
+        note(h, 'gold', income, 'City income');
         // Army upkeep: 1 gold per unit, taken automatically. Unpaid troops desert.
         const due = armySize(h);
         const paid = Math.min(due, h.money);
@@ -1136,8 +1181,8 @@ io.on('connection', socket => {
             note(h, k, -take, 'Deserted: upkeep unpaid');
             deserted.push(`${take} ${k}`);
           }
-          notify('desertion', [h.id], [], 'Troops deserted', `House ${capWord(h.name)} could not pay its army. ${deserted.join(', ')} left the banners.`, [h.id]);
-          addEvent('normal', `Unpaid troops deserted House ${h.name}.`);
+          notify('desertion', [], [p.id], 'Troops deserted', `You could not pay your army. ${deserted.join(', ')} left the banners.`, [h.id]);
+          addEvent('normal', `Unpaid troops deserted ${p.username} of House ${h.name}.`);
         }
       }
       runBotTurns();
@@ -1157,13 +1202,13 @@ io.on('connection', socket => {
 
 // Allies who march on the same capital in the same round fight together automatically.
 function resolveDueAttacks() {
-  const due = houses.filter(h => h.pendingAttack && h.pendingAttack.resolveRound <= round);
+  const due = [...players.values()].map(p => p.w).filter(w => w && w.pendingAttack && w.pendingAttack.resolveRound <= round);
   const done = new Set();
   for (const attacker of due) {
-    if (done.has(attacker.id)) continue;
-    const partner = due.find(o => o !== attacker && !done.has(o.id) && o.pendingAttack && o.pendingAttack.targetCapitalId === attacker.pendingAttack.targetCapitalId && areAllied(attacker.id, o.id)) || null;
-    done.add(attacker.id);
-    if (partner) done.add(partner.id);
+    if (done.has(attacker.playerId)) continue;
+    const partner = due.find(o => o !== attacker && o.id !== attacker.id && !done.has(o.playerId) && o.pendingAttack && o.pendingAttack.targetCapitalId === attacker.pendingAttack.targetCapitalId && areAllied(attacker.id, o.id)) || null;
+    done.add(attacker.playerId);
+    if (partner) done.add(partner.playerId);
     fightBattle(attacker, partner);
   }
 }
@@ -1171,26 +1216,32 @@ function fightBattle(attacker, allyHouse) {
   {
     const order = attacker.pendingAttack;
     const target = findCapital(order.targetCapitalId);
-    if (!target || !target.ownerHouseId || target.ownerHouseId === attacker.id) {
+    const ffOff = !gameSettings.friendlyFire && target && target.ownerHouseId && (target.ownerHouseId === attacker.id || areAllied(attacker.id, target.ownerHouseId));
+    if (!target || !target.ownerHouseId || target.ownerPlayerId === attacker.playerId || ffOff) {
       addEvent('battle', `House ${attacker.name} found no enemy holding at ${order.targetName}; the attack was spent.`);
       attacker.pendingAttack = null;
       if (allyHouse) allyHouse.pendingAttack = null;
       return;
     }
     const defender = findHouse(target.ownerHouseId);
+    const defWallet = target.ownerPlayerId ? players.get(target.ownerPlayerId)?.w : null;
+    if (defender && defender.id !== attacker.id && areAllied(attacker.id, defender.id) && !(allyHouse && allyHouse.id === defender.id)) {
+      const pact = alliances.find(x => [x.houseA, x.houseB].includes(attacker.id) && [x.houseA, x.houseB].includes(defender.id));
+      if (pact) { alliances.splice(alliances.indexOf(pact), 1); notify('alliance-broken', [attacker.id, defender.id], [], 'Allies at war', `House ${capWord(attacker.name)} marched on its ally House ${capWord(defender.name)}. The alliance is broken.`, [attacker.id, defender.id]); }
+    }
     let defense = target.defense + randomInt(0, 3);
     if ((defender?.id === 'stark' && target.id === 'winterfell') || (defender?.id === 'martell' && target.id === 'sunspear') || (defender?.id === 'arryn' && target.id === 'the-eyrie')) defense += 2;
     // Each troop contributes one strength; ships can support an attack, and dragons add five each plus a siege bonus.
     const allyOrder = allyHouse ? allyHouse.pendingAttack : null;
     const attackStrength = forceStrength(order.units) + (allyOrder ? forceStrength(allyOrder.units) : 0) + randomInt(0, 3);
     if (attackStrength >= defense && allyHouse) {
-      const plunder = Math.min(defender?.money || 0, 6);
-      if (defender) defender.money -= plunder;
+      const plunder = Math.min(defWallet?.money || 0, 6);
+      if (defWallet) defWallet.money -= plunder;
       const share = Math.floor(plunder / 2);
       attacker.money += plunder - share; allyHouse.money += share;
       note(attacker, 'gold', plunder - share, `Plunder from ${target.name}`); note(allyHouse, 'gold', share, `Plunder from ${target.name}`);
-      if (defender) note(defender, 'gold', -plunder, `Plundered at ${target.name}`);
-      target.ownerHouseId = null;
+      if (defWallet) note(defWallet, 'gold', -plunder, `Plundered at ${target.name}`);
+      target.ownerHouseId = null; target.ownerPlayerId = null; evictResidents(target);
       target.contested = { houseA: attacker.id, houseB: allyHouse.id };
       const claims = { [attacker.id]: null, [allyHouse.id]: null };
       const spoil = { id: randomUUID(), capitalId: target.id, houseA: attacker.id, houseB: allyHouse.id, claims, round, deadlineRound: round + 1, plunder, status: 'open', orderers: { [attacker.id]: order.playerId, [allyHouse.id]: allyOrder?.playerId } };
@@ -1201,7 +1252,7 @@ function fightBattle(attacker, allyHouse) {
       if (defender) notify('attacked', [defender.id], [], `${target.name} was attacked`, `Houses ${capWord(attacker.name)} and ${capWord(allyHouse.name)} attacked and took ${target.name}.`, [attacker.id, defender.id]);
       settleSpoils(false);
     } else if (attackStrength >= defense) {
-      target.ownerHouseId = attacker.id;
+      target.ownerHouseId = attacker.id; target.ownerPlayerId = order.playerId; evictResidents(target);
       if (target.id === 'kings-landing') throneTaken(attacker.id, order.playerId);
       notify('battle-won', [attacker.id], [], `Victory at ${target.name}`, `House ${capWord(attacker.name)} captured ${target.name}.`, [attacker.id, defender?.id].filter(Boolean));
       if (defender) notify('attacked', [defender.id], [], `${target.name} was attacked`, `House ${capWord(attacker.name)} attacked and took ${target.name}.`, [attacker.id, defender.id]);
