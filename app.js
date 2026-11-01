@@ -453,7 +453,9 @@
     if (!house) return;
     $('infantryCostLabel').textContent = house.infantryCost;
     $('navyCostLabel').textContent = house.navyCost;
-    $('spyTarget').innerHTML = state.houses.filter(h => h.id !== house.id && (h.players || []).some(p => !p.left)).map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
+    const prevSpy = $('spyTarget').value;
+    $('spyTarget').innerHTML = '<option value="">Choose a house</option>' + state.houses.filter(h => h.id !== house.id && (h.players || []).some(p => !p.left)).map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
+    if ([...$('spyTarget').options].some(o => o.value === prevSpy)) $('spyTarget').value = prevSpy;
     $('attackInfantry').max = house.infantry;
     $('attackNavy').max = house.navy;
     $('attackDragons').max = house.dragons;
@@ -495,13 +497,17 @@
   function updateSpyForm() {
     const house = state?.myHouse;
     if (!house) return;
-    const spend = Number($('spyGold').value);
-    const valid = Number.isInteger(spend) && spend >= 2 && spend <= 20;
-    if (valid) {
+    const raw = $('spyGold').value.trim();
+    const spend = Number(raw);
+    const valid = raw !== '' && Number.isInteger(spend) && spend >= 2 && spend <= 20;
+    const ready = valid && $('spyTarget').value && $('spyMission').value;
+    if (ready) {
       const o = spyOddsFor(spend, $('spyTarget').value, $('spyMission').value);
-      $('spyOdds').textContent = `Success ${Math.round(o.success * 100)}% · caught if failed ${Math.round(o.caught * 100)}%`;
-    } else $('spyOdds').textContent = 'Spend between 2 and 20 gold.';
-    lock($('spyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
+      const diff = o.success >= 0.5 ? 'Easy' : o.success >= 0.3 ? 'Medium' : 'Hard';
+      const danger = o.caught >= 0.6 ? 'High' : o.caught >= 0.35 ? 'Medium' : 'Low';
+      $('spyOdds').innerHTML = `<span>Difficulty <b>${diff}</b> · ${Math.round(o.success * 100)}%</span><span>Danger <b>${danger}</b> · ${Math.round(o.caught * 100)}%</span>`;
+    } else $('spyOdds').innerHTML = '';
+    lock($('spyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !$('spyTarget').value ? 'Choose a target house.' : !$('spyMission').value ? 'Choose a mission.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
   }
   $('spyGold').addEventListener('input', updateSpyForm);
   $('spyMission').addEventListener('change', updateSpyForm);
@@ -805,7 +811,7 @@
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
     $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
     const cities = h.cities || [];
-    $('moneyCapitals').innerHTML = cities.length ? cities.map(c => `<div class="resolution-item${c.canMove ? ' has-action' : ''}"><span>+${c.yield}</span><p class="row-who">${escapeHtml(c.name)}${c.living ? ' · you live here' : c.mine ? ' · you hold it (a fifth)' : ''}${c.residents ? ` · ${plural(c.residents, 'resident')}` : ''}</p>${c.canMove ? `<button class="button button-quiet button-small" type="button" data-action="move-city" data-city="${escapeHtml(c.id)}">Move here</button>` : ''}</div>`).join('') : '<p class="muted small-text">Your house holds no cities, so you earn no income.</p>';
+    $('moneyCapitals').innerHTML = cities.length ? cities.map(c => `<div class="resolution-item${c.canMove ? ' has-action' : ''}"><span>+${c.yield}</span><p class="row-who">${escapeHtml(c.name)}${c.living ? ' · you live here' : c.mine ? ' · you hold it (a fifth)' : ''}${c.residents ? ` · ${plural(c.residents, 'resident')}` : ''}</p>${c.canMove ? `<button class="button button-quiet button-small" type="button" data-action="move-city" data-city="${escapeHtml(c.id)}"${c.leavesCrown ? ' data-leaves-crown="1"' : ''}>Move here</button>` : ''}</div>`).join('') : '<p class="muted small-text">Your house holds no cities, so you earn no income.</p>';
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
     $('armyNavy').textContent = h.navy + (h.navyBuilding ? ` (+${h.navyBuilding} building)` : '');
@@ -1638,7 +1644,7 @@
     if (action === 'pick-target') { startPick(); return; }
     if (action === 'go-to-war') { openHub('army', 'war'); startPick(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
-    if (action === 'move-city') { emitAction('move-city', { cityId: button.dataset.city }); return; }
+    if (action === 'move-city') { const leaves = button.dataset.leavesCrown === '1'; if (leaves && !window.confirm('The king must stay in King’s Landing. Leaving means you desert the crown. Move anyway?')) return; emitAction('move-city', { cityId: button.dataset.city, abdicate: leaves }); return; }
     if (action === 'reset-game') { emitAction('reset-game'); return; }
     if (action === 'map-zoom-reset') { applyMapZoom(1, false); const vp = $('mapViewport'); vp.scrollLeft = 0; vp.scrollTop = 0; return; }
     if (action === 'close-map') { setMapOpen(false); return; }

@@ -13,10 +13,10 @@
   <meta name="description" content="A temporary multiplayer Great Houses strategy game prototype.">
   <title>War of Westeros — Multiplayer Strategy</title>
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=1">
-  <link rel="stylesheet" href="./style.css?v=50">
+  <link rel="stylesheet" href="./style.css?v=51">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=62" defer></script>
+  <script src="./app.js?v=63" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -42,7 +42,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.2.1<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v2.2.2<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -310,9 +310,8 @@
                 <div class="action-grid"><form id="spyForm" class="action-card">
               <img class="action-icon-image" src="./assets/game-eye.png?v=2" alt=""><h3>Send spies</h3><p class="muted small-text">Spend 2–20 gold. More gold means better odds.</p>
               <label for="spyTarget">Target house</label><select id="spyTarget" required></select>
-              <label for="spyMission">Mission</label><select id="spyMission"><option value="troops" style="color:#e0b84f">Count troops · medium · high danger</option><option value="movement" style="color:#e0b84f">Watch movements · medium · high danger</option><option value="ravens" style="color:#e0705f">Shoot ravens · hard · low danger</option><option value="mole" style="color:#e0705f">Place a mole · hard · high danger</option></select>
-              <label for="spyGold">Gold to spend (2–20)</label><input id="spyGold" type="number" min="2" max="20" value="8" inputmode="numeric">
-              <p id="spyOdds" class="muted small-text"></p>
+              <label for="spyMission">Mission</label><select id="spyMission"><option value="">Choose a mission</option><option value="troops">Count troops</option><option value="movement">Watch movements</option><option value="ravens">Shoot ravens</option><option value="mole">Place a mole</option></select>
+              <label for="spyGold">Gold to spend (2–20)</label><div class="spy-gold-row"><input id="spyGold" type="number" min="2" max="20" placeholder="2–20" inputmode="numeric"><div id="spyOdds" class="spy-odds"></div></div>
               <button class="button button-secondary button-full" type="submit">Attempt spy mission</button>
             </form></div>
                 <div id="spyReports" class="spy-reports"></div>

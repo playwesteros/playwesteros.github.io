@@ -802,3 +802,5 @@ body.house-themed .footer { border-color: var(--line); }
 .check-row { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); }
 .check-row input { width: 18px; height: 18px; accent-color: var(--gold, #c8a45c); }
 .resolution-item.has-action { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }
+
+.spy-gold-row{display:flex;align-items:center;gap:10px}.spy-gold-row input{flex:0 0 90px;width:90px}.spy-odds{display:flex;flex-direction:column;font-size:.8rem;color:var(--muted,#b9ad94);line-height:1.3}.spy-odds b{color:var(--gold,#e0b84f)}
