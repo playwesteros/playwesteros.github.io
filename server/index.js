@@ -81,6 +81,7 @@ function freshHouses() {
     money: 15 + (def.id === 'lannister' ? 5 : 0),
     infantry: 8,
     navy: 4,
+    navyBuilding: 0,
     dragons: def.id === 'targaryen' ? 1 : 0,
     infantryCost: ['tyrell', 'greyjoy', 'arryn'].includes(def.id) ? 5 : def.id === 'targaryen' ? 4 : 4,
     navyCost: def.id === 'greyjoy' ? 4 : def.id === 'martell' ? 6 : 5,
@@ -262,7 +263,7 @@ function spyFindings(mission, target) {
 function houseIncome(h) { return capitals.filter(c => c.ownerHouseId === h.id).length * incomePerCapital(h); }
 function currentHouseView(h) {
   if (!h) return null;
-  const { money, infantry, navy, dragons, infantryCost, navyCost, pendingAttack, hasAttackedThisRound, commandUsedRound, lockedUntilRound, spyReports, ledger, ...definition } = h;
+  const { money, infantry, navy, navyBuilding, dragons, infantryCost, navyCost, pendingAttack, hasAttackedThisRound, commandUsedRound, lockedUntilRound, spyReports, ledger, ...definition } = h;
   const members = [...players.values()].filter(p => p.houseId === h.id).map(p => ({ id: p.id, username: p.username, connected: p.connected, left: Boolean(p.left) }));
   return { ...definition, players: members, capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length };
 }
@@ -270,7 +271,7 @@ function makePrivateHouseView(h) {
   if (!h) return null;
   const target = h.pendingAttack ? findCapital(h.pendingAttack.targetCapitalId) : null;
   return {
-    id: h.id, name: h.name, money: h.money, infantry: h.infantry, navy: h.navy, dragons: h.dragons,
+    id: h.id, name: h.name, money: h.money, infantry: h.infantry, navy: h.navy, navyBuilding: h.navyBuilding || 0, dragons: h.dragons,
     infantryCost: h.infantryCost, navyCost: h.navyCost,
     capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length, incomePerCapital: incomePerCapital(h), incomePerRound: houseIncome(h), upkeepPerRound: armySize(h),
     pendingAttack: h.pendingAttack ? {
@@ -763,10 +764,11 @@ io.on('connection', socket => {
     const total = cost * amount;
     if (h.money < total) return fail(`This purchase costs ${total} gold, but your house has ${h.money}.`);
     h.money -= total;
-    h[unit] += amount;
-    note(h, 'gold', -total, `Recruited ${amount} ${unit === 'navy' ? 'ships' : 'infantry'}`); note(h, unit, amount, 'Recruited');
+    // Ships take one day (until the next round) to build; once built they can sail and fight at once.
+    if (unit === 'navy') h.navyBuilding = (h.navyBuilding || 0) + amount; else h[unit] += amount;
+    note(h, 'gold', -total, `Recruited ${amount} ${unit === 'navy' ? 'ships' : 'infantry'}`); if (unit !== 'navy') note(h, unit, amount, 'Recruited');
     addEvent('normal', `House ${h.name} recruited ${amount} ${unit === 'navy' ? 'ships' : 'infantry'}.`);
-    return ok(`Recruited ${amount} ${unit === 'navy' ? 'ships' : 'infantry'}.`);
+    return ok(unit === 'navy' ? `${amount} ships ordered. They will be built by the next round.` : `Recruited ${amount} infantry.`);
   });
 
   action(socket, 'disband', (player, payload) => {
@@ -1028,6 +1030,7 @@ io.on('connection', socket => {
       phase = 'ACTION';
       for (const h of houses) {
         h.hasAttackedThisRound = false;
+        if (h.navyBuilding) { h.navy += h.navyBuilding; note(h, 'navy', h.navyBuilding, 'Ships finished building'); h.navyBuilding = 0; }
         h.money += houseIncome(h);
         note(h, 'gold', houseIncome(h), 'Capital income');
         // Army upkeep: 1 gold per unit, taken automatically. Unpaid troops desert.

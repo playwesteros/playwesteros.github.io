@@ -748,9 +748,6 @@ body.house-themed .footer { border-color: var(--line); }
 .map-cap.is-idle .cap-sub { opacity: 0 !important; }
 .map-cap.is-idle .cap-ring { stroke-width: 0 !important; fill: transparent !important; }
 .map-dialog.pick-mode .map-cap.is-idle.is-target { pointer-events: auto; }
-.map-towns { display: none; }
-.map-viewport.show-towns .map-towns { display: inline; }
-.map-viewport.show-towns .map-region-names { opacity: .22; }
 .map-cap.is-idle .cap-hit { pointer-events: none; }
 .map-dialog.pick-mode .map-cap.is-idle.is-target .cap-hit { pointer-events: all; }
 

@@ -694,6 +694,13 @@
     $('gameScreen').classList.toggle('hub-mode', visible);
     $('mapToggleButton').hidden = visible;
     if (!visible) closeHub();
+    const courtOnly = state.phase === 'COURT';
+    document.querySelectorAll('#actionHub .hub-button[data-hub]').forEach(b => {
+      const shut = courtOnly && b.dataset.hub !== 'relations';
+      b.classList.toggle('is-locked', shut); b.setAttribute('aria-disabled', String(shut));
+      b.title = shut ? 'During court only the chat is open.' : '';
+    });
+    if (courtOnly && !$('hubOverlay').hidden && !(currentHub === 'relations' && currentSub === 'messages')) openHub('relations', 'messages');
     if (state.phase === 'LOBBY') seenNotes.ready = false;
     const h = state.myHouse;
     if (!h) return;
@@ -709,7 +716,7 @@
     $('hubRelOffers').textContent = waiting ? `${plural(waiting, 'offer')} awaiting your reply` : 'No offers waiting';
     $('hubRelRole').textContent = state.isKing ? 'You wear the crown — traitors & taxes' : 'Alliances, treaties & messages';
     $('hubArmyTotal').textContent = `${total} units`;
-    $('hubArmyDetail').textContent = `${h.infantry} infantry · ${h.navy} navy · ${h.dragons} dragons`;
+    $('hubArmyDetail').textContent = `${h.infantry} infantry · ${h.navy} navy${h.navyBuilding ? ` (+${h.navyBuilding})` : ''} · ${h.dragons} dragons`;
     $('hubArmyCosts').textContent = `Recruit: infantry ${h.infantryCost}g · navy ${h.navyCost}g`;
     // Money sheet
     $('moneyGold').textContent = `${h.money} gold`;
@@ -730,7 +737,7 @@
     $('moneyCapitals').innerHTML = mine.length ? mine.map(c => `<div class="resolution-item"><span>+${h.incomePerCapital}</span><p class="row-who">${c.originalHouseId ? bannerOf(c.originalHouseId) : ''}${escapeHtml(c.name)}</p></div>`).join('') : '<p class="muted small-text">Your house holds no capitals, so it earns no income.</p>';
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
-    $('armyNavy').textContent = h.navy;
+    $('armyNavy').textContent = h.navy + (h.navyBuilding ? ` (+${h.navyBuilding} building)` : '');
     $('armyDragons').textContent = h.dragons;
     $('armyInfantryCost').textContent = `${h.infantryCost} gold`;
     $('armyNavyCost').textContent = `${h.navyCost} gold`;
@@ -886,10 +893,9 @@
   let mapZoom = 1;
   function applyMapZoom(next, keepCenter = true) {
     const vp = $('mapViewport'), svg = vp.querySelector('.realm-map');
-    const prev = mapZoom; mapZoom = Math.min(4.5, Math.max(0.6, next));
+    const prev = mapZoom; mapZoom = Math.min(4.5, Math.max(1, next));
     const cx = (vp.scrollLeft + vp.clientWidth / 2) / (vp.scrollWidth || 1), cy = (vp.scrollTop + vp.clientHeight / 2) / (vp.scrollHeight || 1);
     svg.style.setProperty('--map-zoom', String(mapZoom));
-    vp.classList.toggle('show-towns', mapZoom >= 1.25);
     if (keepCenter && prev !== mapZoom) { vp.scrollLeft = cx * vp.scrollWidth - vp.clientWidth / 2; vp.scrollTop = cy * vp.scrollHeight - vp.clientHeight / 2; }
   }
   (() => {
@@ -903,7 +909,7 @@
     });
     window.addEventListener('pointerup', () => { drag = null; vp.classList.remove('is-dragging'); });
     vp.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
-    vp.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); applyMapZoom(mapZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
+    vp.addEventListener('wheel', e => { e.preventDefault(); applyMapZoom(mapZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
   })();
   function fitMap() {
     const vp = $('mapViewport'), dlg = $('mapDialog');
@@ -1459,9 +1465,12 @@
     if (action === 'remove-bot') { removeBot(button.dataset.botId); return; }
     if (action === 'remove-bot-dialog') { $('botEditDialog').close(); removeBot(editingBotId); return; }
     if (action === 'close-bot-dialog') { $('botEditDialog').close(); return; }
-    if (action === 'open-hub') { openHub(button.dataset.hub); return; }
-    if (action === 'open-sub') { showSub(button.dataset.sub); return; }
-    if (action === 'sub-back') { showSub(null); return; }
+    if (action === 'open-hub') {
+      if (state?.phase === 'COURT') { if (button.dataset.hub === 'relations') openHub('relations', 'messages'); return; }
+      openHub(button.dataset.hub); return;
+    }
+    if (action === 'open-sub') { if (state?.phase === 'COURT' && button.dataset.sub !== 'messages') return; showSub(button.dataset.sub); return; }
+    if (action === 'sub-back') { if (state?.phase === 'COURT') { closeHub(); return; } showSub(null); return; }
     if (action === 'close-hub') { closeHub(); return; }
     if (action === 'close-announce') { closeAnnouncement(); return; }
     if (action === 'toggle-traitor') { emitAction('mark-traitor', { playerId: button.dataset.playerId, traitor: button.dataset.traitor === 'true' }); return; }
@@ -1470,8 +1479,7 @@
     if (action === 'pick-target') { startPick(); return; }
     if (action === 'go-to-war') { openHub('army', 'war'); startPick(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
-    if (action === 'map-zoom-in') { applyMapZoom(mapZoom * 1.4); return; }
-    if (action === 'map-zoom-out') { applyMapZoom(mapZoom / 1.4); return; }
+    if (action === 'map-zoom-reset') { applyMapZoom(1, false); const vp = $('mapViewport'); vp.scrollLeft = 0; vp.scrollTop = 0; return; }
     if (action === 'close-map') { setMapOpen(false); return; }
     if (action === 'change-house') {
       setPickedHouse(null);
