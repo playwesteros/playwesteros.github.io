@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="./style.css?v=37">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=40" defer></script>
+  <script src="./app.js?v=41" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -39,7 +39,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v1.8.0</span>
+  <span id="gameVersion" class="version-tag" hidden>v1.9.0</span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -174,6 +174,8 @@
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="alliances"><span id="badgeSubAlliances" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Alliances</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="treaties"><span id="badgeSubTreaties" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-chain.png?v=2" alt=""><h3>Treaties &amp; Subsidies</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="messages"><span id="badgeSubMessages" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-raven.png?v=2" alt=""><h3>Messages</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="decrees" id="subDecrees" hidden><img src="./assets/game-throne.png?v=2" alt=""><h3>Decrees</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="hand" id="subHand" hidden><img src="./assets/game-hand.png?v=2" alt=""><h3>Hand’s Ledger</h3></button>
             </div>
             <div class="sub-page" data-sub="alliances" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
@@ -186,12 +188,6 @@
               <button class="button button-secondary button-full" type="submit">Send offer</button>
             </form></div>
                 <div class="alliance-area"><div class="section-head"><h3>Alliances &amp; offers</h3><span id="badgeOffers" class="note-badge" hidden></span></div><div id="allianceList" class="alliance-list"></div></div>
-              </section>
-              <section id="kingTools" class="panel section-panel hub-block" hidden>
-                <div class="section-head"><div><p class="panel-kicker">THE CROWN’S EYES</p><h2>Traitors</h2></div><span class="subtle-label">Only you can see this</span></div>
-                <div class="subsection-title">Traitors</div><p class="muted small-text">Label any player you no longer trust.</p>
-              <div id="traitorList" class="alliance-list"></div>
-              
               </section>
             </div>
             <div class="sub-page" data-sub="treaties" hidden>
@@ -208,7 +204,15 @@
               </div>
               <label for="treatyMessage">Message</label><input id="treatyMessage" maxlength="300" placeholder="Your terms, or a few kind words…" autocomplete="off">
               <button class="button button-secondary button-full" type="submit">Send treaty</button>
-            </form><form id="decreeForm" class="action-card" hidden>
+            </form></div>
+                <div class="alliance-area"><div class="section-head"><h3>Your treaties</h3><span id="badgeTreaties" class="note-badge" hidden></span></div><div id="treatyList" class="alliance-list"></div></div>
+              </section>
+            </div>
+            <div class="sub-page" data-sub="decrees" hidden>
+              <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
+              <section class="panel section-panel hub-block">
+                <div class="section-head"><div><p class="panel-kicker">THE CROWN</p><h2>Royal decrees</h2></div></div>
+                <div class="diplomacy-grid"><form id="decreeForm" class="action-card" hidden>
               <span class="royal-seal"><img src="./assets/game-throne.png?v=2" alt=""></span><h3>Royal decree</h3><p class="muted small-text">Seal a decree, with optional demands. One per round.</p>
               <label for="decreeTarget">To</label><select id="decreeTarget"></select>
               <div class="form-columns-3">
@@ -218,12 +222,26 @@
               </div>
               <label for="decreeMessage">Decree</label><input id="decreeMessage" maxlength="300" placeholder="By order of the crown…" autocomplete="off">
               <button class="button button-primary button-full" type="submit">Issue decree</button>
-            </form></div>
-                <div class="alliance-area"><div class="section-head"><h3>Your treaties</h3><span id="badgeTreaties" class="note-badge" hidden></span></div><div id="treatyList" class="alliance-list"></div></div>
+            </form>
+                  <form id="newHandForm" class="action-card"><span class="royal-seal"><img src="./assets/game-hand.png?v=2" alt=""></span><h3>Appoint a new Hand</h3><p class="muted small-text">Replace the Hand of the King.</p><label for="newHandSelect">Player</label><select id="newHandSelect"></select><button class="button button-secondary button-full" type="submit">Appoint</button></form>
+                </div>
+              </section>
+              <section id="kingTools" class="panel section-panel hub-block" hidden>
+                <div class="section-head"><div><p class="panel-kicker">THE CROWN’S EYES</p><h2>Traitors</h2></div><span class="subtle-label">Only you can see this</span></div>
+                <div class="subsection-title">Traitors</div><p class="muted small-text">Label any player you no longer trust.</p>
+              <div id="traitorList" class="alliance-list"></div>
+              
               </section>
               <section id="kingDecrees" class="panel section-panel hub-block" hidden>
                 <div class="section-head"><div><p class="panel-kicker">THE CROWN’S EYES</p><h2>Decrees you have issued</h2></div><span class="subtle-label">Only you can see this</span></div>
                 <div id="taxLedger" class="tax-ledger"></div>
+              </section>
+            </div>
+            <div class="sub-page" data-sub="hand" hidden>
+              <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
+              <section class="panel section-panel hub-block">
+                <div class="section-head"><div><p class="panel-kicker">ONLY THE HAND SEES THIS</p><h2>Subsidies &amp; decrees</h2></div></div>
+                <div id="handLedger" class="tax-ledger"></div>
               </section>
             </div>
             <div class="sub-page" data-sub="messages" hidden>

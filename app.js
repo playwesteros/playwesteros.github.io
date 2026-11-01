@@ -650,7 +650,7 @@
   }
 
   const HUBS = { money: ['YOUR TREASURY', 'Money', 'hubMoney'], relations: ['COURT & DIPLOMACY', 'Relations', 'hubRelations'], army: ['FORCES & WAR', 'Army', 'hubArmy'] };
-  const SUB_LABEL = { alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', recruit: 'Recruit & disband', spies: 'Spies', war: 'Go to war' };
+  const SUB_LABEL = { alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', decrees: 'Decrees', hand: 'Hand’s ledger', recruit: 'Recruit & disband', spies: 'Spies', war: 'Go to war' };
   let currentSub = null;
   function showSub(name) {
     currentSub = name || null;
@@ -737,6 +737,19 @@
     // King's ledger
     $('kingTools').hidden = !state.isKing;
     $('kingDecrees').hidden = !state.isKing;
+    $('subDecrees').hidden = !state.isKing;
+    $('subHand').hidden = !state.isHand;
+    if ((currentSub === 'decrees' && !state.isKing) || (currentSub === 'hand' && !state.isHand)) showSub(null);
+    if (state.isKing) {
+      const keep = $('newHandSelect').value;
+      $('newHandSelect').innerHTML = state.players.filter(p => !p.left && p.id !== state.me?.id).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.username)}${p.id === state.hand?.id ? ' (current Hand)' : ''}</option>`).join('');
+      if (keep) $('newHandSelect').value = keep;
+      lock($('newHandForm').querySelector('button'), !diploOpen() ? 'A new Hand can be named during the action and court phases.' : !$('newHandSelect').value ? 'There is no one else at court.' : $('newHandSelect').value === state.hand?.id ? 'That player is already the Hand.' : '');
+    }
+    if (state.isHand) {
+      const all = state.decrees || [];
+      $('handLedger').innerHTML = all.length ? all.map(d => `<article class="tax-entry"><strong>Round ${d.round} · King ${escapeHtml(d.kingName)}${d.message ? ` · “${escapeHtml(d.message)}”` : ''}</strong>${(d.gold || d.infantry || d.navy) ? `<div class="tax-row"><span>Demanded</span><span>${[d.gold && `${d.gold} gold`, d.infantry && `${d.infantry} infantry`, d.navy && `${d.navy} ships`].filter(Boolean).join(' · ')}</span></div>` : ''}${(d.recipients || []).map(x => `<div class="tax-row"><span class="row-who">${bannerOf(x.houseId)}House ${escapeHtml(capName(prettyHouse(x.houseId)))}</span><span class="${x.state === 'sent' ? 'tax-paid' : x.state === 'noted' ? 'tax-none' : 'tax-short'}">${x.state === 'sent' ? `Paid${[d.gold && ` ${d.gold} gold`, d.infantry && ` ${d.infantry} infantry`, d.navy && ` ${d.navy} ships`].filter(Boolean).join(',')}` : x.state === 'noted' ? 'Delivered' : 'Not yet paid'}</span></div>`).join('')}</article>`).join('') : '<p class="muted small-text">The king has issued no decrees yet.</p>';
+    }
     if (state.isKing) {
       const others = state.players.filter(p => !p.left && p.id !== state.me?.id);
       $('traitorList').innerHTML = others.length ? others.map(p => {
@@ -1450,6 +1463,10 @@
     emitAction('offer-alliance', { targetHouseId: $('allianceTarget').value, scope: $('allianceScope').value });
   });
 
+  $('newHandForm').addEventListener('submit', event => {
+    event.preventDefault();
+    emitAction('replace-hand', { playerId: $('newHandSelect').value });
+  });
   $('decreeForm').addEventListener('submit', event => {
     event.preventDefault();
     const target = $('decreeTarget').value;

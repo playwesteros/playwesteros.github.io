@@ -730,3 +730,4 @@ body.house-themed .footer { border-color: var(--line); }
 .map-cap.is-idle .cap-ring, .map-cap.is-idle:hover .cap-ring, .map-cap.is-idle:focus-visible .cap-ring { stroke: #8d8d8d; }
 .map-cap.is-idle .cap-name, .map-cap.is-idle .cap-sub { fill: #6f6f6f; }
 @media (max-width: 700px) { .sub-menu { grid-template-columns: 1fr; } .sub-button { flex-direction: row; padding: 12px 14px; } .sub-button img { width: 48px; } }
+.sub-button[hidden] { display: none; }

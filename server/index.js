@@ -306,9 +306,9 @@ function viewFor(playerId) {
     houses: houses.map(currentHouseView),
     players: [...players.values()].map(p => (me && me.id === kingPlayerId ? { ...playerPublic(p), traitor: Boolean(p.traitor) } : playerPublic(p))),
     notices: myHouse ? notices.filter(n => n.playerIds.includes(me.id) || n.houseIds.includes(myHouse.id)).slice(0, 30).map(n => ({ id: n.id, round: n.round, kind: n.kind, title: n.title, text: n.text, banners: [...n.banners] })) : [],
-    decrees: myHouse ? taxLedger.filter(d => d.kingPlayerId === me.id || d.recipients.some(r => r.houseId === myHouse.id)).slice(0, 20).map(d => {
+    decrees: myHouse ? taxLedger.filter(d => d.kingPlayerId === me.id || me.id === handPlayerId || d.recipients.some(r => r.houseId === myHouse.id)).slice(0, 20).map(d => {
       const issuer = d.kingPlayerId === me.id;
-      return { id: d.id, round: d.round, kingName: d.kingName, kingHouseId: d.kingHouseId, message: d.message, gold: d.gold, infantry: d.infantry, navy: d.navy, isIssuer: issuer, myState: d.recipients.find(r => r.houseId === myHouse.id)?.state || null, recipients: issuer ? d.recipients.map(r => ({ ...r })) : undefined };
+      return { id: d.id, round: d.round, kingName: d.kingName, kingHouseId: d.kingHouseId, message: d.message, gold: d.gold, infantry: d.infantry, navy: d.navy, isIssuer: issuer, myState: d.recipients.find(r => r.houseId === myHouse.id)?.state || null, recipients: issuer || me.id === handPlayerId ? d.recipients.map(r => ({ ...r })) : undefined };
     }) : [],
     capitals: capitals.map(c => ({ ...c })),
     minorHousesUnlocked: Number(gameSettings.maxPlayers) >= 7,
@@ -697,6 +697,19 @@ io.on('connection', socket => {
     for (const p of players.values()) p.vote = null;
     addEvent('important', `${players.get(kingPlayerId)?.username || 'A Baratheon player'} was chosen at random as the first king.`);
     return ok(`${players.get(kingPlayerId)?.username || 'A Baratheon player'} is the first king. They must appoint a Hand of the King.`);
+  });
+
+  action(socket, 'replace-hand', (player, payload) => {
+    const check = requirePlayer(player); if (check.ok === false) return check;
+    if (!canDiplomacy()) return fail('A new Hand can be named during the action and court phases.');
+    if (player.id !== kingPlayerId) return fail('Only the king can appoint the Hand of the King.');
+    const target = players.get(String(payload.playerId || ''));
+    if (!target || target.left) return fail('Choose a player who is still in the game.');
+    if (target.id === player.id) return fail('The king cannot appoint themself as the Hand of the King.');
+    if (target.id === handPlayerId) return fail(`${target.username} is already the Hand of the King.`);
+    handPlayerId = target.id;
+    addEvent('important', `${player.username} appointed ${target.username} as the new Hand of the King.`);
+    return ok(`${target.username} is now the Hand of the King.`);
   });
 
   action(socket, 'appoint-hand', (player, payload) => {
