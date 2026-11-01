@@ -757,7 +757,7 @@
       const others = state.players.filter(p => !p.left && p.id !== state.me?.id);
       $('traitorList').innerHTML = others.length ? others.map(p => {
         const house = state.houses.find(item => item.id === p.houseId);
-        return `<div class="alliance-row"><div><strong>${escapeHtml(p.username)}${p.traitor ? ' <em class="traitor-tag">TRAITOR</em>' : ''}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'No house'}</small></div><button class="button ${p.traitor ? 'button-quiet' : 'button-danger'} button-small" type="button" data-action="toggle-traitor" data-player-id="${escapeHtml(p.id)}" data-traitor="${p.traitor ? 'false' : 'true'}">${p.traitor ? 'Pardon' : 'Label traitor'}</button></div>`;
+        return `<div class="alliance-row house-row" style="--house-color:${escapeHtml(house?.color || '#888')}"><div class="row-who">${houseBanner(house, 'msg-banner')}<div><strong>${escapeHtml(p.username)}${p.traitor ? ' <em class="traitor-tag">TRAITOR</em>' : ''}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'No house'}</small></div></div><button class="button ${p.traitor ? 'button-quiet' : 'button-danger'} button-small" type="button" data-action="toggle-traitor" data-player-id="${escapeHtml(p.id)}" data-traitor="${p.traitor ? 'false' : 'true'}">${p.traitor ? 'Pardon' : 'Label traitor'}</button></div>`;
       }).join('') : '<p class="muted small-text">There is no one else at court.</p>';
       const issued = (state.decrees || []).filter(d => d.isIssuer);
       $('taxLedger').innerHTML = issued.length ? issued.map(d => `<article class="tax-entry"><strong>Round ${d.round}${d.message ? ` · “${escapeHtml(d.message)}”` : ''}</strong>${(d.gold || d.infantry || d.navy) ? `<div class="tax-row"><span>Demanded</span><span>${[d.gold && `${d.gold} gold`, d.infantry && `${d.infantry} infantry`, d.navy && `${d.navy} ships`].filter(Boolean).join(' · ')}</span></div>` : ''}<small class="muted">Only the Hand sees who has paid.</small></article>`).join('') : '<p class="muted small-text">You have issued no decrees yet. Open the Relations menu and seal one.</p>';
@@ -1090,7 +1090,7 @@
     setTimeout(showNextAnnouncement, 350);
   }
 
-  const BANNER_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget'];
+  const BANNER_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget', 'newHandSelect', 'handPlayerSelect'];
   function updateSelectBanners() {
     for (const id of BANNER_SELECTS) {
       const sel = $(id); if (!sel) continue;
@@ -1102,7 +1102,13 @@
         sel.addEventListener('change', updateSelectBanners);
         slot = wrap.firstChild;
       }
-      slot.innerHTML = sel.value ? bannerOf(sel.value) : '';
+      const pl = state.players?.find(p => p.id === sel.value);
+      const houseId = pl ? pl.houseId : sel.value;
+      const house = state.houses?.find(h => h.id === houseId);
+      slot.innerHTML = house ? bannerOf(house.id) : '';
+      const wrap = slot.parentNode;
+      wrap.classList.toggle('has-house', Boolean(house));
+      if (house) wrap.style.setProperty('--house-color', house.color || '#c8a86c');
     }
   }
   function render() {
@@ -1126,6 +1132,7 @@
     checkNotices();
     if (state.phase === 'HAND_SELECTION') {
       renderKingSelection();
+      updateSelectBanners();
       updateRoundPill();
       return;
     }
