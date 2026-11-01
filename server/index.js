@@ -314,6 +314,7 @@ function viewFor(playerId) {
     hand: handPlayerId && players.has(handPlayerId) ? { id: handPlayerId, username: players.get(handPlayerId).username } : null,
     settings: { ...gameSettings },
     gameOver: gameOver ? { ...gameOver, winners: gameOver.winners } : null,
+    dragonsLeft: isLastDragon() ? dragonIds.filter(id => !dragonDefeated(id)).length : null,
     dragon: me && dragonIds.includes(me.id) ? { fellow: dragonList().filter(d => d.id !== me.id) } : null,
     isHost: Boolean(me && me.id === hostId), isKing: Boolean(me && me.id === kingPlayerId), isHand: Boolean(me && me.id === handPlayerId),
     me: me ? { id: me.id, username: me.username, houseId: me.houseId, vote: me.vote, lastSpyRound: me.lastSpyRound, eliminated: Boolean(me.eliminated) } : null,
@@ -880,6 +881,7 @@ io.on('connection', socket => {
     if (player.lastSpyRound === round) return fail('You have already sent spies this round.');
     const target = findHouse(String(payload.targetHouseId || ''));
     if (!target || target.id === h.id) return fail('Choose another house as your target.');
+    if (!houseMembers(target.id).length) return fail('That house has no players in this game.');
     const spend = Number(payload.spend ?? 8);
     if (!Number.isInteger(spend) || spend < 2 || spend > 20) return fail('Spend between 2 and 20 gold on a spy mission.');
     const spendCost = spend;
@@ -1049,6 +1051,10 @@ io.on('connection', socket => {
     taxLedger.unshift({ id: randomUUID(), round, kingPlayerId: player.id, kingName: player.username, kingHouseId: h.id, message, gold, infantry, navy, recipients: targets.map(x => ({ houseId: x.id, state: gold + infantry + navy === 0 ? 'noted' : 'pending' })) });
     if (taxLedger.length > 20) taxLedger.length = 20;
     h.commandUsedRound = round;
+    if (handPlayerId && players.has(handPlayerId)) {
+      const asks = [gold && `${gold} gold`, infantry && `${infantry} infantry`, navy && `${navy} ships`].filter(Boolean).join(', ');
+      notify('decree', [], [handPlayerId], 'The king sent a subsidy decree', `King ${player.username} sent a decree to ${targets.length} house${targets.length === 1 ? '' : 's'}${asks ? ` demanding ${asks} from each` : ''}. See the Hand’s ledger.`, [h.id]);
+    }
     addEvent('important', `King ${player.username} issued a royal decree${gold + infantry + navy ? ' with demands' : ''}.`);
     return ok(`Your decree has been sealed and sent to ${targets.length} house${targets.length === 1 ? '' : 's'}.`);
   });

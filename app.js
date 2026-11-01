@@ -401,7 +401,7 @@
     if (!house) return;
     $('infantryCostLabel').textContent = house.infantryCost;
     $('navyCostLabel').textContent = house.navyCost;
-    $('spyTarget').innerHTML = state.houses.filter(h => h.id !== house.id).map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
+    $('spyTarget').innerHTML = state.houses.filter(h => h.id !== house.id && (h.players || []).some(p => !p.left)).map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
     $('attackInfantry').max = house.infantry;
     $('attackNavy').max = house.navy;
     $('attackDragons').max = house.dragons;
@@ -480,6 +480,15 @@
     $('roundGold').textContent = house ? house.money : '—';
     const total = house ? house.infantry + house.navy + house.dragons : null;
     $('roundMilitaryTotal').textContent = total === null ? '—' : total;
+    const ldLive = state.settings?.gameType === 'LAST_DRAGON' && ['HAND_SELECTION', 'ACTION', 'COURT', 'RESOLUTION'].includes(state.phase) && !state.gameOver;
+    $('headerRounds').hidden = !ldLive; $('headerDragons').hidden = !ldLive;
+    if (ldLive) {
+      const left = Math.max(0, (state.settings.dragonRounds || 5) - state.round + 1);
+      $('roundsLeft').textContent = left;
+      $('headerRounds').title = `${plural(left, 'round')} left until the Targaryens win`;
+      $('dragonsLeft').textContent = state.dragonsLeft ?? '—';
+      $('headerDragons').title = `${plural(state.dragonsLeft ?? 0, 'Targaryen')} remaining`;
+    }
     $('headerArmy').title = house ? `${house.infantry} infantry · ${house.navy} navy · ${house.dragons} dragons` : 'Forces unavailable';
     // King / Hand icons only appear for the player who holds that role.
     const myDef = state.houses.find(item => item.id === state.me?.houseId);
@@ -923,12 +932,24 @@
     vp.addEventListener('click', e => { if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
     vp.addEventListener('wheel', e => { e.preventDefault(); applyMapZoom(mapZoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15)); }, { passive: false });
   })();
+  (() => {
+    const vp = $('mapViewport'); let pinch = null;
+    const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    vp.addEventListener('touchstart', e => { if (e.touches.length === 2) pinch = { d: dist(e.touches), z: mapZoom }; }, { passive: true });
+    vp.addEventListener('touchmove', e => {
+      if (e.touches.length !== 2 || !pinch) return;
+      e.preventDefault();
+      applyMapZoom(pinch.z * dist(e.touches) / pinch.d);
+    }, { passive: false });
+    vp.addEventListener('touchend', e => { if (e.touches.length < 2) pinch = null; });
+  })();
   function fitMap() {
     const vp = $('mapViewport'), dlg = $('mapDialog');
     const vh = Math.max(280, Math.min(window.innerHeight - 175, 1500));
-    const mapW = vh * 1024 / 1721;
+    const mapW = vh * 944 / 1721;
     dlg.style.width = Math.max(320, Math.min(window.innerWidth - 20, mapW + 40, 900)) + 'px';
     vp.style.maxHeight = 'none'; vp.style.height = vh + 'px';
+    vp.style.height = Math.min(vh, Math.round(vp.clientWidth * 1721 / 944)) + 'px';
     mapZoom = 1; applyMapZoom(1, false);
     vp.scrollLeft = 0; vp.scrollTop = 0;
   }
@@ -1055,7 +1076,7 @@
     if (!announceShowing) showNextAnnouncement();
   }
   // ---- Event notices: alliances, traitor labels, attacks, battle results ----
-  const NOTICE_LABEL = { desertion: 'DESERTION', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT' };
+  const NOTICE_LABEL = { decree: 'ROYAL DECREE', desertion: 'DESERTION', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT' };
   const NOTICE_MID = { 'spy-caught': 'game-eye', alliance: 'game-handshake', 'alliance-broken': 'game-chain', attacked: 'game-swords', 'battle-won': 'game-swords', 'battle-lost': 'game-swords' };
   const NOTICE_GOOD = new Set(['alliance', 'battle-won']);
   const noticeKey = () => `warOfWesterosNotices:${gameCode}`;
@@ -1208,10 +1229,6 @@
     const ld = state?.settings?.gameType === 'LAST_DRAGON';
     const live = ['ACTION', 'COURT', 'RESOLUTION'].includes(state?.phase) && !state?.gameOver;
     let text = '';
-    if (live && ld) {
-      if (state.dragon) text = `You are a secret Dragon${state.dragon.fellow.length ? ` with ${state.dragon.fellow.map(d => d.username).join(', ')}` : ''}. Survive to round ${state.settings.dragonRounds} or take the throne. If every Dragon falls, the realm wins.`;
-      else text = `${plural(state.settings.dragonCount, 'secret Dragon')} walk among you. Defeat them before round ${state.settings.dragonRounds} ends.`;
-    }
     if (live && state.me?.eliminated) text = 'You have been eliminated when the throne fell. You can still watch and speak at court.';
     else if (live && state.isKing && !state.hand) text = 'You hold King’s Landing and wear the crown. Appoint your Hand from Relations → Decrees.' + (text ? ' ' + text : '');
     if (live && state.myHouse?.fallen) text = 'Your house has fallen. You can still watch and speak at court.' + (text ? ' ' + text : '');
