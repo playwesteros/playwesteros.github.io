@@ -321,7 +321,7 @@
     const inf = Number($('attackInfantry').value), nav = Number($('attackNavy').value), dr = Number($('attackDragons').value);
     if ([inf, nav, dr].some(n => !Number.isInteger(n) || n < 0)) return 'Units to send must be whole numbers, zero or more.';
     if (inf + nav + dr < 1) return 'Commit at least one unit to the war.';
-    { const t = state.capitals.find(c => c.id === warTargetId); if (nav > 0 && t?.id === 'winterfell' && t.ownerHouseId === 'stark') return 'Winterfell cannot be attacked by ships. Send land forces only.'; }
+    { const t = state.capitals.find(c => c.id === warTargetId); if (nav > 0 && t?.id === 'winterfell') return 'Winterfell cannot be attacked by ships. Send land forces only.'; }
     if (inf > h.infantry || nav > h.navy || dr > h.dragons) return `You only have ${h.infantry} infantry, ${h.navy} ships and ${h.dragons} dragons to send.`;
     return '';
   }
