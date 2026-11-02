@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="./style.css?v=51">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=64" defer></script>
+  <script src="./app.js?v=65" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -42,7 +42,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.3.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v2.4.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -122,6 +122,14 @@
     <button class="button button-secondary button-full" type="button" data-action="edit-menu-house">Change house</button>
     <button class="button button-quiet button-full" type="button" data-action="close-edit-menu">Cancel</button>
   </dialog>
+  <dialog id="crownDialog" class="lobby-dialog">
+    <div>
+      <p class="eyebrow">THE IRON THRONE</p><h2>The crown is offered to you</h2>
+      <p class="muted">The king has forfeited the crown. Take the throne and live in King’s Landing, or refuse it and let the first army to reach King’s Landing take it without a fight.</p>
+      <button class="button button-primary button-full" type="button" data-action="crown-take">Take the crown</button>
+      <button class="button button-danger button-full" type="button" data-action="crown-refuse">Refuse the crown</button>
+    </div>
+  </dialog>
   <dialog id="lobbyNameDialog" class="lobby-dialog">
     <form id="lobbyNameForm">
       <p class="eyebrow">YOUR PLAYER</p><h2>Change your name</h2>
@@ -184,7 +192,7 @@
             </section>
             <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">EVERY COIN AND SOLDIER</p><h2>Ledger</h2></div></div><div><div id="ledgerTotals" class="ledger-totals"></div><div id="moneyLedger" class="ledger-list"></div><button id="ledgerToggle" class="button button-quiet button-small" type="button" data-action="toggle-ledger" hidden></button></div>
             </section>
-            <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">WHAT FEEDS THE TREASURY</p><h2>Your cities</h2></div></div><div id="moneyCapitals" class="event-list"></div></section>
+            <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">WHAT FEEDS THE TREASURY</p><h2>Your cities</h2></div></div><div id="moneyCapitals" class="event-list"></div><button id="forfeitCrownButton" class="button button-danger button-small" type="button" data-action="forfeit-crown" hidden>Forfeit the crown</button></section>
           </div>
           <div id="hubRelations" class="hub-pane" hidden>
             <p id="relationsPhaseNote" class="muted small-text"></p>

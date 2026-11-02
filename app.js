@@ -306,6 +306,7 @@
   function warTargetProblem(capital) {
     const mine = state.myHouse;
     if (capital.contested) return `${capital.name} is contested between two victorious allies. Wait until they settle who rules it.`;
+    if (capital.vacant) return '';
     if (!capital.ownerHouseId || capital.ownerPlayerId === state.me?.id) return `${capital.name} is already yours.`;
     const ff = state.settings?.friendlyFire !== false;
     if (capital.ownerHouseId === mine.id && !ff) return `Friendly fire is off: ${capital.name} is held by your own house.`;
@@ -344,7 +345,7 @@
     const c = state.capitals.find(x => x.id === warTargetId);
     const box = $('warTargetBox');
     box.classList.toggle('is-empty', !c);
-    box.innerHTML = c ? `${escapeHtml(c.name)}<small>${escapeHtml(c.region)} · House ${escapeHtml(capName(prettyHouse(c.ownerHouseId)))}</small>` : 'No target chosen yet';
+    box.innerHTML = c ? `${escapeHtml(c.name)}<small>${escapeHtml(c.region)} · ${c.vacant ? 'Empty throne' : `House ${escapeHtml(capName(prettyHouse(c.ownerHouseId)))}`}</small>` : 'No target chosen yet';
     $('pickTargetButton').innerHTML = `<img class="button-icon" src="./assets/game-castle.png?v=2" alt="">${c ? 'Change target on the map' : 'Choose target on the map'}`;
   }
 
@@ -382,7 +383,7 @@
         flagImg.setAttribute('x', String(-col * 328)); flagImg.setAttribute('y', String(-row * 380));
       } else if (flag) flag.remove();
       const sub = el.querySelector('.cap-sub');
-      if (sub) sub.textContent = cap.contested ? 'Contested' : owner ? `House ${capName(owner.name)}` : '';
+      if (sub) sub.textContent = cap.vacant ? 'Empty throne' : cap.contested ? 'Contested' : owner ? `House ${capName(owner.name)}` : '';
       el.classList.toggle('is-target', pickingTarget && state.myHouse && !warTargetProblem(cap));
     });
     renderMapUnits();
@@ -406,32 +407,41 @@
     const tag = (x, y, text, color) => { const t = document.createElementNS(NS, 'text'); t.setAttribute('x', x); t.setAttribute('y', y); t.setAttribute('font-size', '32'); t.setAttribute('font-weight', '700'); t.setAttribute('fill', color || '#f3e6c2'); t.setAttribute('stroke', '#1b1208'); t.setAttribute('stroke-width', '6'); t.setAttribute('paint-order', 'stroke'); t.setAttribute('font-family', 'Georgia, serif'); t.textContent = text; return t; };
     const home = pos.get(h.cityId);
     const color = (state.houses.find(x => x.id === h.id) || {}).color || '#c8a45c';
-    if (home) {
+    // An army badge: a dark disc with the gold army icon and the unit count in a pill, readable on parchment.
+    const badge = (cx, cy, r, count, label) => {
       const g = document.createElementNS(NS, 'g');
-      const ring = document.createElementNS(NS, 'circle'); ring.setAttribute('cx', home.x); ring.setAttribute('cy', home.y); ring.setAttribute('r', '40'); ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', color); ring.setAttribute('stroke-width', '6'); ring.setAttribute('stroke-dasharray', '12 9');
-      g.appendChild(ring);
-      g.appendChild(img('./assets/ui-player.png?v=2', home.x - 78, home.y - 62, 50));
-      const home_troops = h.infantry + h.navy + h.dragons;
-      if (home_troops > 0) { g.appendChild(img('./assets/ui-army.png?v=1', home.x - 82, home.y + 2, 50)); g.appendChild(tag(home.x - 28, home.y + 44, String(home_troops))); }
-      const title = document.createElementNS(NS, 'title'); title.textContent = 'You are here'; g.appendChild(title);
-      layer.appendChild(g);
+      const disc = document.createElementNS(NS, 'circle'); disc.setAttribute('cx', cx); disc.setAttribute('cy', cy); disc.setAttribute('r', r); disc.setAttribute('fill', '#1b1208'); disc.setAttribute('stroke', color); disc.setAttribute('stroke-width', '8');
+      g.appendChild(disc);
+      g.appendChild(img('./assets/ui-army.png?v=1', cx - r * 0.78, cy - r * 0.78, r * 1.56));
+      const w = 30 + String(count).length * 26, ph = 48;
+      const pill = document.createElementNS(NS, 'rect'); pill.setAttribute('x', cx + r * 0.35); pill.setAttribute('y', cy + r * 0.25); pill.setAttribute('width', w); pill.setAttribute('height', ph); pill.setAttribute('rx', ph / 2); pill.setAttribute('fill', '#1b1208'); pill.setAttribute('stroke', color); pill.setAttribute('stroke-width', '5');
+      g.appendChild(pill);
+      const t = document.createElementNS(NS, 'text'); t.setAttribute('x', cx + r * 0.35 + w / 2); t.setAttribute('y', cy + r * 0.25 + 35); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '36'); t.setAttribute('font-weight', '700'); t.setAttribute('fill', '#f3e6c2'); t.setAttribute('font-family', 'Georgia, serif'); t.textContent = String(count);
+      g.appendChild(t);
+      const title = document.createElementNS(NS, 'title'); title.textContent = label; g.appendChild(title);
+      return g;
+    };
+    if (home) {
+      const ring = document.createElementNS(NS, 'circle'); ring.setAttribute('cx', home.x); ring.setAttribute('cy', home.y); ring.setAttribute('r', '44'); ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', color); ring.setAttribute('stroke-width', '8'); ring.setAttribute('stroke-dasharray', '14 10');
+      const rt = document.createElementNS(NS, 'title'); rt.textContent = 'You live here'; ring.appendChild(rt);
+      layer.appendChild(ring);
+      const troops = h.infantry + h.navy + h.dragons;
+      if (troops > 0) layer.appendChild(badge(home.x - 86, home.y - 40, 40, troops, `Your troops at home: ${troops}`));
     }
     const o = h.pendingAttack;
     const from = home, to = o && pos.get(o.targetCapitalId);
     if (o && from && to) {
       const step = (state.round - o.orderedRound) * 3 + ['ACTION', 'COURT', 'RESOLUTION'].indexOf(state.phase);
       const t = Math.min(0.85, 0.15 + 0.14 * step);
-      const line = document.createElementNS(NS, 'line');
-      line.setAttribute('x1', from.x); line.setAttribute('y1', from.y); line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
-      line.setAttribute('stroke', color); line.setAttribute('stroke-width', '9'); line.setAttribute('stroke-dasharray', '24 16'); line.setAttribute('stroke-linecap', 'round'); line.setAttribute('opacity', '.9');
-      layer.appendChild(line);
+      for (const [w, stroke] of [[18, '#1b1208'], [9, color]]) {
+        const line = document.createElementNS(NS, 'line');
+        line.setAttribute('x1', from.x); line.setAttribute('y1', from.y); line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
+        line.setAttribute('stroke', stroke); line.setAttribute('stroke-width', w); line.setAttribute('stroke-dasharray', '26 16'); line.setAttribute('stroke-linecap', 'round');
+        layer.appendChild(line);
+      }
       const x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t;
-      const dot = document.createElementNS(NS, 'circle'); dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('r', '34'); dot.setAttribute('fill', '#1b1208'); dot.setAttribute('stroke', color); dot.setAttribute('stroke-width', '6');
-      layer.appendChild(dot);
-      layer.appendChild(img('./assets/ui-army.png?v=1', x - 24, y - 24, 48));
       const n = o.units.infantry + o.units.navy + o.units.dragons;
-      layer.appendChild(tag(x + 38, y + 12, String(n)));
-      const title = document.createElementNS(NS, 'title'); title.textContent = `Your army marching on ${o.targetName}`; dot.appendChild(title);
+      layer.appendChild(badge(x, y, 50, n, `Your army marching on ${o.targetName}`));
     }
   }
   function showMapHint(text) {
@@ -817,7 +827,8 @@
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
     $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
     const cities = h.cities || [];
-    $('moneyCapitals').innerHTML = cities.length ? cities.map(c => `<div class="resolution-item${c.canMove ? ' has-action' : ''}"><span>+${c.yield}</span><p class="row-who">${escapeHtml(c.name)}${c.living ? ' · you live here' : c.mine ? ' · you hold it (a fifth)' : ''}${c.residents ? ` · ${plural(c.residents, 'resident')}` : ''}</p>${c.canMove ? `<button class="button button-quiet button-small" type="button" data-action="move-city" data-city="${escapeHtml(c.id)}"${c.leavesCrown ? ' data-leaves-crown="1"' : ''}>Move here</button>` : ''}</div>`).join('') : '<p class="muted small-text">Your house holds no cities, so you earn no income.</p>';
+    $('moneyCapitals').innerHTML = cities.length ? cities.map(c => `<div class="resolution-item"><span>+${c.yield}</span><p class="row-who">${escapeHtml(c.name)}${c.living ? ' · you live here' : c.mine ? ' · you hold it (a fifth)' : ''}${c.residents ? ` · ${plural(c.residents, 'resident')}` : ''}</p></div>`).join('') : '<p class="muted small-text">Your house holds no cities, so you earn no income.</p>';
+    const fb = $('forfeitCrownButton'); if (fb) { fb.hidden = !state.isKing; lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
     $('armyNavy').textContent = h.navy + (h.navyBuilding ? ` (+${h.navyBuilding} building)` : '');
@@ -1297,6 +1308,13 @@
       : teams ? 'Players join teams that share a house. Teams must be as even as possible. The last team standing wins.'
       : 'Each player picks their own house and it is locked. Defeat every other house to win.';
   }
+  $('crownDialog')?.addEventListener('cancel', e => e.preventDefault());
+  function renderCrownOffer() {
+    const dlg = $('crownDialog'); if (!dlg) return;
+    const offered = Boolean(state?.crownOffer) && !state.gameOver;
+    if (offered && !dlg.open) dlg.showModal();
+    else if (!offered && dlg.open) dlg.close();
+  }
   let gameOverShownFor = '';
   let roleRevealShown = false;
   function renderEndgame() {
@@ -1341,6 +1359,7 @@
 
     renderWaitingRoom();
     renderEndgame();
+    renderCrownOffer();
     checkRoleChanges();
     checkNotices();
     if (state.phase === 'HAND_SELECTION') {
@@ -1660,7 +1679,9 @@
     if (action === 'pick-target') { startPick(); return; }
     if (action === 'go-to-war') { openHub('army', 'war'); startPick(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
-    if (action === 'move-city') { const leaves = button.dataset.leavesCrown === '1'; if (leaves && !window.confirm('The king must stay in King’s Landing. Leaving means you desert the crown. Move anyway?')) return; emitAction('move-city', { cityId: button.dataset.city, abdicate: leaves }); return; }
+    if (action === 'forfeit-crown') { if (window.confirm('Forfeit the crown? You return to your home city. The Hand may take the throne, or the first army to reach King’s Landing will take it unopposed.')) emitAction('forfeit-crown'); return; }
+    if (action === 'crown-take') { $('crownDialog').close(); emitAction('crown-choice', { accept: true }); return; }
+    if (action === 'crown-refuse') { $('crownDialog').close(); emitAction('crown-choice', { accept: false }); return; }
     if (action === 'reset-game') { emitAction('reset-game'); return; }
     if (action === 'map-zoom-reset') { applyMapZoom(1, false); const vp = $('mapViewport'); vp.scrollLeft = 0; vp.scrollTop = 0; return; }
     if (action === 'close-map') { setMapOpen(false); return; }

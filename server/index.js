@@ -238,6 +238,30 @@ function yieldFor(p, c) {
   return 0;
 }
 function playerIncome(p) { return capitals.reduce((n, c) => n + yieldFor(p, c), 0); }
+function homeCityOf(p) {
+  const own = capitals.find(c => c.originalHouseId === p.houseId);
+  if (own && own.ownerHouseId === p.houseId && !own.contested) return own;
+  return capitals.find(c => c.id !== 'kings-landing' && c.ownerHouseId === p.houseId && !c.contested) || null;
+}
+// A sacked city: everyone living there is defeated and their gold goes to the victor(s).
+function sackCity(c, victorIds) {
+  const victors = victorIds.map(id => players.get(id)).filter(p => p && p.w);
+  const fallen = [];
+  for (const p of players.values()) {
+    if (p.left || p.eliminated || p.cityId !== c.id || !p.w) continue;
+    const gold = p.w.money || 0;
+    if (gold && victors.length) {
+      const each = Math.floor(gold / victors.length);
+      victors.forEach((v, i) => { const g = each + (i === 0 ? gold - each * victors.length : 0); v.w.money += g; note(v.w, 'gold', g, `Gold of ${p.username}, fallen at ${c.name}`); });
+      note(p.w, 'gold', -gold, `Taken when ${c.name} was sacked`);
+    }
+    p.w.money = 0; p.w.infantry = 0; p.w.navy = 0; p.w.dragons = 0; p.w.pendingAttack = null;
+    p.eliminated = true; fallen.push(p);
+    notify('attacked', [], [p.id], `${c.name} was sacked`, `Your city fell. You are defeated${gold ? ` and your ${gold} gold goes to the victor` : ''}. You can still watch and speak at court.`, [p.houseId]);
+  }
+  if (fallen.length) addEvent('important', `${c.name} was sacked. ${fallen.map(p => p.username).join(', ')} ${fallen.length > 1 ? 'were' : 'was'} defeated.`);
+  return fallen;
+}
 function evictResidents(c) { for (const p of players.values()) if (p.cityId === c.id && p.houseId !== c.ownerHouseId) p.cityId = null; }
 function incomePerCapital(h) { return 15 + (h.id === 'tyrell' ? 3 : 0); }
 function armySize(h) { return h.infantry + h.navy + h.dragons; }
@@ -289,7 +313,7 @@ function makePrivateHouseView(h) {
   if (!h) return null;
   const me = h.playerId ? players.get(h.playerId) : null;
   const target = h.pendingAttack ? findCapital(h.pendingAttack.targetCapitalId) : null;
-  const cities = me ? capitals.filter(c => c.ownerHouseId === h.id && !c.contested).map(c => ({ id: c.id, name: c.name, yield: yieldFor(me, c), living: me.cityId === c.id, residents: residentsOf(c).length, mine: c.ownerPlayerId === me.id, canMove: phase === 'ACTION' && me.cityId !== c.id && !me.eliminated, leavesCrown: me.id === kingPlayerId && c.id !== 'kings-landing' })) : [];
+  const cities = me ? capitals.filter(c => c.ownerHouseId === h.id && !c.contested).map(c => ({ id: c.id, name: c.name, yield: yieldFor(me, c), living: me.cityId === c.id, residents: residentsOf(c).length, mine: c.ownerPlayerId === me.id, canMove: false })) : [];
   return {
     id: h.id, name: h.name, fallen: houseFallen(h), money: h.money || 0, infantry: h.infantry || 0, navy: h.navy || 0, navyBuilding: h.navyBuilding || 0, dragons: h.dragons || 0,
     infantryCost: h.infantryCost, navyCost: h.navyCost,
@@ -325,6 +349,8 @@ function viewFor(playerId) {
     gameOver: gameOver ? { ...gameOver, winners: gameOver.winners } : null,
     dragonsLeft: isLastDragon() ? dragonIds.filter(id => !dragonDefeated(id)).length : null,
     dragon: me && dragonIds.includes(me.id) ? { fellow: dragonList().filter(d => d.id !== me.id) } : null,
+    crownOffer: Boolean(me && capitals.some(c => c.vacant && c.offerTo === me.id)),
+    throneVacant: capitals.some(c => c.vacant),
     isHost: Boolean(me && me.id === hostId), isKing: Boolean(me && me.id === kingPlayerId), isHand: Boolean(me && me.id === handPlayerId),
     me: me ? { id: me.id, username: me.username, houseId: me.houseId, vote: me.vote, lastSpyRound: me.lastSpyRound, eliminated: Boolean(me.eliminated) } : null,
     myHouse: makePrivateHouseView(me?.w || myHouse),
@@ -419,7 +445,7 @@ function throneTaken(houseId, orderedBy) {
   }
   kingPlayerId = heir.id;
   handPlayerId = null;
-  const seat = capitals.find(c => c.id === 'kings-landing'); if (seat) { seat.ownerPlayerId = heir.id; seat.ownerHouseId = heir.houseId || seat.ownerHouseId; evictResidents(seat); }
+  const seat = capitals.find(c => c.id === 'kings-landing'); if (seat) { seat.vacant = false; seat.offerTo = null; seat.ownerPlayerId = heir.id; seat.ownerHouseId = heir.houseId || seat.ownerHouseId; evictResidents(seat); }
   heir.cityId = 'kings-landing';
   addEvent('important', `House ${capWord(house.name)} took King’s Landing. ${heir.username} is the new king${fallen.length ? `; ${fallen.join(' and ')} ${fallen.length > 1 ? 'were' : 'was'} eliminated` : ''}.`);
   notify('battle-won', [houseId], [], 'The Iron Throne is yours', `You hold King’s Landing and wear the crown. Appoint a Hand of the King from the Relations menu.`, [houseId]);
@@ -938,31 +964,40 @@ io.on('connection', socket => {
     return ok(caught ? `Your spies were captured. House ${target.name} knows it was you.` : success ? `Your spies returned with intelligence from House ${target.name}.` : `Your spy mission against House ${target.name} failed.`);
   });
 
-  action(socket, 'move-city', (player, payload) => {
-    const check = requireHouse(player); if (check.ok === false) return check;
-    if (phase !== 'ACTION') return fail('You can move between cities during the action phase.');
-    const c = findCapital(String(payload.cityId || ''));
-    if (!c || c.contested || c.ownerHouseId !== player.houseId) return fail('You can only live in a city your house holds.');
-    if (player.cityId === c.id) return fail(`You already live in ${c.name}.`);
-    if (player.id === kingPlayerId && c.id !== 'kings-landing') {
-      if (payload.abdicate !== true) return fail('The king must stay in King’s Landing. Leaving means giving up the crown.');
-      const throne = capitals.find(x => x.id === 'kings-landing');
-      const alive = p => p && !p.eliminated && !p.left && p.houseId && p.id !== player.id;
-      let heir = alive(players.get(handPlayerId)) ? players.get(handPlayerId) : null;
-      if (!heir) { const pool = [...players.values()].filter(p => alive(p) && !p.isBot); heir = pool.find(p => p.houseId === player.houseId) || pool[randomInt(0, Math.max(0, pool.length - 1))] || null; }
-      if (!heir) return fail('There is no one to take the crown.');
-      player.cityId = c.id;
-      kingPlayerId = heir.id; handPlayerId = null;
-      if (throne) { throne.ownerPlayerId = heir.id; throne.ownerHouseId = heir.houseId; evictResidents(throne); }
-      heir.cityId = 'kings-landing';
-      addEvent('important', `${player.username} left King’s Landing and deserted the crown. ${heir.username} is the new king.`);
-      notify('notice', [heir.houseId], [heir.id], 'You wear the crown', `${player.username} deserted the throne. You are king and now live in King’s Landing. Appoint a Hand of the King from the Relations menu.`, [heir.houseId]);
+  // The king may forfeit the crown: he returns to his home city and the Hand chooses whether to take it.
+  action(socket, 'forfeit-crown', (player) => {
+    const check = requirePlayer(player); if (check.ok === false) return check;
+    if (player.id !== kingPlayerId) return fail('Only the king can forfeit the crown.');
+    if (phase !== 'ACTION') return fail('You can forfeit the crown during the action phase.');
+    const home = homeCityOf(player);
+    if (!home) return fail('You have no home city to return to.');
+    const throne = capitals.find(c => c.id === 'kings-landing');
+    const hand = handPlayerId ? players.get(handPlayerId) : null;
+    const offerTo = hand && !hand.eliminated && !hand.left && hand.id !== player.id ? hand : null;
+    player.cityId = home.id;
+    kingPlayerId = null; handPlayerId = offerTo ? offerTo.id : null;
+    if (throne) { throne.ownerHouseId = null; throne.ownerPlayerId = null; throne.vacant = true; throne.offerTo = offerTo ? offerTo.id : null; }
+    addEvent('important', `${player.username} forfeited the crown and returned to ${home.name}. ${offerTo ? `${offerTo.username}, the Hand, must choose whether to take it.` : 'King’s Landing stands open to the first army that reaches it.'}`);
+    if (offerTo) notify('notice', [], [offerTo.id], 'The crown is offered', `${player.username} forfeited the crown. Take the throne, or refuse and let the first army to reach King’s Landing take it without a fight.`, [player.houseId]);
+    return ok(`You forfeited the crown and returned to ${home.name}.`);
+  });
+
+  action(socket, 'crown-choice', (player, payload) => {
+    const check = requirePlayer(player); if (check.ok === false) return check;
+    const throne = capitals.find(c => c.id === 'kings-landing');
+    if (!throne?.vacant || throne.offerTo !== player.id) return fail('The crown is not offered to you.');
+    throne.offerTo = null;
+    if (payload.accept === true) {
+      kingPlayerId = player.id; handPlayerId = null;
+      throne.vacant = false; throne.ownerPlayerId = player.id; throne.ownerHouseId = player.houseId;
+      player.cityId = 'kings-landing';
+      addEvent('important', `${player.username} took the crown and now lives in King’s Landing.`);
       checkVictory();
-      return ok(`You deserted the crown and now live in ${c.name}.`);
+      return ok('You wear the crown. Appoint a Hand of the King from the Relations menu.');
     }
-    player.cityId = c.id;
-    addEvent('normal', `${player.username} moved to ${c.name}.`);
-    return ok(`You now live in ${c.name}.`);
+    handPlayerId = null;
+    addEvent('important', `${player.username} refused the crown. King’s Landing stands open to the first army that reaches it.`);
+    return ok('You refused the crown. The first army to reach King’s Landing will take it unopposed.');
   });
 
   action(socket, 'plan-attack', (player, payload) => {
@@ -973,7 +1008,7 @@ io.on('connection', socket => {
     if (h.pendingAttack) return fail('You already have a pending attack order.');
     if (h.hasAttackedThisRound) return fail('You have already planned an attack this round.');
     const target = findCapital(String(payload.targetCapitalId || ''));
-    if (!target || target.contested || !target.ownerHouseId) return fail('Choose a city held by someone else.');
+    if (!target || target.contested || (!target.ownerHouseId && !target.vacant)) return fail('Choose a city held by someone else.');
     if (target.ownerPlayerId === player.id) return fail('That city is already yours.');
     const sameHouse = target.ownerHouseId === h.id, allyTarget = !sameHouse && areAllied(h.id, target.ownerHouseId);
     if (sameHouse && !gameSettings.friendlyFire) return fail('Friendly fire is off: you cannot attack a city held by your own house.');
@@ -1252,7 +1287,7 @@ function fightBattle(attacker, allyHouse) {
     const order = attacker.pendingAttack;
     const target = findCapital(order.targetCapitalId);
     const ffOff = !gameSettings.friendlyFire && target && target.ownerHouseId && (target.ownerHouseId === attacker.id || areAllied(attacker.id, target.ownerHouseId));
-    if (!target || !target.ownerHouseId || target.ownerPlayerId === attacker.playerId || ffOff) {
+    if (!target || (!target.ownerHouseId && !target.vacant) || target.ownerPlayerId === attacker.playerId || ffOff) {
       addEvent('battle', `House ${attacker.name} found no enemy holding at ${order.targetName}; the attack was spent.`);
       attacker.pendingAttack = null;
       if (allyHouse) allyHouse.pendingAttack = null;
@@ -1264,7 +1299,7 @@ function fightBattle(attacker, allyHouse) {
       const pact = alliances.find(x => [x.houseA, x.houseB].includes(attacker.id) && [x.houseA, x.houseB].includes(defender.id));
       if (pact) { alliances.splice(alliances.indexOf(pact), 1); notify('alliance-broken', [attacker.id, defender.id], [], 'Allies at war', `House ${capWord(attacker.name)} marched on its ally House ${capWord(defender.name)}. The alliance is broken.`, [attacker.id, defender.id]); }
     }
-    let defense = target.defense + randomInt(0, 3);
+    let defense = target.vacant ? -1 : target.defense + randomInt(0, 3);
     if ((defender?.id === 'stark' && target.id === 'winterfell') || (defender?.id === 'martell' && target.id === 'sunspear') || (defender?.id === 'arryn' && target.id === 'the-eyrie')) defense += 2;
     // Each troop contributes one strength; ships can support an attack, and dragons add five each plus a siege bonus.
     const allyOrder = allyHouse ? allyHouse.pendingAttack : null;
@@ -1276,6 +1311,7 @@ function fightBattle(attacker, allyHouse) {
       attacker.money += plunder - share; allyHouse.money += share;
       note(attacker, 'gold', plunder - share, `Plunder from ${target.name}`); note(allyHouse, 'gold', share, `Plunder from ${target.name}`);
       if (defWallet) note(defWallet, 'gold', -plunder, `Plundered at ${target.name}`);
+      sackCity(target, [order.playerId, allyOrder?.playerId].filter(Boolean));
       target.ownerHouseId = null; target.ownerPlayerId = null; evictResidents(target);
       target.contested = { houseA: attacker.id, houseB: allyHouse.id };
       const claims = { [attacker.id]: null, [allyHouse.id]: null };
@@ -1287,11 +1323,13 @@ function fightBattle(attacker, allyHouse) {
       if (defender) notify('attacked', [defender.id], [], `${target.name} was attacked`, `Houses ${capWord(attacker.name)} and ${capWord(allyHouse.name)} attacked and took ${target.name}.`, [attacker.id, defender.id]);
       settleSpoils(false);
     } else if (attackStrength >= defense) {
+      sackCity(target, [order.playerId]);
       target.ownerHouseId = attacker.id; target.ownerPlayerId = order.playerId; evictResidents(target);
       if (target.id === 'kings-landing') throneTaken(attacker.id, order.playerId);
       notify('battle-won', [attacker.id], [], `Victory at ${target.name}`, `House ${capWord(attacker.name)} captured ${target.name}.`, [attacker.id, defender?.id].filter(Boolean));
       if (defender) notify('attacked', [defender.id], [], `${target.name} was attacked`, `House ${capWord(attacker.name)} attacked and took ${target.name}.`, [attacker.id, defender.id]);
-      addEvent('battle', `House ${attacker.name} captured ${target.name} from House ${defender?.name || 'an unknown house'} (attack ${attackStrength} vs. defense ${defense}).`);
+      addEvent('battle', target.vacant || defense < 0 ? `House ${attacker.name} marched into the empty ${target.name} unopposed.` : `House ${attacker.name} captured ${target.name} from House ${defender?.name || 'an unknown house'} (attack ${attackStrength} vs. defense ${defense}).`);
+      checkVictory();
     } else {
       addEvent('battle', `House ${attacker.name} failed to capture ${target.name} (attack ${attackStrength} vs. defense ${defense}).`);
       const lost = [attacker.id, allyHouse?.id].filter(Boolean);
