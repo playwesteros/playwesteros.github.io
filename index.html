@@ -13,10 +13,10 @@
   <meta name="description" content="A temporary multiplayer Great Houses strategy game prototype.">
   <title>War of Westeros — Multiplayer Strategy</title>
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=1">
-  <link rel="stylesheet" href="./style.css?v=53">
+  <link rel="stylesheet" href="./style.css?v=54">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=68" defer></script>
+  <script src="./app.js?v=69" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -42,7 +42,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.6.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v2.7.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -173,7 +173,7 @@
 
     <p id="dragonNote" class="dragon-note" hidden></p>
     <section id="actionHub" class="action-hub" aria-label="Round menus" hidden>
-      <button class="hub-button" type="button" data-action="open-hub" data-hub="money" data-cat="money"><span id="badgeMoney" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-coins.png?v=2" alt=""><h3>Money</h3><div class="hub-detail"><strong id="hubMoneyGold">—</strong><span id="hubMoneyIncome"></span><span id="hubMoneyCapitals"></span></div></button>
+      <button class="hub-button" type="button" data-action="open-hub" data-hub="money" data-cat="money"><span id="badgeMoney" class="gold-gain" hidden></span><span id="badgeMoneyN" class="hub-badge hub-badge-left" aria-live="polite" hidden></span><img src="./assets/game-coins.png?v=2" alt=""><h3>Money</h3><div class="hub-detail"><strong id="hubMoneyGold">—</strong><span id="hubMoneyIncome"></span><span id="hubMoneyCapitals"></span></div></button>
       <button class="hub-button" type="button" data-action="open-hub" data-hub="relations" data-cat="relations"><span id="badgeRelations" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Relations</h3><div class="hub-detail"><strong id="hubRelAlliances">—</strong><span id="hubRelOffers"></span><span id="hubRelRole"></span></div></button>
       <button class="hub-button" type="button" data-action="open-hub" data-hub="army" data-cat="army"><span id="badgeArmy" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-swords.png?v=2" alt=""><h3>Army</h3><div class="hub-detail"><strong id="hubArmyTotal">—</strong><span id="hubArmyDetail"></span><span id="hubArmyCosts"></span></div></button>
     </section>
@@ -184,15 +184,36 @@
         <header class="hub-sheet-head"><div><p class="eyebrow" id="hubEyebrow"></p><h2 id="hubTitle"></h2></div><button class="button button-quiet button-small" type="button" data-action="close-hub">Close</button></header>
         <div class="hub-sheet-body">
           <div id="hubMoney" class="hub-pane" data-cat="money" hidden>
-            <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">YOUR TREASURY</p><h2>Gold &amp; income</h2></div></div>
-            <div class="money-grid">
-              <article class="money-card"><span id="badgeGold" class="note-badge" hidden></span><span>YOUR GOLD</span><strong id="moneyGold">—</strong></article>
-              <article class="money-card"><span>NET PER ROUND</span><strong id="moneyIncome">—</strong><small id="moneyIncomeNote"></small></article>
+            <div class="sub-menu">
+              <button class="hub-button sub-button gold-button" type="button" data-action="gold-info"><span id="badgeGold" class="gold-gain" hidden></span><img src="./assets/game-coins.png?v=2" alt=""><h3 id="moneyGold">— gold</h3><small id="moneyIncomeNote" class="muted"></small></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="gift" data-cat="gift"><img src="./assets/game-handshake.png?v=2" alt=""><h3>Send a gift</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="reports" data-cat="reports"><span id="badgeSubReports" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/ui-letter.png?v=1" alt=""><h3>Reports</h3></button>
+              <button id="subCrown" class="hub-button sub-button" type="button" data-action="open-sub" data-sub="crown" data-cat="crown" hidden><img src="./assets/game-castle.png?v=2" alt=""><h3>The crown</h3></button>
             </div>
-            </section>
-            <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">EVERY COIN AND SOLDIER</p><h2>Ledger</h2></div></div><div><div id="ledgerTotals" class="ledger-totals"></div><div id="moneyLedger" class="ledger-list"></div><button id="ledgerToggle" class="button button-quiet button-small" type="button" data-action="toggle-ledger" hidden></button></div>
-            </section>
-            <section id="crownSection" class="panel section-panel hub-block" hidden><div class="section-head"><div><p class="panel-kicker">THE IRON THRONE</p><h2>The crown</h2></div></div><p class="muted small-text">The king must live in King’s Landing. You may forfeit the crown and return to your home city.</p><button id="forfeitCrownButton" class="button button-danger button-small" type="button" data-action="forfeit-crown">Forfeit the crown</button></section>
+            <div class="sub-page" data-sub="gift" data-cat="gift" hidden>
+              <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
+              <section class="panel section-panel hub-block">
+                <div class="section-head"><div><p class="panel-kicker">FROM YOUR TREASURY</p><h2>Send a gift</h2></div></div>
+                <form id="giftForm" class="action-card">
+                  <p class="muted small-text">Send gold to any player. It arrives at once and cannot be taken back.</p>
+                  <label for="giftTarget">Send to</label><select id="giftTarget" required></select>
+                  <label for="giftGold">Gold</label><input id="giftGold" type="number" min="1" placeholder="Amount" inputmode="numeric">
+                  <button class="button button-primary button-full" type="submit">Send gold</button>
+                </form>
+              </section>
+            </div>
+            <div class="sub-page" data-sub="reports" data-cat="reports" hidden>
+              <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
+              <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">EVERY COIN AND SOLDIER</p><h2>Ledger</h2></div></div><div><div id="ledgerTotals" class="ledger-totals"></div><div id="moneyLedger" class="ledger-list"></div><button id="ledgerToggle" class="button button-quiet button-small" type="button" data-action="toggle-ledger" hidden></button></div></section>
+              <section class="panel section-panel hub-block">
+                <div class="section-head"><div><p class="panel-kicker">THE REALM’S RECORD</p><h2>Battles</h2></div></div>
+                <div id="battleReports" class="event-list"></div>
+              </section>
+            </div>
+            <div class="sub-page" data-sub="crown" data-cat="crown" hidden>
+              <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
+              <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">THE IRON THRONE</p><h2>The crown</h2></div></div><p class="muted small-text">The king must live in King’s Landing. You may forfeit the crown and return to your home city.</p><button id="forfeitCrownButton" class="button button-danger button-small" type="button" data-action="forfeit-crown">Forfeit the crown</button></section>
+            </div>
           </div>
           <div id="hubRelations" class="hub-pane" hidden>
             <p id="relationsPhaseNote" class="muted small-text"></p>
@@ -294,7 +315,7 @@
               <button class="hub-button sub-button" type="button" data-action="open-map" data-cat="map"><img src="./assets/ui-map.png?v=2" alt=""><h3>War map</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="recruit" data-cat="recruit"><img src="./assets/ui-army.png?v=1" alt=""><h3>Recruit &amp; Disband</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="spies" data-cat="spies"><img src="./assets/game-eye.png?v=2" alt=""><h3>Spies</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="war" data-cat="war"><span id="badgeSubWar" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-swords.png?v=2" alt=""><h3>Battle reports</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="war" data-cat="war"><span id="badgeSubWar" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-swords.png?v=2" alt=""><h3>War councils</h3></button>
             </div>
             <div class="sub-page" data-sub="recruit" data-cat="recruit" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
@@ -335,11 +356,7 @@
               <section class="panel section-panel hub-block">
                 <div class="section-head"><h3>War councils &amp; spoils</h3><span id="badgeWar" class="note-badge" hidden></span></div><div id="warList" class="alliance-list"></div>
               </section>
-              <section class="panel section-panel hub-block">
-                <div class="section-head"><div><p class="panel-kicker">THE REALM’S RECORD</p><h2>Battle reports</h2></div><span id="badgeBattles" class="note-badge" hidden></span></div>
-                <div id="battleReports" class="event-list"></div>
-            
-              </section>
+              
             </div>
           </div>
         </div>

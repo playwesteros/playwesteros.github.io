@@ -809,3 +809,9 @@ body.house-themed .footer { border-color: var(--line); }
 .war-panel{position:sticky;bottom:-6px;z-index:20;margin-top:10px;padding:12px;border:1px solid var(--line-bright);border-radius:10px;background:rgba(18,13,8,.96);box-shadow:0 -6px 24px #000a}.war-panel[hidden]{display:none}.war-panel-head{display:flex;gap:8px;align-items:center;margin-bottom:6px}.war-panel-head .war-target-box{margin:0}.war-form .form-columns{margin-bottom:8px}
 
 .toast[popover]{inset:auto auto 24px 50%;margin:0;overflow:visible;color:#ece6d7}.toast[popover]:not(:popover-open){display:none}
+
+.gold-gain{position:absolute;top:12px;right:12px;display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;padding:0 9px;border-radius:99px;color:#2a1c05;background:linear-gradient(135deg,#f0cf74,#c9a24a);box-shadow:0 0 0 3px rgba(201,162,74,.28);font:700 12px Inter,sans-serif;z-index:2}
+.gold-gain[hidden]{display:none}.gold-gain.badge-pop{animation:badge-pop .4s cubic-bezier(.3,1.6,.5,1)}
+.hub-badge-left{right:auto;left:12px}
+.gold-button{cursor:default;position:relative}.gold-button h3{font-size:1.15rem}
+.gold-button:active{transform:none}

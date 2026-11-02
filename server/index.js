@@ -1012,6 +1012,20 @@ io.on('connection', socket => {
     return ok('You refused the crown. The first army to reach King’s Landing will take it unopposed.');
   });
 
+  action(socket, 'send-gift', (player, payload) => {
+    const check = requireHouse(player); if (check.ok === false) return check;
+    if (phase !== 'ACTION') return fail('Gifts can be sent during the action phase.');
+    const to = players.get(String(payload.toPlayerId || ''));
+    if (!to || to.id === player.id || to.left || to.eliminated || !to.w) return fail('Choose another player to receive the gift.');
+    const gold = Number(payload.gold);
+    if (!Number.isInteger(gold) || gold < 1) return fail('Send a whole number of gold, at least 1.');
+    if (gold > check.money) return fail(`You only have ${check.money} gold.`);
+    check.money -= gold; to.w.money += gold;
+    note(check, 'gold', -gold, `Gift to ${to.username}`); note(to.w, 'gold', gold, `Gift from ${player.username}`);
+    notify('notice', [], [to.id], 'A gift of gold', `${player.username} sent you ${gold} gold.`, [player.houseId]);
+    return ok(`You sent ${gold} gold to ${to.username}.`);
+  });
+
   action(socket, 'plan-attack', (player, payload) => {
     const check = requireHouse(player); if (check.ok === false) return check;
     const h = check;

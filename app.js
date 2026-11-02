@@ -478,6 +478,10 @@
     const prevSpy = $('spyTarget').value;
     $('spyTarget').innerHTML = '<option value="">Choose a house</option>' + state.houses.filter(h => h.id !== house.id && (h.players || []).some(p => !p.left)).map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
     if ([...$('spyTarget').options].some(o => o.value === prevSpy)) $('spyTarget').value = prevSpy;
+    const prevGift = $('giftTarget').value;
+    $('giftTarget').innerHTML = '<option value="">Choose a player</option>' + state.players.filter(p => p.id !== state.me.id && !p.left && !p.eliminated && p.houseId).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.username)} · House ${escapeHtml(state.houses.find(x => x.id === p.houseId)?.name || '')}</option>`).join('');
+    if ([...$('giftTarget').options].some(o => o.value === prevGift)) $('giftTarget').value = prevGift;
+    updateGiftForm();
     $('attackInfantry').max = house.infantry;
     $('attackNavy').max = house.navy;
     $('attackDragons').max = house.dragons;
@@ -532,6 +536,17 @@
     } else $('spyOdds').innerHTML = '';
     lock($('spyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !$('spyTarget').value ? 'Choose a target house.' : !$('spyMission').value ? 'Choose a mission.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
   }
+  function updateGiftForm() {
+    const h = state?.myHouse; if (!h) return;
+    const raw = $('giftGold').value.trim(), n = Number(raw);
+    lock($('giftForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Gifts can be sent during the action phase.' : !$('giftTarget').value ? 'Choose who receives the gift.' : !(raw !== '' && Number.isInteger(n) && n >= 1) ? 'Enter a whole number of gold, at least 1.' : n > h.money ? `You only have ${h.money} gold.` : '');
+  }
+  $('giftGold').addEventListener('input', updateGiftForm);
+  $('giftTarget').addEventListener('change', updateGiftForm);
+  $('giftForm').addEventListener('submit', event => {
+    event.preventDefault();
+    emitAction('send-gift', { toPlayerId: $('giftTarget').value, gold: Number($('giftGold').value) }, () => { $('giftGold').value = ''; updateGiftForm(); });
+  });
   $('spyGold').addEventListener('input', updateSpyForm);
   $('spyMission').addEventListener('change', updateSpyForm);
   $('spyTarget').addEventListener('change', updateSpyForm);
@@ -751,7 +766,7 @@
   }
 
   const HUBS = { money: ['YOUR TREASURY', 'Money', 'hubMoney'], relations: ['COURT & DIPLOMACY', 'Relations', 'hubRelations'], army: ['FORCES & WAR', 'Army', 'hubArmy'] };
-  const SUB_LABEL = { alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', decrees: 'Decrees', hand: 'Hand’s ledger', recruit: 'Recruit & disband', spies: 'Spies', war: 'Go to war' };
+  const SUB_LABEL = { gift: 'Send a gift', reports: 'Reports', crown: 'The crown', alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', decrees: 'Decrees', hand: 'Hand’s ledger', recruit: 'Recruit & disband', spies: 'Spies', war: 'War councils' };
   let currentSub = null;
   function showSub(name) {
     currentSub = name || null;
@@ -820,8 +835,7 @@
     $('hubArmyCosts').textContent = `Recruit: infantry ${h.infantryCost}g · navy ${h.navyCost}g`;
     // Money sheet
     $('moneyGold').textContent = `${h.money} gold`;
-    $('moneyIncome').textContent = `${h.incomePerRound - h.upkeepPerRound >= 0 ? '+' : '−'}${Math.abs(h.incomePerRound - h.upkeepPerRound)} gold`;
-    $('moneyIncomeNote').textContent = `${h.incomePerRound} income − ${h.upkeepPerRound} upkeep`;
+    $('moneyIncomeNote').textContent = `${h.incomePerRound >= h.upkeepPerRound ? '+' : '−'}${Math.abs(h.incomePerRound - h.upkeepPerRound)} a round · ${h.incomePerRound} income − ${h.upkeepPerRound} upkeep`;
     $('upkeepNote').textContent = `Upkeep: ${h.upkeepPerRound} gold per round (1 per unit).`;
     const led = h.ledger || [];
     const sum = (res, sign) => led.filter(e => e.res === res && Math.sign(e.delta) === sign).reduce((n, e) => n + Math.abs(e.delta), 0);
@@ -833,7 +847,7 @@
     tog.hidden = !older;
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
     $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
-    const fb = $('forfeitCrownButton'); $('crownSection').hidden = !state.isKing; if (fb) { lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
+    const fb = $('forfeitCrownButton'); $('subCrown').hidden = !state.isKing; if (!state.isKing && currentSub === 'crown') showSub(null); if (fb) { lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
     $('armyNavy').textContent = h.navy + (h.navyBuilding ? ` (+${h.navyBuilding} building)` : '');
@@ -1100,25 +1114,27 @@
     if (currentHub === 'relations' && currentSub === 'messages') markSeen(activeChatTab === 'public' ? seenNotes.pub : seenNotes.sec, activeChatTab === 'public' ? n.pub : n.sec);
     if (currentHub === 'relations' && currentSub === 'alliances') markSeen(seenNotes.offers, n.offers);
     if (currentHub === 'relations' && currentSub === 'treaties') { markSeen(seenNotes.treaties, n.treaties); markSeen(seenNotes.decrees, n.decrees); }
-    if (currentHub === 'army' && currentSub === 'war') { markSeen(seenNotes.war, n.war); markSeen(seenNotes.battles, n.battles); }
+    if (currentHub === 'army' && currentSub === 'war') markSeen(seenNotes.war, n.war);
+    if (currentHub === 'money' && currentSub === 'reports') markSeen(seenNotes.battles, n.battles);
     if (h.money < seenNotes.gold) seenNotes.gold = h.money;
     const count = (list, set) => list.filter(item => !set.has(item.id)).length;
     const unPub = count(n.pub, seenNotes.pub), unSec = count(n.sec, seenNotes.sec), unOffers = count(n.offers, seenNotes.offers), unTreaties = count(n.treaties, seenNotes.treaties), unDecrees = count(n.decrees, seenNotes.decrees), unWar = count(n.war, seenNotes.war), unBattles = count(n.battles, seenNotes.battles);
     const gain = Math.max(0, h.money - seenNotes.gold);
     const text = value => (value ? String(Math.min(value, 99)) : '');
     setBadge('badgeRelations', text(unPub + unSec + unOffers + unTreaties + unDecrees));
-    setBadge('badgeArmy', text(unBattles + unWar));
+    setBadge('badgeArmy', text(unWar));
+    setBadge('badgeMoneyN', text(unBattles));
+    setBadge('badgeSubReports', text(unBattles));
     setBadge('badgeSubAlliances', text(unOffers));
     setBadge('badgeSubTreaties', text(unTreaties + unDecrees));
     setBadge('badgeSubMessages', text(unPub + unSec));
-    setBadge('badgeSubWar', text(unWar + unBattles));
+    setBadge('badgeSubWar', text(unWar));
     setBadge('badgeMoney', gain ? `+${gain}` : '');
     setBadge('badgeTabPublic', text(unPub));
     setBadge('badgeTabSecret', text(unSec));
     setBadge('badgeOffers', text(unOffers));
     setBadge('badgeTreaties', text(unTreaties + unDecrees));
     setBadge('badgeWar', text(unWar));
-    setBadge('badgeBattles', text(unBattles));
     setBadge('badgeGold', gain ? `+${gain}` : '');
   }
 
@@ -1254,7 +1270,7 @@
   }
 
   // House dropdowns: the real <select> stays hidden (value + change events), a custom list shows each house's banner and colour, ordered by house.
-  const HOUSE_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget', 'newHandSelect', 'handPlayerSelect'];
+  const HOUSE_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget', 'giftTarget', 'newHandSelect', 'handPlayerSelect'];
   const houseIndex = id => { const i = (state?.houses || []).findIndex(h => h.id === id); return i < 0 ? 99 : i; };
   const houseOfValue = value => {
     const house = state.houses.find(x => x.id === value);
@@ -1680,6 +1696,7 @@
     if (action === 'close-hub') { closeHub(); return; }
     if (action === 'close-announce') { closeAnnouncement(); return; }
     if (action === 'toggle-traitor') { emitAction('mark-traitor', { playerId: button.dataset.playerId, traitor: button.dataset.traitor === 'true' }); return; }
+    if (action === 'gold-info') return;
     if (action === 'toggle-ledger') { ledgerAll = !ledgerAll; renderHub(); return; }
     if (action === 'close-decree-popup') { $('decreeOverlay').hidden = true; return; }
     if (action === 'war-cancel') { warTargetId = null; renderWarTarget(); updateAttackLock(); return; }
