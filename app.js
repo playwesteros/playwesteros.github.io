@@ -4,6 +4,9 @@
   const SERVER_URL = window.GOT_CONFIG?.serverUrl || 'http://localhost:3000';
   const tokenKey = 'ironThroneClientToken';
   const usernameKey = 'ironThroneUsername';
+  const savedNameKey = 'ironThroneSavedName';
+  const savedPlayerName = () => { try { return localStorage.getItem(savedNameKey) || ''; } catch (e) { return ''; } };
+  let enteredName = '';
   const roomCodeKey = 'warOfWesterosGamePin';
   // House chosen on the throne screen before logging in. Claimed automatically right after login.
   const pickedHouseKey = 'ironThronePickedHouse';
@@ -768,7 +771,7 @@
   }
 
   const HUBS = { money: ['YOUR TREASURY', 'Money', 'hubMoney'], relations: ['COURT & DIPLOMACY', 'Relations', 'hubRelations'], army: ['FORCES & WAR', 'Army', 'hubArmy'] };
-  const SUB_LABEL = { gift: 'Send a gift', reports: 'Reports', alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', decrees: 'Decrees', hand: 'Hand’s ledger', recruit: 'Recruit & disband', spies: 'Spies', war: 'War councils' };
+  const SUB_LABEL = { gift: 'Send money & troops', reports: 'Reports', alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', decrees: 'Decrees', hand: 'Hand’s ledger', recruit: 'Recruit & disband', spies: 'Spies' };
   let currentSub = null;
   function showSub(name) {
     currentSub = name || null;
@@ -916,6 +919,9 @@
   // Flow: host setup or throne selection → name → waiting room → game.
   function updateScreens() {
     const loggedIn = Boolean(state?.me);
+    const needName = !loggedIn && !gameCode && !enteredName;
+    $('nameScreen').hidden = !needName;
+    if (needName && !$('nameEntryInput').dataset.filled) { $('nameEntryInput').value = savedPlayerName(); $('rememberNameInput').checked = Boolean(savedPlayerName()); $('nameEntryInput').dataset.filled = '1'; }
     const hostSetup = showHostSetup || (loggedIn && state?.phase === 'LOBBY' && state.isHost && !state.settings?.configured);
     const showThrone = changingLobbyHouse || (!loggedIn && (!gameCode || !pickedHouse));
     const waiting = loggedIn && state?.phase === 'LOBBY' && !hostSetup && !changingLobbyHouse;
@@ -1116,21 +1122,18 @@
     if (currentHub === 'relations' && currentSub === 'messages') markSeen(activeChatTab === 'public' ? seenNotes.pub : seenNotes.sec, activeChatTab === 'public' ? n.pub : n.sec);
     if (currentHub === 'relations' && currentSub === 'alliances') markSeen(seenNotes.offers, n.offers);
     if (currentHub === 'relations' && currentSub === 'treaties') { markSeen(seenNotes.treaties, n.treaties); markSeen(seenNotes.decrees, n.decrees); }
-    if (currentHub === 'army' && currentSub === 'war') markSeen(seenNotes.war, n.war);
-    if (currentHub === 'money' && currentSub === 'reports') markSeen(seenNotes.battles, n.battles);
+    if (currentHub === 'money' && currentSub === 'reports') { markSeen(seenNotes.war, n.war); markSeen(seenNotes.battles, n.battles); }
     if (h.money < seenNotes.gold) seenNotes.gold = h.money;
     const count = (list, set) => list.filter(item => !set.has(item.id)).length;
     const unPub = count(n.pub, seenNotes.pub), unSec = count(n.sec, seenNotes.sec), unOffers = count(n.offers, seenNotes.offers), unTreaties = count(n.treaties, seenNotes.treaties), unDecrees = count(n.decrees, seenNotes.decrees), unWar = count(n.war, seenNotes.war), unBattles = count(n.battles, seenNotes.battles);
     const gain = Math.max(0, h.money - seenNotes.gold);
     const text = value => (value ? String(Math.min(value, 99)) : '');
     setBadge('badgeRelations', text(unPub + unSec + unOffers + unTreaties + unDecrees));
-    setBadge('badgeArmy', text(unWar));
-    setBadge('badgeMoneyN', text(unBattles));
-    setBadge('badgeSubReports', text(unBattles));
+    setBadge('badgeMoneyN', text(unBattles + unWar));
+    setBadge('badgeSubReports', text(unBattles + unWar));
     setBadge('badgeSubAlliances', text(unOffers));
     setBadge('badgeSubTreaties', text(unTreaties + unDecrees));
     setBadge('badgeSubMessages', text(unPub + unSec));
-    setBadge('badgeSubWar', text(unWar));
     setBadge('badgeMoney', gain ? `+${gain}` : '');
     setBadge('badgeTabPublic', text(unPub));
     setBadge('badgeTabSecret', text(unSec));
@@ -1541,13 +1544,12 @@
       setPickedHouse({ key: normHouse(event.data.house).slice(0, 40), name: String(event.data.name || event.data.house).slice(0, 60) });
       if (state?.me) changingLobbyHouse = false;
       render();
+      if (!state?.me && gameCode && enteredName) doLogin(enteredName);
     }
   });
   $('throneFrame')?.addEventListener('load', sendHousesToThrone);
 
-  $('loginForm').addEventListener('submit', event => {
-    event.preventDefault();
-    const username = $('usernameInput').value.trim();
+  function doLogin(username) {
     if (!socket?.connected) {
       $('loginError').textContent = `Cannot reach ${SERVER_URL}. Start the server and check docs/config.js.`;
       return;
@@ -1555,6 +1557,7 @@
     $('loginError').textContent = '';
     socket.emit('login', { username, clientToken }, result => {
       if (!result?.ok) {
+        $('usernameInput').value = username;
         $('loginError').textContent = result?.message || 'Could not join the game.';
         return;
       }
@@ -1562,6 +1565,19 @@
       showToast(result.message || 'Welcome to the realm.', 'success');
       socket.emit('request-state');
     });
+  }
+  $('loginForm').addEventListener('submit', event => {
+    event.preventDefault();
+    doLogin($('usernameInput').value.trim());
+  });
+  $('nameForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const name = $('nameEntryInput').value.trim().replace(/\s+/g, ' ');
+    if (name.length < 2 || name.length > 22) { $('nameError').textContent = 'Name must be between 2 and 22 characters.'; return; }
+    $('nameError').textContent = '';
+    enteredName = name;
+    try { if ($('rememberNameInput').checked) localStorage.setItem(savedNameKey, name); else localStorage.removeItem(savedNameKey); } catch (e) { /* storage unavailable */ }
+    render();
   });
   $('gameTypeInput').addEventListener('change', () => { limitOptions(); updateDragonSetup(); });
   $('maxPlayersInput').addEventListener('change', updateDragonSetup);
@@ -1598,6 +1614,8 @@
     socket.emit('edit-player-name', { username }, result => {
       if (!result?.ok) return showToast(result?.message || 'Could not update your name.', 'error');
       $('lobbyNameDialog').close();
+      enteredName = username;
+      try { if (savedPlayerName()) localStorage.setItem(savedNameKey, username); } catch (e) { /* storage unavailable */ }
       showToast(result.message || 'Name updated.', 'success');
     });
   });
