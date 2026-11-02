@@ -35,7 +35,7 @@
   const $ = id => document.getElementById(id);
   function setThronePage(mode) {
     const frame = $('throneFrame');
-    if (frame) frame.src = mode === 'entry' ? './throne-photo.html?mode=entry&v=14' : './throne-photo.html?v=14';
+    if (frame) frame.src = mode === 'entry' ? './throne-photo.html?mode=entry&v=15' : './throne-photo.html?v=15';
   }
   function transitionThrone(mode) {
     const frame = $('throneFrame');
@@ -1562,6 +1562,7 @@
         return;
       }
       localStorage.setItem(usernameKey, username);
+      enteredName = username;
       showToast(result.message || 'Welcome to the realm.', 'success');
       socket.emit('request-state');
     });

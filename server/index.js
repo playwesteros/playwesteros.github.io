@@ -511,6 +511,9 @@ function houseError(h, playerId) {
   }
   return others ? `House ${h.name} is already taken.` : null;
 }
+// Names only have to be unique inside one lobby.
+function nameTaken(name, exceptId) { const n = String(name).toLowerCase(); return [...players.values()].some(p => !p.left && p.id !== exceptId && p.username.toLowerCase() === n); }
+const nameTakenMsg = name => `The name “${name}” is already used in this lobby. Choose a different one.`;
 function isHost(player) { return Boolean(player && player.id === hostId); }
 function isCourt() { return phase === 'COURT'; }
 function canDiplomacy() { return phase === 'ACTION' || phase === 'COURT'; }
@@ -649,6 +652,7 @@ io.on('connection', socket => {
 
       let playerId = tokenToPlayerId.get(token);
       let player = playerId ? players.get(playerId) : null;
+      if (nameTaken(name, player?.id)) return fail(nameTakenMsg(name));
       let isNew = false;
       if (!player) {
         if (!hostId && roomOwners.get(roomCode) !== token) return fail('Waiting for the host to enter the game. Try again in a moment.');
@@ -750,6 +754,7 @@ io.on('connection', socket => {
     if (phase !== 'LOBBY') return fail('Names can only be changed in the lobby.');
     const name = String(payload.username || '').trim().replace(/\s+/g, ' ');
     if (name.length < 2 || name.length > 22) return fail('Name must be between 2 and 22 characters.');
+    if (nameTaken(name, player.id)) return fail(nameTakenMsg(name));
     player.username = name;
     return ok('Your name has been updated.');
   });
@@ -783,6 +788,7 @@ io.on('connection', socket => {
     if (name.length < 2 || name.length > 22) return fail('Name must be between 2 and 22 characters.');
     const h = findHouse(String(payload.houseId || '')); if (!h) return fail('That house does not exist.');
     const taken = houseError(h, bot.id); if (taken) return fail(taken);
+    if (nameTaken(name, bot.id)) return fail(nameTakenMsg(name));
     const previousName = bot.username;
     const previousHouse = bot.houseId;
     bot.username = name;
