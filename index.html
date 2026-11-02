@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="./style.css?v=51">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=63" defer></script>
+  <script src="./app.js?v=64" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -42,7 +42,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.2.2<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v2.3.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -60,8 +60,13 @@
         <label for="gameTypeInput">Game type</label>
         <select id="gameTypeInput" name="gameType" required>
           <option value="CLASSIC">Classic</option>
+          <option value="TEAMS">Teams</option>
           <option value="LAST_DRAGON">Last Dragon</option>
         </select>
+        <div id="teamSetup" hidden>
+          <label for="teamSizeInput">Players per team</label>
+          <select id="teamSizeInput" name="teamSize"><option value="2">Teams of 2</option><option value="3">Teams of 3</option><option value="4">Teams of 4</option></select>
+        </div>
         <div id="dragonSetup" hidden>
           <label for="dragonCountInput">Secret Dragons</label>
           <select id="dragonCountInput" name="dragonCount"></select>
@@ -140,8 +145,8 @@
   <main id="kingSelectionScreen" class="realm-screen" hidden>
     <section class="realm-card panel king-selection-card">
       <p class="eyebrow">THE FIRST KING</p>
-      <h1>The crown passes to Baratheon</h1>
-      <p class="muted">The first king is chosen at random from the players who joined House Baratheon.</p>
+      <h1>The first king is chosen</h1>
+      <p class="muted">The first king is chosen at random. A Baratheon always takes the crown if one is playing.</p>
       <div id="firstKingIdentity" class="first-king-identity"></div>
       <form id="handSelectionForm" class="hand-selection-form" hidden>
         <label for="handPlayerSelect">Appoint the Hand of the King</label>
@@ -409,7 +414,7 @@
       <section class="center-column">
         <section id="lobbyPanel" class="panel section-panel">
           <div class="section-head"><div><p class="panel-kicker">FIRST COME, FIRST SERVED</p><h2>Choose your house</h2></div><span class="subtle-label">House selection</span></div>
-          <p class="muted section-intro">Major houses can have multiple players. Minor houses unlock when the host sets the player limit to 7 or more. One minor-house place opens for each player above 6, each minor house takes one player, and starting with minor houses needs at least 2 players in every major house.</p>
+          <p id="houseIntro" class="muted section-intro">Each player takes their own house, and the choice is locked once made.</p>
           <div id="housePicker" class="house-picker"></div>
           <div class="lobby-footer"><div id="lobbyStatus" class="muted small-text">Waiting for players…</div><div id="lobbyPlayerList" class="lobby-player-list"></div></div>
         </section>

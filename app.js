@@ -99,7 +99,7 @@
 
   const PHASES = {
     LOBBY: ['THE LOBBY', 'The Great Houses', 'Choose a house. The lobby host can begin the Great Council once everyone has joined a house.'],
-    HAND_SELECTION: ['THE FIRST KING', 'Appoint the Hand', 'The first king was chosen at random from the players of House Baratheon. The king chooses the Hand of the King before Round 1 begins.'],
+    HAND_SELECTION: ['THE FIRST KING', 'Appoint the Hand', 'The first king was chosen at random (a Baratheon always takes the crown if one is playing). The king chooses the Hand of the King before Round 1 begins.'],
     ACTION: ['ROUND ACTIONS', `Round ${state?.round || 1}: prepare your moves`, 'Recruit forces, purchase intelligence, and plan an attack. Army sizes stay private from enemy houses.'],
     COURT: ['THE ROYAL COURT', 'Words and alliances', 'Negotiate, make alliance offers, exchange secret messages, and let the king issue one decree.'],
     RESOLUTION: ['ROUND RESOLUTION', 'The realm answers', 'The host resolves the round. Pending attacks that are due are calculated and the realm chronicle is updated.']
@@ -186,7 +186,7 @@
   function allHouseOptions(excludeHouseId = null, includeEmpty = false) {
     if (!state) return '<option value="">Connect to server first</option>';
     const list = state.houses.filter(h => h.id !== excludeHouseId && (includeEmpty || h.players.length > 0 || h.capitalCount >= 0));
-    return list.map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}${h.type === 'minor' ? ' · Minor' : ''}</option>`).join('');
+    return list.map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
   }
 
   function playerName(playerId) {
@@ -211,15 +211,22 @@
 
   // Why `house` can't be taken by player `excludeId` right now (null = available). Mirrors the server rules.
   function minorHouseReason(house, excludeId) {
-    if (house.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON') return 'Not available in Last Dragon';
-    if (house.type !== 'minor') return null;
-    const maxPlayers = Number(state.settings?.maxPlayers);
-    if (maxPlayers < 7) return `Minor house · host must set the player limit to 7 or more (${maxPlayers || 0}/7)`;
-    if (house.players.some(p => !p.left && p.id !== excludeId)) return 'Already claimed by another player';
-    const slots = maxPlayers - 6;
-    const taken = state.players.filter(p => !p.left && p.id !== excludeId && state.houses.find(h => h.id === p.houseId)?.type === 'minor').length;
-    if (taken >= slots) return `All ${slots} minor-house place${slots === 1 ? '' : 's'} taken (one per player above 6)`;
-    return null;
+    const s = state.settings || {};
+    if (house.id === 'targaryen' && s.gameType === 'LAST_DRAGON') return 'Not available in Last Dragon';
+    const others = house.players.filter(p => !p.left && p.id !== excludeId).length;
+    if (s.gameType === 'TEAMS') return others >= (s.teamSize || 2) ? `Team full · ${others} of ${s.teamSize || 2}` : null;
+    return others ? 'Already claimed by another player' : null;
+  }
+  const houseIsLocked = () => state?.settings?.gameType !== 'TEAMS' && Boolean(state?.me?.houseId);
+  const houseChangeMsg = () => houseIsLocked() ? 'Your house is locked once you choose it.' : 'There are no other houses available right now.';
+  // Teams must be as even as possible. Returns a message, or '' when fine.
+  function teamProblem(list) {
+    if (state.settings?.gameType !== 'TEAMS') return '';
+    const sizes = state.houses.map(h => ({ h, n: list.filter(p => p.houseId === h.id).length })).filter(x => x.n > 0);
+    if (sizes.length < 2) return 'Teams mode needs at least 2 teams.';
+    const most = Math.max(...sizes.map(x => x.n)), least = Math.min(...sizes.map(x => x.n));
+    if (most - least <= 1) return '';
+    return `Teams must be as even as possible. ${sizes.filter(x => x.n === most).map(x => x.h.name).join(', ')}: ${most}. ${sizes.filter(x => x.n === least).map(x => x.h.name).join(', ')}: ${least}.`;
   }
 
   function renderWaitingRoom() {
@@ -227,11 +234,12 @@
     const activePlayers = state.players.filter(player => !player.left);
     $('lobbyCount').textContent = `${activePlayers.length} player${activePlayers.length === 1 ? '' : 's'}`;
     const setup = state.settings || { maxPlayers: 16, gameType: 'CLASSIC' };
-    const gameTypeLabel = setup.gameType === 'LAST_DRAGON' ? `Last Dragon · ${plural(setup.dragonCount || 1, 'Dragon')} · ${setup.dragonRounds || 5} rounds` : 'Classic';
+    const gameTypeLabel = setup.gameType === 'LAST_DRAGON' ? `Last Dragon · ${plural(setup.dragonCount || 1, 'Dragon')} · ${setup.dragonRounds || 5} rounds` : setup.gameType === 'TEAMS' ? `Teams · up to ${setup.teamSize || 2} per team` : 'Classic';
+    if ($('houseIntro')) $('houseIntro').textContent = setup.gameType === 'TEAMS' ? `Join a team. Teams can hold up to ${setup.teamSize || 2} players and must be as even as possible to begin. You can switch teams until the game starts.` : 'Each player takes their own house, and the choice is locked once made.';
     const ffLabel = setup.friendlyFire === false ? ' · Friendly fire off' : '';
     $('lobbySettings').textContent = `${gameTypeLabel} · ${activePlayers.length} of ${setup.maxPlayers} players${ffLabel}`;
-    lobbyCanChangeHouse = state.phase === 'LOBBY' && state.houses.some(h => h.id !== state.me.houseId && !minorHouseReason(h, state.me.id));
-    lock(document.querySelector('[data-action="edit-menu-house"]'), lobbyCanChangeHouse ? '' : 'There are no other houses available right now.');
+    lobbyCanChangeHouse = state.phase === 'LOBBY' && state.houses.some(h => h.id !== state.me.houseId && !minorHouseReason(h, state.me.id)) && !houseIsLocked();
+    lock(document.querySelector('[data-action="edit-menu-house"]'), lobbyCanChangeHouse ? '' : houseChangeMsg());
     const houseRank = id => { const i = state.houses.findIndex(h => h.id === id); return i < 0 ? state.houses.length : i; };
     const lobbyOrder = [...state.players].sort((a, b) => houseRank(a.houseId) - houseRank(b.houseId));
     $('lobbyRoster').innerHTML = lobbyOrder.length ? lobbyOrder.map(p => {
@@ -239,25 +247,23 @@
       const banner = house ? houseBanner(house, 'player-house-banner') : '<span class="player-house-banner player-house-pending" aria-hidden="true">?</span>';
       const status = p.isBot ? 'Bot player' : p.left ? 'Left the game' : p.connected ? 'Connected' : 'Reconnecting';
       const own = p.id === state.me.id;
-      const houseControl = own ? `<button class="lobby-banner-button ${lobbyCanChangeHouse ? '' : 'is-locked'}" type="button" data-action="edit-player" data-edit-kind="house" aria-label="Change your house"${lockAttr(lobbyCanChangeHouse ? '' : 'There are no other houses available right now.')}>${banner}</button>` : banner;
+      const houseControl = own ? `<button class="lobby-banner-button ${lobbyCanChangeHouse ? '' : 'is-locked'}" type="button" data-action="edit-player" data-edit-kind="house" aria-label="Change your house"${lockAttr(lobbyCanChangeHouse ? '' : houseChangeMsg())}>${banner}</button>` : banner;
       const nameEdit = own ? '<button class="player-edit-name" type="button" data-action="edit-player" data-edit-kind="name" aria-label="Edit your name">✎</button>' : '';
       const kickControl = !p.isBot && state.isHost && state.phase === 'LOBBY' && !own && p.id !== state.hostId ? `<button class="player-edit-name player-remove-bot" type="button" data-action="kick-player" data-player-id="${escapeHtml(p.id)}" aria-label="Remove ${escapeHtml(p.username)}">✕</button>` : '';
       const botControls = p.isBot && state.isHost && state.phase === 'LOBBY' ? `<button class="player-edit-name" type="button" data-action="edit-bot" data-bot-id="${escapeHtml(p.id)}" aria-label="Edit ${escapeHtml(p.username)}">✎</button><button class="player-edit-name player-remove-bot" type="button" data-action="remove-bot" data-bot-id="${escapeHtml(p.id)}" aria-label="Remove ${escapeHtml(p.username)}">✕</button>` : '';
       return `<div class="player-row ${p.left ? 'player-left' : ''} ${own ? 'player-row-own' : ''}" ${own && house?.color ? `style="--house-color:${escapeHtml(house.color)}"` : ''}>${houseControl}<div class="player-row-info"><strong>${escapeHtml(p.username)}<img class="player-icon name-icon ${p.isBot || (p.connected && !p.left && p.houseId) ? '' : 'player-away'}" src="./assets/ui-${p.isBot ? 'bot' : p.connected && !p.left && p.houseId ? 'player' : 'dead'}.png?v=2" alt="">${p.id === state.hostId ? ' <em class="host-tag">SERVER OWNER</em>' : ''}${nameEdit}${botControls}${kickControl}</strong><small>${house ? `House ${escapeHtml(house.name)}` : 'Joining · house not chosen'} · ${status}</small></div></div>`;
     }).join('') : '<p class="muted">The hall is quiet. Be the first to join.</p>';
     const canStart = state.isHost && state.phase === 'LOBBY';
-    const hasBaratheon = state.players.some(p => p.connected && !p.isBot && p.houseId === 'baratheon');
     const canAddBot = canStart && activePlayers.length < Number(setup.maxPlayers);
     $('addBotButton').hidden = !canStart;
     lock($('addBotButton'), canAddBot ? '' : 'The hall is full. Raise the player limit or remove someone first.');
     $('startGameButton').hidden = !canStart;
     const connectedPlayers = activePlayers.filter(p => p.connected);
-    const hasMinor = connectedPlayers.some(p => state.houses.find(h => h.id === p.houseId)?.type === 'minor');
-    const thinMajors = hasMinor ? state.houses.filter(h => h.type === 'major' && connectedPlayers.filter(p => p.houseId === h.id).length < 2).map(h => h.name) : [];
-    lock($('startGameButton'), !canStart ? '' : !hasBaratheon ? 'A human player must join House Baratheon first. Bots cannot be king.' : connectedPlayers.length < 2 ? 'At least 2 connected players are needed to begin.' : thinMajors.length ? `With minor houses in play, every major house needs at least 2 players. Still short: ${thinMajors.map(capName).join(', ')}.` : '');
+    const teamMsg = teamProblem(connectedPlayers);
+    const hasHuman = connectedPlayers.some(p => !p.isBot);
+    lock($('startGameButton'), !canStart ? '' : !hasHuman ? 'A human player is needed to be the first king. Bots cannot be king.' : connectedPlayers.length < 2 ? 'At least 2 connected players are needed to begin.' : teamMsg);
     $('lobbyHostNote').textContent = !canStart ? 'The server owner will begin the game when everyone is ready.'
-      : !hasBaratheon ? 'A human player must join House Baratheon to be the first king.'
-      : thinMajors.length ? `With minor houses in play, every major house needs at least 2 players. Still short: ${thinMajors.join(', ')}.`
+      : teamMsg ? teamMsg
       : 'As server owner, begin when everyone is ready.';
   }
 
@@ -355,7 +361,7 @@
       el.dataset.capital = cap.id;
       el.style.setProperty('--cap-color', owner?.color || '#7d2a14');
       el.classList.toggle('is-contested', Boolean(cap.contested));
-      const idle = !owner || (owner.type === 'minor' && !(owner.players || []).some(p => !p.left));
+      const idle = !owner || !(owner.players || []).some(p => !p.left);
       el.classList.toggle('is-idle', idle);
       if (idle) el.style.setProperty('--cap-color', '#8d8d8d');
       const pos = !idle && owner ? HOUSE_SPRITE_POSITION[owner.id] : null;
@@ -897,9 +903,9 @@
     document.body.classList.toggle('throne-open', showThrone);
     if (hostSetup) {
       const maxSelect = $('maxPlayersInput');
-      if (!maxSelect.options.length) maxSelect.innerHTML = Array.from({ length: 14 }, (_, i) => i + 3).map(n => `<option value="${n}">${n} players</option>`).join('');
-      maxSelect.value = String(state?.settings?.maxPlayers || 10);
       $('gameTypeInput').value = state?.settings?.gameType || 'CLASSIC';
+      $('teamSizeInput').value = String(state?.settings?.teamSize || 2);
+      limitOptions(state?.settings?.maxPlayers);
       updateDragonSetup();
       $('friendlyFireInput').checked = state?.settings?.friendlyFire !== false;
     }
@@ -921,12 +927,12 @@
     const houses = state.houses.map(h => {
       const reason = minorHouseReason(h, state.me?.id);
       const hiddenHouse = h.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON';
-      const locked = Boolean(reason) && reason !== 'Already claimed by another player';
-      const claimed = reason === 'Already claimed by another player';
+      const locked = Boolean(reason) && !reason.startsWith('Already claimed') && !reason.startsWith('Team full');
+      const claimed = Boolean(reason) && !locked;
       return {
         id: h.id, name: h.name, motto: h.motto, color: h.color,
         status: hiddenHouse ? 'hidden' : locked ? 'locked' : claimed ? 'claimed' : 'open',
-        note: reason || (h.type === 'major' ? `Major house · ${h.players.length} sworn` : 'Minor house · one player only')
+        note: reason || (state.settings?.gameType === 'TEAMS' ? `Team · ${h.players.filter(p => !p.left).length} of ${state.settings.teamSize || 2} sworn` : 'One player per house')
       };
     });
     frame.contentWindow.postMessage({ type: 'iron-throne:houses', houses }, location.origin === 'null' ? '*' : location.origin);
@@ -959,7 +965,7 @@
     $('botNameInput').value = bot.username;
     $('botHouseSelect').innerHTML = state.houses.filter(h => !(h.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON')).map(h => {
       const unavailable = Boolean(minorHouseReason(h, bot.id));
-      return `<option value="${escapeHtml(h.id)}" ${unavailable ? 'disabled' : ''}>${escapeHtml(h.name)}${h.type === 'minor' ? ' · Minor' : ''}</option>`;
+      return `<option value="${escapeHtml(h.id)}" ${unavailable ? 'disabled' : ''}>${escapeHtml(h.name)}</option>`;
     }).join('');
     $('botHouseSelect').value = bot.houseId;
     $('botEditDialog').showModal();
@@ -1022,7 +1028,7 @@
 
   function openHouseChooser() {
     $('lobbyEditMenu').close?.();
-    if (!lobbyCanChangeHouse) return showToast('There are no other houses available right now.', 'error');
+    if (!lobbyCanChangeHouse) return showToast(houseChangeMsg(), 'error');
     changingLobbyHouse = true;
     setPickedHouse(null);
     $('throneFrame')?.contentWindow?.postMessage({ type: 'iron-throne:reset' }, location.origin === 'null' ? '*' : location.origin);
@@ -1269,9 +1275,18 @@
       dd.querySelector('.hdrop-list').innerHTML = items.map(it => `<div class="hdrop-item ${it.o.value === sel.value ? 'sel' : ''}" role="option" data-value="${escapeHtml(it.o.value)}"${it.o.disabled ? ' data-disabled="1"' : ''} style="--house-color:${escapeHtml(it.house?.color || '#888')}">${row(it)}</div>`).join('');
     }
   }
+  function limitOptions(want) {
+    const mode = $('gameTypeInput').value;
+    const lo = mode === 'TEAMS' ? 4 : 3, hi = mode === 'CLASSIC' ? 8 : mode === 'LAST_DRAGON' ? 7 : 16;
+    const sel = $('maxPlayersInput'), keep = Number(want) || Number(sel.value) || (mode === 'CLASSIC' ? 8 : mode === 'LAST_DRAGON' ? 7 : 8);
+    sel.innerHTML = Array.from({ length: hi - lo + 1 }, (_, i) => i + lo).map(n => `<option value="${n}">${n} players</option>`).join('');
+    sel.value = String(Math.min(hi, Math.max(lo, keep)));
+  }
   function updateDragonSetup() {
     const ld = $('gameTypeInput').value === 'LAST_DRAGON';
+    const teams = $('gameTypeInput').value === 'TEAMS';
     $('dragonSetup').hidden = !ld;
+    $('teamSetup').hidden = !teams;
     const max = Math.max(1, Math.floor(Number($('maxPlayersInput').value || 10) / 2));
     const sel = $('dragonCountInput'), keep = Number(sel.value) || Number(state?.settings?.dragonCount) || 1;
     sel.innerHTML = Array.from({ length: max }, (_, i) => `<option value="${i + 1}">${plural(i + 1, 'Dragon')}</option>`).join('');
@@ -1279,7 +1294,8 @@
     if (!$('dragonRoundsInput').dataset.set) { $('dragonRoundsInput').value = String(state?.settings?.dragonRounds || 5); $('dragonRoundsInput').dataset.set = '1'; }
     $('gameTypeNote').textContent = ld
       ? 'Targaryen is not a house in this mode. Secret Dragons are picked at random from the players. If they survive the set number of rounds or one takes the throne, they win. If they are all defeated first, the whole realm wins.'
-      : 'Defeat every other house to win.';
+      : teams ? 'Players join teams that share a house. Teams must be as even as possible. The last team standing wins.'
+      : 'Each player picks their own house and it is locked. Defeat every other house to win.';
   }
   let gameOverShownFor = '';
   let roleRevealShown = false;
@@ -1503,12 +1519,12 @@
       socket.emit('request-state');
     });
   });
-  $('gameTypeInput').addEventListener('change', updateDragonSetup);
+  $('gameTypeInput').addEventListener('change', () => { limitOptions(); updateDragonSetup(); });
   $('maxPlayersInput').addEventListener('change', updateDragonSetup);
   $('hostSetupForm').addEventListener('submit', event => {
     event.preventDefault();
     $('hostSetupError').textContent = '';
-    const settings = { maxPlayers: Number($('maxPlayersInput').value), gameType: $('gameTypeInput').value, dragonCount: Number($('dragonCountInput').value || 1), dragonRounds: Number($('dragonRoundsInput').value || 5), friendlyFire: $('friendlyFireInput').checked };
+    const settings = { maxPlayers: Number($('maxPlayersInput').value), gameType: $('gameTypeInput').value, teamSize: Number($('teamSizeInput').value || 2), dragonCount: Number($('dragonCountInput').value || 1), dragonRounds: Number($('dragonRoundsInput').value || 5), friendlyFire: $('friendlyFireInput').checked };
     socket.emit(preparingHost ? 'set-room-settings' : 'set-game-settings', preparingHost ? { ...settings, clientToken } : settings, result => {
       if (!result?.ok) $('hostSetupError').textContent = result?.message || 'Could not save game setup.';
       else {

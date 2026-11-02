@@ -31,14 +31,14 @@ const io = new Server(server, {
 });
 
 const HOUSE_DEFS = [
-  { id: 'stark', name: 'Stark', type: 'major', color: '#91a8c1', sigil: '🐺', motto: 'Winter is Coming', capital: 'Winterfell', buff: 'King of the North: the city of Winterfell cannot be attacked by ships, and gains +2 defense when attacked.', nerf: null },
-  { id: 'lannister', name: 'Lannister', type: 'major', color: '#c8a45c', sigil: '🦁', motto: 'Hear Me Roar!', capital: 'Casterly Rock', buff: 'Rich as a Lannister: The city of Casterly Rock yields 18 gold a round instead of 15 to whoever holds it, and the house begins with 5 extra gold.', nerf: null },
-  { id: 'baratheon', name: 'Baratheon', type: 'major', color: '#c7b8a0', sigil: '🦌', motto: 'Ours Is the Fury', capital: 'Storm’s End', buff: 'Royal Blood: a Baratheon always starts as king.', nerf: null },
-  { id: 'targaryen', name: 'Targaryen', type: 'minor', color: '#bf6258', sigil: '🐉', motto: 'Fire and Blood', capital: 'Dragonstone', buff: 'Dragonlord: begins with 1 dragon; each dragon adds 5 battle strength and +2 siege strength.', nerf: 'The realm fears dragons: failed spy missions against this house are more likely.' },
-  { id: 'tyrell', name: 'Tyrell', type: 'minor', color: '#76a77d', sigil: '🌹', motto: 'Growing Strong', capital: 'Highgarden', buff: 'The Reach: gains 2 extra gold per capital at round start.', nerf: 'Lavish courts: infantry recruitment costs 5 gold each.' },
-  { id: 'greyjoy', name: 'greyjoy', type: 'minor', color: '#8f9da7', sigil: '🐙', motto: 'We Do Not Sow', capital: 'Pyke', buff: 'Iron Fleet: ships cost 4 gold each.', nerf: 'Hard shores: infantry recruitment costs 5 gold each.' },
-  { id: 'martell', name: 'martell', type: 'minor', color: '#d49b62', sigil: '☀', motto: 'Unbowed, Unbent, Unbroken', capital: 'Sunspear', buff: 'Desert defense: +2 defense when Sunspear is attacked.', nerf: 'Distant ports: naval recruitment costs 6 gold each.' },
-  { id: 'arryn', name: 'arryn', type: 'minor', color: '#8cb8c9', sigil: '🦅', motto: 'As High as Honor', capital: 'The Eyrie', buff: 'High ground: +2 defense when the Eyrie is attacked.', nerf: 'Mountain roads: infantry recruitment costs 5 gold each.' }
+  { id: 'stark', name: 'Stark', color: '#91a8c1', sigil: '🐺', motto: 'Winter is Coming', capital: 'Winterfell', buff: 'King of the North: the city of Winterfell cannot be attacked by ships, and gains +2 defense when attacked.', nerf: null },
+  { id: 'lannister', name: 'Lannister', color: '#c8a45c', sigil: '🦁', motto: 'Hear Me Roar!', capital: 'Casterly Rock', buff: 'Rich as a Lannister: The city of Casterly Rock yields 18 gold a round instead of 15 to whoever holds it, and the house begins with 5 extra gold.', nerf: null },
+  { id: 'baratheon', name: 'Baratheon', color: '#c7b8a0', sigil: '🦌', motto: 'Ours Is the Fury', capital: 'Storm’s End', buff: 'Royal Blood: a Baratheon always starts as king.', nerf: null },
+  { id: 'targaryen', name: 'Targaryen', color: '#bf6258', sigil: '🐉', motto: 'Fire and Blood', capital: 'Dragonstone', buff: 'Dragonlord: begins with 1 dragon; each dragon adds 5 battle strength and +2 siege strength.', nerf: 'The realm fears dragons: failed spy missions against this house are more likely.' },
+  { id: 'tyrell', name: 'Tyrell', color: '#76a77d', sigil: '🌹', motto: 'Growing Strong', capital: 'Highgarden', buff: 'The Reach: gains 2 extra gold per capital at round start.', nerf: 'Lavish courts: infantry recruitment costs 5 gold each.' },
+  { id: 'greyjoy', name: 'greyjoy', color: '#8f9da7', sigil: '🐙', motto: 'We Do Not Sow', capital: 'Pyke', buff: 'Iron Fleet: ships cost 4 gold each.', nerf: 'Hard shores: infantry recruitment costs 5 gold each.' },
+  { id: 'martell', name: 'martell', color: '#d49b62', sigil: '☀', motto: 'Unbowed, Unbent, Unbroken', capital: 'Sunspear', buff: 'Desert defense: +2 defense when Sunspear is attacked.', nerf: 'Distant ports: naval recruitment costs 6 gold each.' },
+  { id: 'arryn', name: 'arryn', color: '#8cb8c9', sigil: '🦅', motto: 'As High as Honor', capital: 'The Eyrie', buff: 'High ground: +2 defense when the Eyrie is attacked.', nerf: 'Mountain roads: infantry recruitment costs 5 gold each.' }
 ];
 
 const CAPITAL_DEFS = [
@@ -94,7 +94,7 @@ function resetWorld(keepPlayers = true, rematch = false) {
   const keptHouses = rematch ? new Map([...players.values()].map(p => [p.id, p.houseId])) : null;
   phase = 'LOBBY';
   round = 1;
-  gameSettings = { configured: false, maxPlayers: 10, gameType: 'CLASSIC', dragonCount: 1, dragonRounds: 5, friendlyFire: true };
+  gameSettings = { configured: false, maxPlayers: 10, gameType: 'CLASSIC', dragonCount: 1, dragonRounds: 5, friendlyFire: true, teamSize: 2 };
   dragonIds = [];
   gameOver = null;
   startHouseCount = 0;
@@ -336,7 +336,6 @@ function viewFor(playerId) {
       return { id: d.id, round: d.round, kingName: d.kingName, kingHouseId: d.kingHouseId, message: d.message, gold: d.gold, infantry: d.infantry, navy: d.navy, isIssuer: issuer, myState: d.recipients.find(r => r.houseId === myHouse.id)?.state || null, recipients: me.id === handPlayerId ? d.recipients.map(r => ({ ...r })) : undefined };
     }) : [],
     capitals: capitals.map(c => ({ ...c, income: capitalIncome(c), residents: residentsOf(c).length })),
-    minorHousesUnlocked: Number(gameSettings.maxPlayers) >= 7,
     voteCandidates,
     votesCast: voterIds.filter(id => players.get(id)?.vote).length,
     voteTotal: voterIds.length,
@@ -446,15 +445,39 @@ function requireHouse(player) {
   if (h && houseFallen(h)) return fail('Your house has fallen. You can still watch and speak at court.');
   return (h && player.w) || h || fail('Choose a house first.');
 }
-function minorSlots() { return Math.max(0, Number(gameSettings.maxPlayers) - 6); }
-function minorPlayerCount(excludeId) { return [...players.values()].filter(p => !p.left && p.id !== excludeId && findHouse(p.houseId)?.type === 'minor').length; }
-// Returns an error message if `playerId` may not take house `h`, otherwise null.
-function minorHouseError(h, playerId) {
-  if (h.type !== 'minor') return null;
-  if (Number(gameSettings.maxPlayers) < 7) return 'Minor houses unlock when the player limit is 7 or more.';
-  if ([...players.values()].some(p => !p.left && p.houseId === h.id && p.id !== playerId)) return 'That minor house has already been claimed.';
-  if (minorPlayerCount(playerId) >= minorSlots()) return `Only ${minorSlots()} player${minorSlots() === 1 ? '' : 's'} may join minor houses with a limit of ${gameSettings.maxPlayers} (one for each player above 6).`;
+const isTeams = () => gameSettings.gameType === 'TEAMS';
+const MODE_LABEL = { CLASSIC: 'Classic', LAST_DRAGON: 'Last Dragon', TEAMS: 'Teams' };
+// Validates host setup. Classic: up to 8 players, one house each. Last Dragon: up to 7 (no Targaryen). Teams: 2-4 per house.
+function parseSettings(payload) {
+  const gameType = String(payload.gameType || '');
+  if (!MODE_LABEL[gameType]) return { error: 'Choose Classic, Teams or Last Dragon.' };
+  const maxPlayers = Number(payload.maxPlayers);
+  const lo = gameType === 'TEAMS' ? 4 : 3, hi = gameType === 'CLASSIC' ? 8 : gameType === 'LAST_DRAGON' ? 7 : 16;
+  if (!Number.isInteger(maxPlayers) || maxPlayers < lo || maxPlayers > hi) return { error: `Choose a player limit from ${lo} to ${hi}.` };
+  let teamSize = 2;
+  if (gameType === 'TEAMS') {
+    teamSize = Number(payload.teamSize ?? 2);
+    if (!Number.isInteger(teamSize) || teamSize < 2 || teamSize > 4) return { error: 'Choose a team size from 2 to 4.' };
+    if (maxPlayers > houses.length * teamSize) return { error: `${houses.length} teams of ${teamSize} hold at most ${houses.length * teamSize} players.` };
+  }
+  const ds = dragonSettings(payload, maxPlayers, gameType); if (ds.error) return ds;
+  return { configured: true, maxPlayers, gameType, teamSize, dragonCount: ds.dragonCount, dragonRounds: ds.dragonRounds, friendlyFire: payload.friendlyFire !== false };
+}
+// Existing players must fit the chosen mode.
+function settingsConflict(next) {
+  const active = [...players.values()].filter(p => !p.left);
+  if (active.length > next.maxPlayers) return `The player limit cannot be lower than the ${active.length} players already joined.`;
+  const by = {}; for (const p of active) if (p.houseId) by[p.houseId] = (by[p.houseId] || 0) + 1;
+  if (next.gameType === 'TEAMS') { if (Object.values(by).some(n => n > next.teamSize)) return `A team already has more than ${next.teamSize} players.`; }
+  else if (Object.values(by).some(n => n > 1)) return 'Two players share a house. Each player needs their own house in this mode.';
+  if (next.gameType === 'LAST_DRAGON' && by.targaryen) return 'Someone already chose House Targaryen, which is not available in Last Dragon. Ask them to pick another house first.';
   return null;
+}
+// Returns an error message if `playerId` may not take house `h`, otherwise null.
+function houseError(h, playerId) {
+  const others = [...players.values()].filter(p => !p.left && p.houseId === h.id && p.id !== playerId).length;
+  if (isTeams()) return others >= gameSettings.teamSize ? `Team ${h.name} is full (${gameSettings.teamSize} players).` : null;
+  return others ? `House ${h.name} is already taken.` : null;
 }
 function isHost(player) { return Boolean(player && player.id === hostId); }
 function isCourt() { return phase === 'COURT'; }
@@ -574,13 +597,9 @@ io.on('connection', socket => {
     withWorld(roomCode, () => {
       if (phase !== 'LOBBY') return ack(callback, fail('Game setup is closed after the game begins.'));
       if (gameSettings.configured) return ack(callback, fail('This game has already been prepared.'));
-      const maxPlayers = Number(payload.maxPlayers);
-      const gameType = String(payload.gameType || '');
-      if (!Number.isInteger(maxPlayers) || maxPlayers < 3 || maxPlayers > 16) return ack(callback, fail('Choose a player limit from 3 to 16.'));
-      if (!['CLASSIC', 'LAST_DRAGON'].includes(gameType)) return ack(callback, fail('Choose Classic or Last Dragon.'));
-      const ds = dragonSettings(payload, maxPlayers, gameType); if (ds.error) return ack(callback, fail(ds.error));
-      gameSettings = { configured: true, maxPlayers, gameType, dragonCount: ds.dragonCount, dragonRounds: ds.dragonRounds, friendlyFire: payload.friendlyFire !== false };
-      addEvent('important', `The host set up a ${gameType === 'LAST_DRAGON' ? 'Last Dragon' : 'Classic'} game for ${maxPlayers} players.`);
+      const next = parseSettings(payload); if (next.error) return ack(callback, fail(next.error));
+      gameSettings = next;
+      addEvent('important', `The host set up a ${MODE_LABEL[next.gameType]} game for ${next.maxPlayers} players.`);
       broadcastState(roomCode);
       ack(callback, ok('Game prepared. Choose your house to continue.'));
     });
@@ -673,7 +692,8 @@ io.on('connection', socket => {
     if (phase !== 'LOBBY') return fail('House selection is closed after the lobby.');
     const h = findHouse(String(payload.houseId || '')); if (!h) return fail('That house does not exist.');
     if (isLastDragon() && h.id === 'targaryen') return fail('House Targaryen is not available in Last Dragon. The Dragons are hidden among the players.');
-    const houseError = minorHouseError(h, player.id); if (houseError) return fail(houseError);
+    if (!isTeams() && player.houseId && player.houseId !== h.id) return fail('Your house is locked. You cannot change it once chosen.');
+    const taken = houseError(h, player.id); if (taken) return fail(taken);
     const previous = player.houseId;
     player.houseId = h.id;
     player.vote = null;
@@ -685,17 +705,10 @@ io.on('connection', socket => {
     const check = requirePlayer(player); if (check.ok === false) return check;
     if (!isHost(player)) return fail('Only the host can set up this game.');
     if (phase !== 'LOBBY') return fail('Game setup is closed after the game begins.');
-    const maxPlayers = Number(payload.maxPlayers);
-    const gameType = String(payload.gameType || '');
-    if (!Number.isInteger(maxPlayers) || maxPlayers < 3 || maxPlayers > 16) return fail('Choose a player limit from 3 to 16.');
-    const activeCount = [...players.values()].filter(existing => !existing.left).length;
-    if (maxPlayers < activeCount) return fail(`The player limit cannot be lower than the ${activeCount} players already joined.`);
-    if (!['CLASSIC', 'LAST_DRAGON'].includes(gameType)) return fail('Choose Classic or Last Dragon.');
-    if (minorPlayerCount(null) > Math.max(0, maxPlayers - 6)) return fail('That limit leaves too few minor-house places for the players already in minor houses.');
-    const ds = dragonSettings(payload, maxPlayers, gameType); if (ds.error) return fail(ds.error);
-    if (gameType === 'LAST_DRAGON' && [...players.values()].some(p => !p.left && p.houseId === 'targaryen')) return fail('Someone already chose House Targaryen, which is not available in Last Dragon. Ask them to pick another house first.');
-    gameSettings = { configured: true, maxPlayers, gameType, dragonCount: ds.dragonCount, dragonRounds: ds.dragonRounds, friendlyFire: payload.friendlyFire !== false };
-    addEvent('important', `The host set up a ${gameType === 'LAST_DRAGON' ? 'Last Dragon' : 'Classic'} game for ${maxPlayers} players.`);
+    const next = parseSettings(payload); if (next.error) return fail(next.error);
+    const conflict = settingsConflict(next); if (conflict) return fail(conflict);
+    gameSettings = next;
+    addEvent('important', `The host set up a ${MODE_LABEL[next.gameType]} game for ${next.maxPlayers} players.`);
     return ok('Game setup saved. The hall is open.');
   });
 
@@ -718,9 +731,9 @@ io.on('connection', socket => {
     let botNumber = 1;
     while (usedNames.has(`Bot ${botNumber}`)) botNumber += 1;
     const activeMembers = houseId => [...players.values()].filter(existing => !existing.left && existing.houseId === houseId);
-    let house;
-    if (activeMembers('baratheon').length === 0) house = findHouse('baratheon');
-    else house = [...houses].filter(candidate => candidate.type === 'major').sort((a, b) => activeMembers(a.id).length - activeMembers(b.id).length)[0];
+    const open = houses.filter(candidate => !houseError(candidate, null) && !(isLastDragon() && candidate.id === 'targaryen'));
+    if (!open.length) return fail('No house is open for a bot.');
+    const house = isTeams() ? [...open].sort((a, b) => activeMembers(a.id).length - activeMembers(b.id).length)[0] : open[randomInt(0, open.length - 1)];
     const bot = { id: randomUUID(), username: `Bot ${botNumber}`, token: `bot-${randomUUID()}`, houseId: house.id, vote: null, lastSpyRound: 0, connected: true, left: false, isBot: true, socketId: null };
     players.set(bot.id, bot);
     addEvent('normal', `${bot.username} joined House ${house.name}.`);
@@ -736,7 +749,7 @@ io.on('connection', socket => {
     const name = String(payload.username || '').trim().replace(/\s+/g, ' ');
     if (name.length < 2 || name.length > 22) return fail('Name must be between 2 and 22 characters.');
     const h = findHouse(String(payload.houseId || '')); if (!h) return fail('That house does not exist.');
-    const houseError = minorHouseError(h, bot.id); if (houseError) return fail(houseError);
+    const taken = houseError(h, bot.id); if (taken) return fail(taken);
     const previousName = bot.username;
     const previousHouse = bot.houseId;
     bot.username = name;
@@ -784,15 +797,19 @@ io.on('connection', socket => {
     const connected = connectedPlayers();
     if (connected.length < 2) return fail('At least two players are needed so the king can appoint a Hand.');
     if (connected.some(p => !p.houseId)) return fail('Everyone connected must choose a house before the game begins.');
-    const baratheons = connected.filter(p => p.houseId === 'baratheon' && !p.isBot);
-    if (!baratheons.length) return fail('A human player must join House Baratheon to be the first king. Bots cannot be king.');
-    if (connected.some(p => findHouse(p.houseId)?.type === 'minor')) {
-      const thin = houses.filter(h => h.type === 'major' && connected.filter(p => p.houseId === h.id).length < 2);
-      if (thin.length) return fail(`With minor houses in play, every major house needs at least 2 players. Still short: ${thin.map(h => h.name).join(', ')}.`);
+    const humans = connected.filter(p => !p.isBot);
+    if (!humans.length) return fail('A human player is needed to be the first king. Bots cannot be king.');
+    if (isTeams()) {
+      const sizes = houses.map(h => ({ h, n: connected.filter(p => p.houseId === h.id).length })).filter(x => x.n > 0);
+      if (sizes.length < 2) return fail('Teams mode needs at least 2 teams.');
+      const most = Math.max(...sizes.map(x => x.n)), least = Math.min(...sizes.map(x => x.n));
+      if (most - least > 1) return fail(`Teams must be as even as possible. ${sizes.filter(x => x.n === most).map(x => x.h.name).join(', ')} ${most === 1 ? 'has' : 'have'} ${most}; ${sizes.filter(x => x.n === least).map(x => x.h.name).join(', ')} ${least === 1 ? 'has' : 'have'} ${least}.`);
     }
     if (isLastDragon() && connected.length < 3) return fail('Last Dragon needs at least 3 players: a king, a Dragon and someone loyal to the realm.');
     if (isLastDragon() && connected.some(p => p.houseId === 'targaryen')) return fail('House Targaryen is not available in Last Dragon. Ask that player to choose another house.');
-    kingPlayerId = baratheons[randomInt(0, baratheons.length - 1)].id;
+    const royal = humans.filter(p => p.houseId === 'baratheon');
+    const kingPool = royal.length ? royal : humans;
+    kingPlayerId = kingPool[randomInt(0, kingPool.length - 1)].id;
     const king = players.get(kingPlayerId);
     const throne = capitals.find(c => c.id === 'kings-landing'); if (throne) throne.ownerHouseId = king?.houseId || 'baratheon';
     startHouseCount = new Set(connected.map(p => p.houseId)).size;
@@ -823,8 +840,8 @@ io.on('connection', socket => {
     voterIds = [];
     candidateIds = [];
     for (const p of players.values()) p.vote = null;
-    addEvent('important', `${players.get(kingPlayerId)?.username || 'A Baratheon player'} was chosen at random as the first king.`);
-    return ok(`${players.get(kingPlayerId)?.username || 'A Baratheon player'} is the first king. They must appoint a Hand of the King.`);
+    addEvent('important', `${players.get(kingPlayerId)?.username || 'A player'} was chosen at random as the first king.`);
+    return ok(`${players.get(kingPlayerId)?.username || 'A player'} is the first king. They must appoint a Hand of the King.`);
   });
 
   action(socket, 'replace-hand', (player, payload) => {
