@@ -32,7 +32,7 @@ const io = new Server(server, {
 
 const HOUSE_DEFS = [
   { id: 'stark', name: 'Stark', color: '#91a8c1', sigil: '🐺', motto: 'Winter is Coming', capital: 'Winterfell', buff: 'King of the North: the city of Winterfell cannot be attacked by ships, and gains +2 defense when attacked.', nerf: null },
-  { id: 'lannister', name: 'Lannister', color: '#c8a45c', sigil: '🦁', motto: 'Hear Me Roar!', capital: 'Casterly Rock', buff: 'Rich as a Lannister: The city of Casterly Rock yields 18 gold a round instead of 15 to whoever holds it, and the house begins with 5 extra gold.', nerf: null },
+  { id: 'lannister', name: 'Lannister', color: '#c8a45c', sigil: '🦁', motto: 'Hear Me Roar!', capital: 'Casterly Rock', buff: 'Rich as a Lannister: The city of Casterly Rock yields 18 gold a round instead of 15 to every player living there, and the house begins with 5 extra gold.', nerf: null },
   { id: 'baratheon', name: 'Baratheon', color: '#c7b8a0', sigil: '🦌', motto: 'Ours Is the Fury', capital: 'Storm’s End', buff: 'Royal Blood: a Baratheon always starts as king.', nerf: null },
   { id: 'targaryen', name: 'Targaryen', color: '#bf6258', sigil: '🐉', motto: 'Fire and Blood', capital: 'Dragonstone', buff: 'Dragonlord: begins with 1 dragon; each dragon adds 5 battle strength and +2 siege strength.', nerf: 'The realm fears dragons: failed spy missions against this house are more likely.' },
   { id: 'tyrell', name: 'Tyrell', color: '#76a77d', sigil: '🌹', motto: 'Growing Strong', capital: 'Highgarden', buff: 'The Reach: gains 2 extra gold per capital at round start.', nerf: 'Lavish courts: infantry recruitment costs 5 gold each.' },
@@ -228,13 +228,12 @@ function loseInfantry(houseId, count, why) {
   let left = count;
   for (const w of houseWallets(houseId)) { const take = Math.min(w.infantry, left); if (!take) continue; w.infantry -= take; left -= take; note(w, 'infantry', -take, why); }
 }
-// Cities: the player who holds a city collects a fifth of its income; every player living in it gets the full income.
+// Cities: only the players living in a city earn its income (each gets the full amount); holding a city elsewhere earns nothing.
 function residentsOf(c) { return [...players.values()].filter(p => !p.left && !p.eliminated && p.cityId === c.id && p.houseId === c.ownerHouseId); }
 function yieldFor(p, c) {
   if (p.left || p.eliminated || !c.ownerHouseId || c.contested) return 0;
   const income = capitalIncome(c);
   if (p.cityId === c.id && p.houseId === c.ownerHouseId) return income;
-  if (c.ownerPlayerId === p.id) return Math.floor(income / 5);
   return 0;
 }
 function playerIncome(p) { return capitals.reduce((n, c) => n + yieldFor(p, c), 0); }
@@ -313,12 +312,11 @@ function makePrivateHouseView(h) {
   if (!h) return null;
   const me = h.playerId ? players.get(h.playerId) : null;
   const target = h.pendingAttack ? findCapital(h.pendingAttack.targetCapitalId) : null;
-  const cities = me ? capitals.filter(c => c.ownerHouseId === h.id && !c.contested).map(c => ({ id: c.id, name: c.name, yield: yieldFor(me, c), living: me.cityId === c.id, residents: residentsOf(c).length, mine: c.ownerPlayerId === me.id, canMove: false })) : [];
   return {
     id: h.id, name: h.name, fallen: houseFallen(h), money: h.money || 0, infantry: h.infantry || 0, navy: h.navy || 0, navyBuilding: h.navyBuilding || 0, dragons: h.dragons || 0,
     infantryCost: h.infantryCost, navyCost: h.navyCost,
     capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length, incomePerCapital: incomePerCapital(h), incomePerRound: me ? playerIncome(me) : 0, upkeepPerRound: armySize({ infantry: h.infantry || 0, navy: h.navy || 0, dragons: h.dragons || 0 }),
-    cityId: me?.cityId || null, cities,
+    cityId: me?.cityId || null,
     pendingAttack: h.pendingAttack ? {
       ...h.pendingAttack,
       targetName: target?.name || h.pendingAttack.targetName,

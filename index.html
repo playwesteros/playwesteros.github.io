@@ -13,10 +13,10 @@
   <meta name="description" content="A temporary multiplayer Great Houses strategy game prototype.">
   <title>War of Westeros — Multiplayer Strategy</title>
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=1">
-  <link rel="stylesheet" href="./style.css?v=52">
+  <link rel="stylesheet" href="./style.css?v=53">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=66" defer></script>
+  <script src="./app.js?v=68" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -42,7 +42,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.5.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v2.6.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -192,7 +192,7 @@
             </section>
             <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">EVERY COIN AND SOLDIER</p><h2>Ledger</h2></div></div><div><div id="ledgerTotals" class="ledger-totals"></div><div id="moneyLedger" class="ledger-list"></div><button id="ledgerToggle" class="button button-quiet button-small" type="button" data-action="toggle-ledger" hidden></button></div>
             </section>
-            <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">WHAT FEEDS THE TREASURY</p><h2>Your cities</h2></div></div><div id="moneyCapitals" class="event-list"></div><button id="forfeitCrownButton" class="button button-danger button-small" type="button" data-action="forfeit-crown" hidden>Forfeit the crown</button></section>
+            <section id="crownSection" class="panel section-panel hub-block" hidden><div class="section-head"><div><p class="panel-kicker">THE IRON THRONE</p><h2>The crown</h2></div></div><p class="muted small-text">The king must live in King’s Landing. You may forfeit the crown and return to your home city.</p><button id="forfeitCrownButton" class="button button-danger button-small" type="button" data-action="forfeit-crown">Forfeit the crown</button></section>
           </div>
           <div id="hubRelations" class="hub-pane" hidden>
             <p id="relationsPhaseNote" class="muted small-text"></p>

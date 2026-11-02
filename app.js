@@ -122,8 +122,10 @@
     if (!toast) return;
     toast.textContent = message;
     toast.className = `toast toast-visible ${kind === 'error' ? 'toast-error' : kind === 'success' ? 'toast-success' : ''}`;
+    // A popover lives in the top layer, so the toast shows above open dialogs (like the lobby menu) too.
+    try { if (!toast.hasAttribute('popover')) toast.setAttribute('popover', 'manual'); if (!toast.matches(':popover-open')) toast.showPopover(); else { toast.hidePopover(); toast.showPopover(); } } catch (e) { /* older browsers: fixed toast */ }
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { toast.className = 'toast'; }, 4200);
+    toastTimer = setTimeout(() => { toast.className = 'toast'; try { toast.hidePopover(); } catch (e) { /* not open */ } }, 4200);
   }
 
   function setConnection(connected, label) {
@@ -809,7 +811,7 @@
     // Hub buttons (details are hidden on phones)
     $('hubMoneyGold').textContent = `${h.money} gold`;
     $('hubMoneyIncome').textContent = `+${h.incomePerRound} income · −${h.upkeepPerRound} upkeep`;
-    $('hubMoneyCapitals').textContent = (h.cities || []).find(c => c.living)?.name ? `Living in ${(h.cities || []).find(c => c.living).name}` : 'You have no city';
+    $('hubMoneyCapitals').textContent = state.capitals.find(c => c.id === h.cityId)?.name ? `Living in ${state.capitals.find(c => c.id === h.cityId).name}` : 'You have no city';
     $('hubRelAlliances').textContent = plural(myAlliances, 'alliance');
     $('hubRelOffers').textContent = waiting ? `${plural(waiting, 'offer')} awaiting your reply` : 'No offers waiting';
     $('hubRelRole').textContent = state.isKing ? 'You wear the crown — traitors & taxes' : 'Alliances, treaties & messages';
@@ -831,9 +833,7 @@
     tog.hidden = !older;
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
     $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
-    const cities = h.cities || [];
-    $('moneyCapitals').innerHTML = cities.length ? cities.map(c => `<div class="resolution-item"><span>+${c.yield}</span><p class="row-who">${escapeHtml(c.name)}${c.living ? ' · you live here' : c.mine ? ' · you hold it (a fifth)' : ''}${c.residents ? ` · ${plural(c.residents, 'resident')}` : ''}</p></div>`).join('') : '<p class="muted small-text">Your house holds no cities, so you earn no income.</p>';
-    const fb = $('forfeitCrownButton'); if (fb) { fb.hidden = !state.isKing; lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
+    const fb = $('forfeitCrownButton'); $('crownSection').hidden = !state.isKing; if (fb) { lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
     $('armyNavy').textContent = h.navy + (h.navyBuilding ? ` (+${h.navyBuilding} building)` : '');

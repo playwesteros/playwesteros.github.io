@@ -807,3 +807,5 @@ body.house-themed .footer { border-color: var(--line); }
 
 .spy-odds b.lvl-good{color:#7fc47a}.spy-odds b.lvl-mid{color:#e0b84f}.spy-odds b.lvl-bad{color:#e0705f}
 .war-panel{position:sticky;bottom:-6px;z-index:20;margin-top:10px;padding:12px;border:1px solid var(--line-bright);border-radius:10px;background:rgba(18,13,8,.96);box-shadow:0 -6px 24px #000a}.war-panel[hidden]{display:none}.war-panel-head{display:flex;gap:8px;align-items:center;margin-bottom:6px}.war-panel-head .war-target-box{margin:0}.war-form .form-columns{margin-bottom:8px}
+
+.toast[popover]{inset:auto auto 24px 50%;margin:0;overflow:visible;color:#ece6d7}.toast[popover]:not(:popover-open){display:none}
