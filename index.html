@@ -13,10 +13,10 @@
   <meta name="description" content="A temporary multiplayer Great Houses strategy game prototype.">
   <title>War of Westeros — Multiplayer Strategy</title>
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=1">
-  <link rel="stylesheet" href="./style.css?v=54">
+  <link rel="stylesheet" href="./style.css?v=56">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=69" defer></script>
+  <script src="./app.js?v=70" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -34,7 +34,7 @@
       <span id="headerArmy" class="hs-item" title="Total military"><img src="./assets/game-swords.png?v=2" alt="Military"><b id="roundMilitaryTotal">—</b><small>army</small></span>
       <span id="headerRounds" class="hs-item" title="Rounds left until the Targaryens win" hidden><img src="./assets/ui-hourglass.png?v=1" alt="Rounds left"><b id="roundsLeft">—</b><small>rounds left</small></span>
       <span id="headerDragons" class="hs-item" title="Targaryens remaining" hidden><img src="./assets/ui-dragon.png?v=1" alt="Targaryens"><b id="dragonsLeft">—</b><small>Targaryens</small></span>
-      <span id="roundKingBadge" class="hs-item hs-role" title="You are the King" hidden><img src="./assets/game-throne.png?v=2" alt="You are the King"></span>
+      <span id="roundKingBadge" class="hs-item hs-role is-clickable" title="You are the King. Press to forfeit the crown." role="button" tabindex="0" data-action="forfeit-crown" hidden><img src="./assets/game-throne.png?v=2" alt="You are the King"></span>
       <span id="roundHandBadge" class="hs-item hs-role" title="You are the Hand of the King" hidden><img src="./assets/game-hand.png?v=2" alt="You are the Hand of the King"></span>
     </div>
     <div class="topbar-right">
@@ -42,7 +42,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.7.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v2.8.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -188,17 +188,22 @@
               <button class="hub-button sub-button gold-button" type="button" data-action="gold-info"><span id="badgeGold" class="gold-gain" hidden></span><img src="./assets/game-coins.png?v=2" alt=""><h3 id="moneyGold">— gold</h3><small id="moneyIncomeNote" class="muted"></small></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="gift" data-cat="gift"><img src="./assets/game-handshake.png?v=2" alt=""><h3>Send a gift</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="reports" data-cat="reports"><span id="badgeSubReports" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/ui-letter.png?v=1" alt=""><h3>Reports</h3></button>
-              <button id="subCrown" class="hub-button sub-button" type="button" data-action="open-sub" data-sub="crown" data-cat="crown" hidden><img src="./assets/game-castle.png?v=2" alt=""><h3>The crown</h3></button>
+
             </div>
             <div class="sub-page" data-sub="gift" data-cat="gift" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section class="panel section-panel hub-block">
                 <div class="section-head"><div><p class="panel-kicker">FROM YOUR TREASURY</p><h2>Send a gift</h2></div></div>
                 <form id="giftForm" class="action-card">
-                  <p class="muted small-text">Send gold to any player. It arrives at once and cannot be taken back.</p>
+                  <p class="muted small-text">Send gold, troops or ships to any player with a note. It arrives at once and cannot be taken back.</p>
                   <label for="giftTarget">Send to</label><select id="giftTarget" required></select>
-                  <label for="giftGold">Gold</label><input id="giftGold" type="number" min="1" placeholder="Amount" inputmode="numeric">
-                  <button class="button button-primary button-full" type="submit">Send gold</button>
+                  <div class="form-columns-3">
+                    <div><label for="giftGold">Gold</label><input id="giftGold" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                    <div><label for="giftInfantry">Infantry</label><input id="giftInfantry" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                    <div><label for="giftNavy">Ships</label><input id="giftNavy" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                  </div>
+                  <label for="giftMessage">Note</label><input id="giftMessage" maxlength="300" placeholder="A few words to go with it…" autocomplete="off">
+                  <button class="button button-primary button-full" type="submit">Send gift</button>
                 </form>
               </section>
             </div>
@@ -210,16 +215,12 @@
                 <div id="battleReports" class="event-list"></div>
               </section>
             </div>
-            <div class="sub-page" data-sub="crown" data-cat="crown" hidden>
-              <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
-              <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">THE IRON THRONE</p><h2>The crown</h2></div></div><p class="muted small-text">The king must live in King’s Landing. You may forfeit the crown and return to your home city.</p><button id="forfeitCrownButton" class="button button-danger button-small" type="button" data-action="forfeit-crown">Forfeit the crown</button></section>
-            </div>
           </div>
           <div id="hubRelations" class="hub-pane" hidden>
             <p id="relationsPhaseNote" class="muted small-text"></p>
             <div class="sub-menu">
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="alliances" data-cat="alliances"><span id="badgeSubAlliances" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Alliances</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="treaties" data-cat="treaties"><span id="badgeSubTreaties" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/ui-letter.png?v=1" alt=""><h3>Treaties &amp; Subsidies</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="treaties" data-cat="treaties" id="subTreaties"><span id="badgeSubTreaties" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/ui-letter.png?v=1" alt=""><h3>Treaties &amp; Subsidies</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="messages" data-cat="messages"><span id="badgeSubMessages" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-raven.png?v=2" alt=""><h3>Messages</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="decrees" data-cat="decrees" id="subDecrees" hidden><img src="./assets/game-throne.png?v=2" alt=""><h3>Decrees</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="hand" data-cat="hand" id="subHand" hidden><img src="./assets/game-hand.png?v=2" alt=""><h3>Hand’s Ledger</h3></button>
@@ -279,6 +280,7 @@
               <div id="traitorList" class="alliance-list"></div>
               
               </section>
+              <section id="kingForfeit" class="panel section-panel hub-block" hidden><div class="section-head"><div><p class="panel-kicker">THE IRON THRONE</p><h2>The crown</h2></div></div><p class="muted small-text">The king must live in King’s Landing. You may forfeit the crown and return to your home city.</p><button id="forfeitCrownButton" class="button button-danger button-small" type="button" data-action="forfeit-crown">Forfeit the crown</button></section>
               <section id="kingDecrees" class="panel section-panel hub-block" hidden>
                 <div class="section-head"><div><p class="panel-kicker">THE CROWN’S EYES</p><h2>Decrees you have issued</h2></div><span class="subtle-label">Only you can see this</span></div>
                 <div id="taxLedger" class="tax-ledger"></div>

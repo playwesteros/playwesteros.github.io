@@ -1017,13 +1017,19 @@ io.on('connection', socket => {
     if (phase !== 'ACTION') return fail('Gifts can be sent during the action phase.');
     const to = players.get(String(payload.toPlayerId || ''));
     if (!to || to.id === player.id || to.left || to.eliminated || !to.w) return fail('Choose another player to receive the gift.');
-    const gold = Number(payload.gold);
-    if (!Number.isInteger(gold) || gold < 1) return fail('Send a whole number of gold, at least 1.');
+    const gold = wholeNumber(payload.gold), infantry = wholeNumber(payload.infantry), navy = wholeNumber(payload.navy);
+    if (gold === null || infantry === null || navy === null) return fail('Gold, soldiers and ships must be whole numbers of zero or more.');
+    const message = String(payload.message || '').trim().slice(0, 300);
+    if (gold + infantry + navy === 0 && !message) return fail('Add gold, soldiers, ships or a note to the gift.');
     if (gold > check.money) return fail(`You only have ${check.money} gold.`);
-    check.money -= gold; to.w.money += gold;
-    note(check, 'gold', -gold, `Gift to ${to.username}`); note(to.w, 'gold', gold, `Gift from ${player.username}`);
-    notify('notice', [], [to.id], 'A gift of gold', `${player.username} sent you ${gold} gold.`, [player.houseId]);
-    return ok(`You sent ${gold} gold to ${to.username}.`);
+    if (infantry > check.infantry) return fail(`You only have ${check.infantry} infantry available.`);
+    if (navy > check.navy) return fail(`You only have ${check.navy} ships available.`);
+    check.money -= gold; check.infantry -= infantry; check.navy -= navy;
+    to.w.money += gold; to.w.infantry += infantry; to.w.navy += navy;
+    for (const [res, n] of [['gold', gold], ['infantry', infantry], ['navy', navy]]) { note(check, res, -n, `Gift to ${to.username}`); note(to.w, res, n, `Gift from ${player.username}`); }
+    const parts = [gold && `${gold} gold`, infantry && `${infantry} infantry`, navy && `${navy} ${navy === 1 ? 'ship' : 'ships'}`].filter(Boolean);
+    notify('notice', [], [to.id], 'A gift', `${player.username} sent you ${parts.join(', ') || 'a note'}${message ? `: “${message}”` : '.'}`, [player.houseId]);
+    return ok(`Gift sent to ${to.username}.`);
   });
 
   action(socket, 'plan-attack', (player, payload) => {

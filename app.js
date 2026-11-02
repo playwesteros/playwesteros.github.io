@@ -536,16 +536,18 @@
     } else $('spyOdds').innerHTML = '';
     lock($('spyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !$('spyTarget').value ? 'Choose a target house.' : !$('spyMission').value ? 'Choose a mission.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
   }
+  const giftNum = id => { const raw = $(id).value.trim(); return raw === '' ? 0 : Number(raw); };
   function updateGiftForm() {
     const h = state?.myHouse; if (!h) return;
-    const raw = $('giftGold').value.trim(), n = Number(raw);
-    lock($('giftForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Gifts can be sent during the action phase.' : !$('giftTarget').value ? 'Choose who receives the gift.' : !(raw !== '' && Number.isInteger(n) && n >= 1) ? 'Enter a whole number of gold, at least 1.' : n > h.money ? `You only have ${h.money} gold.` : '');
+    const g = giftNum('giftGold'), inf = giftNum('giftInfantry'), nav = giftNum('giftNavy'), note = $('giftMessage').value.trim();
+    const bad = [g, inf, nav].some(n => !Number.isInteger(n) || n < 0);
+    lock($('giftForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Gifts can be sent during the action phase.' : !$('giftTarget').value ? 'Choose who receives the gift.' : bad ? 'Gold, infantry and ships must be whole numbers, zero or more.' : g + inf + nav + (note ? 1 : 0) < 1 ? 'Add gold, troops, ships or a note.' : g > h.money ? `You only have ${h.money} gold.` : inf > h.infantry ? `You only have ${h.infantry} infantry.` : nav > h.navy ? `You only have ${h.navy} ships.` : '');
   }
-  $('giftGold').addEventListener('input', updateGiftForm);
+  ['giftGold', 'giftInfantry', 'giftNavy', 'giftMessage'].forEach(id => $(id).addEventListener('input', updateGiftForm));
   $('giftTarget').addEventListener('change', updateGiftForm);
   $('giftForm').addEventListener('submit', event => {
     event.preventDefault();
-    emitAction('send-gift', { toPlayerId: $('giftTarget').value, gold: Number($('giftGold').value) }, () => { $('giftGold').value = ''; updateGiftForm(); });
+    emitAction('send-gift', { toPlayerId: $('giftTarget').value, gold: giftNum('giftGold'), infantry: giftNum('giftInfantry'), navy: giftNum('giftNavy'), message: $('giftMessage').value }, () => { ['giftGold', 'giftInfantry', 'giftNavy', 'giftMessage'].forEach(id => { $(id).value = ''; }); updateGiftForm(); });
   });
   $('spyGold').addEventListener('input', updateSpyForm);
   $('spyMission').addEventListener('change', updateSpyForm);
@@ -766,7 +768,7 @@
   }
 
   const HUBS = { money: ['YOUR TREASURY', 'Money', 'hubMoney'], relations: ['COURT & DIPLOMACY', 'Relations', 'hubRelations'], army: ['FORCES & WAR', 'Army', 'hubArmy'] };
-  const SUB_LABEL = { gift: 'Send a gift', reports: 'Reports', crown: 'The crown', alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', decrees: 'Decrees', hand: 'Hand’s ledger', recruit: 'Recruit & disband', spies: 'Spies', war: 'War councils' };
+  const SUB_LABEL = { gift: 'Send a gift', reports: 'Reports', alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', decrees: 'Decrees', hand: 'Hand’s ledger', recruit: 'Recruit & disband', spies: 'Spies', war: 'War councils' };
   let currentSub = null;
   function showSub(name) {
     currentSub = name || null;
@@ -847,7 +849,7 @@
     tog.hidden = !older;
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
     $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
-    const fb = $('forfeitCrownButton'); $('subCrown').hidden = !state.isKing; if (!state.isKing && currentSub === 'crown') showSub(null); if (fb) { lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
+    const fb = $('forfeitCrownButton'); $('kingForfeit').hidden = !state.isKing; $('subTreaties').hidden = state.isKing; if (state.isKing && currentSub === 'treaties') showSub(null); if (fb) { lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
     $('armyNavy').textContent = h.navy + (h.navyBuilding ? ` (+${h.navyBuilding} building)` : '');
