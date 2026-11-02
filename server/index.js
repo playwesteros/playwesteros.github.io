@@ -445,9 +445,11 @@ function throneTaken(houseId, orderedBy) {
   }
   kingPlayerId = heir.id;
   handPlayerId = null;
-  const seat = capitals.find(c => c.id === 'kings-landing'); if (seat) { seat.vacant = false; seat.offerTo = null; seat.ownerPlayerId = heir.id; seat.ownerHouseId = heir.houseId || seat.ownerHouseId; evictResidents(seat); }
+  const seat = capitals.find(c => c.id === 'kings-landing'); const wasVacant = Boolean(seat?.vacant);
+  if (seat) { seat.vacant = false; seat.offerTo = null; seat.ownerPlayerId = heir.id; seat.ownerHouseId = heir.houseId || seat.ownerHouseId; evictResidents(seat); }
   heir.cityId = 'kings-landing';
   addEvent('important', `House ${capWord(house.name)} took King’s Landing. ${heir.username} is the new king${fallen.length ? `; ${fallen.join(' and ')} ${fallen.length > 1 ? 'were' : 'was'} eliminated` : ''}.`);
+  if (wasVacant) notifyAll('crown', 'A new king', `${heir.username} of House ${capWord(house.name)} took the empty throne and is now king.`, [houseId]);
   notify('battle-won', [houseId], [], 'The Iron Throne is yours', `You hold King’s Landing and wear the crown. Appoint a Hand of the King from the Relations menu.`, [houseId]);
 }
 function checkVictory(endOfRound) {
@@ -533,6 +535,7 @@ function note(h, res, delta, text) {
 }
 // Pop-up notices (alliances, traitor labels, attacks, battle results) addressed to houses or individual players.
 function capWord(t) { return String(t || '').replace(/^\w/, c => c.toUpperCase()); }
+function notifyAll(kind, title, text, banners) { notify(kind, [], [...players.values()].filter(p => !p.left).map(p => p.id), title, text, banners); }
 function notify(kind, houseIds, playerIds, title, text, banners) {
   notices.unshift({ id: randomUUID(), round, kind, houseIds: [...new Set(houseIds)], playerIds, title, text: String(text).slice(0, 260), banners });
   if (notices.length > 60) notices.length = 60;
@@ -828,6 +831,8 @@ io.on('connection', socket => {
     if (isTeams()) {
       const sizes = houses.map(h => ({ h, n: connected.filter(p => p.houseId === h.id).length })).filter(x => x.n > 0);
       if (sizes.length < 2) return fail('Teams mode needs at least 2 teams.');
+      const need = Math.ceil(connected.length / gameSettings.teamSize);
+      if (sizes.length !== need) return fail(`With ${connected.length} players and teams of ${gameSettings.teamSize}, there must be ${need} teams. Right now there ${sizes.length === 1 ? 'is 1' : `are ${sizes.length}`}.`);
       const most = Math.max(...sizes.map(x => x.n)), least = Math.min(...sizes.map(x => x.n));
       if (most - least > 1) return fail(`Teams must be as even as possible. ${sizes.filter(x => x.n === most).map(x => x.h.name).join(', ')} ${most === 1 ? 'has' : 'have'} ${most}; ${sizes.filter(x => x.n === least).map(x => x.h.name).join(', ')} ${least === 1 ? 'has' : 'have'} ${least}.`);
     }
@@ -976,8 +981,9 @@ io.on('connection', socket => {
     const offerTo = hand && !hand.eliminated && !hand.left && hand.id !== player.id ? hand : null;
     player.cityId = home.id;
     kingPlayerId = null; handPlayerId = offerTo ? offerTo.id : null;
-    if (throne) { throne.ownerHouseId = null; throne.ownerPlayerId = null; throne.vacant = true; throne.offerTo = offerTo ? offerTo.id : null; }
+    if (throne) { throne.ownerHouseId = null; throne.ownerPlayerId = null; throne.vacant = true; throne.offerTo = offerTo ? offerTo.id : null; throne.forfeitedBy = { name: player.username, houseId: player.houseId }; }
     addEvent('important', `${player.username} forfeited the crown and returned to ${home.name}. ${offerTo ? `${offerTo.username}, the Hand, must choose whether to take it.` : 'King’s Landing stands open to the first army that reaches it.'}`);
+    if (!offerTo) notifyAll('crown', 'There is no king', `${player.username} forfeited the crown. King’s Landing is open: the first army to reach it takes the throne without a fight.`, [player.houseId]);
     if (offerTo) notify('notice', [], [offerTo.id], 'The crown is offered', `${player.username} forfeited the crown. Take the throne, or refuse and let the first army to reach King’s Landing take it without a fight.`, [player.houseId]);
     return ok(`You forfeited the crown and returned to ${home.name}.`);
   });
@@ -992,11 +998,13 @@ io.on('connection', socket => {
       throne.vacant = false; throne.ownerPlayerId = player.id; throne.ownerHouseId = player.houseId;
       player.cityId = 'kings-landing';
       addEvent('important', `${player.username} took the crown and now lives in King’s Landing.`);
+      notifyAll('crown', 'A new king', `${throne.forfeitedBy?.name || 'The king'} forfeited the crown. ${player.username} of House ${capWord(houseName(player.houseId))} took the throne and is now king.`, [player.houseId]);
       checkVictory();
       return ok('You wear the crown. Appoint a Hand of the King from the Relations menu.');
     }
     handPlayerId = null;
     addEvent('important', `${player.username} refused the crown. King’s Landing stands open to the first army that reaches it.`);
+    notifyAll('crown', 'There is no king', `${throne.forfeitedBy?.name || 'The king'} forfeited the crown and ${player.username}, the Hand, refused it. The first army to reach King’s Landing takes the throne without a fight.`, [throne.forfeitedBy?.houseId, player.houseId].filter(Boolean));
     return ok('You refused the crown. The first army to reach King’s Landing will take it unopposed.');
   });
 

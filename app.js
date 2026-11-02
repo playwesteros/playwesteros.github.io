@@ -224,6 +224,8 @@
     if (state.settings?.gameType !== 'TEAMS') return '';
     const sizes = state.houses.map(h => ({ h, n: list.filter(p => p.houseId === h.id).length })).filter(x => x.n > 0);
     if (sizes.length < 2) return 'Teams mode needs at least 2 teams.';
+    const size = state.settings.teamSize || 2, need = Math.ceil(list.length / size);
+    if (sizes.length !== need) return `With ${list.length} players and teams of ${size}, there must be ${need} teams. Right now there ${sizes.length === 1 ? 'is 1' : `are ${sizes.length}`}.`;
     const most = Math.max(...sizes.map(x => x.n)), least = Math.min(...sizes.map(x => x.n));
     if (most - least <= 1) return '';
     return `Teams must be as even as possible. ${sizes.filter(x => x.n === most).map(x => x.h.name).join(', ')}: ${most}. ${sizes.filter(x => x.n === least).map(x => x.h.name).join(', ')}: ${least}.`;
@@ -338,15 +340,13 @@
   function updateAttackLock() {
     if (!state?.myHouse) return;
     lock($('attackForm').querySelector('button[type="submit"]'), attackLockReason());
-    lock($('pickTargetButton'), warBlockReason());
-    lock(document.querySelector('[data-action="go-to-war"]'), warBlockReason());
   }
   function renderWarTarget() {
     const c = state.capitals.find(x => x.id === warTargetId);
     const box = $('warTargetBox');
     box.classList.toggle('is-empty', !c);
     box.innerHTML = c ? `${escapeHtml(c.name)}<small>${escapeHtml(c.region)} · ${c.vacant ? 'Empty throne' : `House ${escapeHtml(capName(prettyHouse(c.ownerHouseId)))}`}</small>` : 'No target chosen yet';
-    $('pickTargetButton').innerHTML = `<img class="button-icon" src="./assets/game-castle.png?v=2" alt="">${c ? 'Change target on the map' : 'Choose target on the map'}`;
+    $('warPanel').hidden = !c;
   }
 
   // Map: owner colours, contested capitals, and target picking.
@@ -452,9 +452,8 @@
   function startPick() {
     pickingTarget = true;
     $('mapDialog').classList.add('pick-mode');
-    showMapHint('Tap the capital you wish to attack. Highlighted capitals can be targeted.');
+    showMapHint('War map: tap a highlighted city to march on it.');
     renderMap();
-    setMapOpen(true);
   }
   function endPick() {
     if (!pickingTarget && !$('mapDialog').classList.contains('pick-mode')) return;
@@ -482,6 +481,7 @@
     renderWarTarget();
     $('attackOrderStatus').textContent = house.pendingAttack ? `Committed against ${house.pendingAttack.targetName}. Resolves after Round ${house.pendingAttack.resolveRound}.` : '';
     updateAttackLock();
+    if (pickingTarget && warBlockReason()) { endPick(); showMapHint(warBlockReason()); }
     updateRecruitButton();
     updateDisbandButton();
     updateSpyForm();
@@ -521,7 +521,7 @@
       const o = spyOddsFor(spend, $('spyTarget').value, $('spyMission').value);
       const diff = o.success >= 0.5 ? 'Easy' : o.success >= 0.3 ? 'Medium' : 'Hard';
       const danger = o.caught >= 0.6 ? 'High' : o.caught >= 0.35 ? 'Medium' : 'Low';
-      $('spyOdds').innerHTML = `<span>Difficulty <b>${diff}</b> · ${Math.round(o.success * 100)}%</span><span>Danger <b>${danger}</b> · ${Math.round(o.caught * 100)}%</span>`;
+      $('spyOdds').innerHTML = `<span>Difficulty <b class="lvl-${diff === 'Easy' ? 'good' : diff === 'Medium' ? 'mid' : 'bad'}">${diff}</b> · ${Math.round(o.success * 100)}%</span><span>Danger <b class="lvl-${danger === 'Low' ? 'good' : danger === 'Medium' ? 'mid' : 'bad'}">${danger}</b> · ${Math.round(o.caught * 100)}%</span>`;
     } else $('spyOdds').innerHTML = '';
     lock($('spyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !$('spyTarget').value ? 'Choose a target house.' : !$('spyMission').value ? 'Choose a mission.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
   }
@@ -1033,6 +1033,8 @@
     const dialog = $('mapDialog');
     if (open) {
       if (!dialog.open) { dialog.showModal(); fitMap(); }
+      if (state?.myHouse && !warBlockReason()) startPick(true);
+      else if (state?.myHouse && ['ACTION', 'COURT', 'RESOLUTION'].includes(state.phase)) showMapHint(warBlockReason());
     } else if (dialog.open) dialog.close();
     dialog.querySelectorAll('.map-cap.is-active').forEach(cap => cap.classList.remove('is-active'));
   }
@@ -1152,7 +1154,7 @@
     if (!announceShowing) showNextAnnouncement();
   }
   // ---- Event notices: alliances, traitor labels, attacks, battle results ----
-  const NOTICE_LABEL = { decree: 'ROYAL DECREE', desertion: 'DESERTION', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT' };
+  const NOTICE_LABEL = { decree: 'ROYAL DECREE', crown: 'THE CROWN', desertion: 'DESERTION', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT' };
   const NOTICE_MID = { 'spy-caught': 'game-eye', alliance: 'game-handshake', 'alliance-broken': 'game-chain', attacked: 'game-swords', 'battle-won': 'game-swords', 'battle-lost': 'game-swords' };
   const NOTICE_GOOD = new Set(['alliance', 'battle-won']);
   const noticeKey = () => `warOfWesterosNotices:${gameCode}`;
@@ -1597,11 +1599,10 @@
         const problem = warTargetProblem(capital);
         if (problem) return showMapHint(problem);
         warTargetId = capital.id;
-        setMapOpen(false);
+        showMapHint('War map: tap a highlighted city to march on it.');
         renderWarTarget();
         updateAttackLock();
-        $('attackForm').scrollIntoView({ block: 'center', behavior: 'smooth' });
-        showToast(`Target chosen: ${capital.name}. Commit your forces and declare war.`, 'success');
+        $('warPanel').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         return;
       }
     }
@@ -1676,8 +1677,7 @@
     if (action === 'toggle-traitor') { emitAction('mark-traitor', { playerId: button.dataset.playerId, traitor: button.dataset.traitor === 'true' }); return; }
     if (action === 'toggle-ledger') { ledgerAll = !ledgerAll; renderHub(); return; }
     if (action === 'close-decree-popup') { $('decreeOverlay').hidden = true; return; }
-    if (action === 'pick-target') { startPick(); return; }
-    if (action === 'go-to-war') { openHub('army', 'war'); startPick(); return; }
+    if (action === 'war-cancel') { warTargetId = null; renderWarTarget(); updateAttackLock(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
     if (action === 'forfeit-crown') { if (window.confirm('Forfeit the crown? You return to your home city. The Hand may take the throne, or the first army to reach King’s Landing will take it unopposed.')) emitAction('forfeit-crown'); return; }
     if (action === 'crown-take') { $('crownDialog').close(); emitAction('crown-choice', { accept: true }); return; }
