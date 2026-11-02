@@ -43,6 +43,7 @@
     .house-option small{display:none;color:#c0b6a2;font-size:.57rem;line-height:1.25;text-align:center}
     .mode-pin-panel{position:absolute;z-index:5;top:50%;left:50%;width:min(340px,calc(100vw - 36px));transform:translate(-50%,-50%);padding:24px 22px 20px;border:1px solid #d9be8770;border-top:2px solid #c8a86c;border-radius:10px;background:rgba(13,15,18,.96);box-shadow:0 16px 50px #000c;text-align:center;color:#eee7d7;font-family:Cinzel,Georgia,serif}
     .mode-pin-panel[hidden]{display:none}
+    .mode-pin-panel .panel-x,.house-panel .panel-x{position:absolute;top:6px;right:6px;z-index:2;width:28px;height:28px;padding:0;margin:0;border:1px solid #d9be8759;border-radius:50%;background:#14130fcc;color:#ead6a8;font:400 19px/1 Georgia,serif;cursor:pointer;display:grid;place-items:center}
     .mode-pin-panel label{display:block;margin-bottom:10px;color:#c8a86c;font-size:11px;letter-spacing:.19em}
     .mode-pin-panel input{width:100%;padding:10px;background:#101318;border:1px solid #d9be8752;border-radius:5px;color:#f3e3bf;text-align:center;font:700 24px Cinzel,Georgia,serif;letter-spacing:.3em;text-transform:uppercase;outline:none}
     .mode-pin-panel button{margin:12px 4px 0;padding:9px 14px;border:1px solid #d9be8759;border-radius:5px;background:#26241f;color:#ead6a8;font:700 10px Cinzel,Georgia,serif;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}
@@ -83,9 +84,11 @@
     <button id="joinButton" class="entry-button" type="button"><strong>JOIN GAME</strong><small>Enter a four-character game PIN.</small></button>
   </section>
   <section id="housePanel" class="choice-panel house-panel" aria-label="Choose your house" hidden>
+    <button class="panel-x" id="houseX" type="button" aria-label="Back">×</button>
     <div id="houseGrid" class="house-grid" role="group" aria-label="Available houses"></div>
   </section>
   <form id="modePinPanel" class="mode-pin-panel" hidden>
+    <button class="panel-x" id="pinX" type="button" aria-label="Back">×</button>
     <label for="modePinInput">ENTER GAME PIN</label>
     <input id="modePinInput" maxlength="4" minlength="4" inputmode="text" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" required>
     <div><button type="submit">Join the game</button><button id="cancelPin" type="button">Back</button></div>
@@ -140,6 +143,14 @@
     modePinInput.addEventListener('input',()=>{modePinInput.value=modePinInput.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);pinError.textContent=''});
     modePinPanel.addEventListener('submit',event=>{event.preventDefault();const pin=modePinInput.value.trim().toUpperCase();if(pin.length!==4){pinError.textContent='Enter all four characters.';return}if(inFrame)window.parent.postMessage({type:'iron-throne:join-pin',pin},location.origin==='null'?'*':location.origin)});
     document.getElementById('cancelPin').addEventListener('click',()=>{modePinPanel.hidden=true;reset()});
+    document.getElementById('pinX').addEventListener('click',()=>document.getElementById('cancelPin').click());
+    function leaveHouseScreen(){if(inFrame)window.parent.postMessage({type:'iron-throne:back'},location.origin==='null'?'*':location.origin)}
+    document.getElementById('houseX').addEventListener('click',leaveHouseScreen);
+    document.addEventListener('click',e=>{
+      if(e.target.closest('#modePinPanel,#housePanel,#confirmHouse,#entryActions,.panel-x'))return;
+      if(!modePinPanel.hidden){document.getElementById('cancelPin').click();return}
+      if(!entryMode&&picked<0)leaveHouseScreen()
+    });
     addEventListener('message',ev=>{if(ev.source!==window.parent||!ev.data)return;
       if(ev.data.type==='iron-throne:set-mode'&&['entry','house'].includes(ev.data.mode))transitionMode(ev.data.mode);
       if(ev.data.type==='iron-throne:mode-error'){const message=String(ev.data.message||'Could not continue.');pinError.textContent=message;setHint(modePinPanel.hidden?message:'Choose an option to try again',true)}

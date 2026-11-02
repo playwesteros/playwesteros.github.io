@@ -823,3 +823,7 @@ body.house-themed .footer { border-color: var(--line); }
 .hs-item.is-clickable{cursor:pointer}.hs-item.is-clickable:hover{filter:brightness(1.25)}
 
 .name-card{max-width:520px}
+
+.realm-card { position: relative; }
+.screen-x { position: absolute; top: 10px; right: 12px; width: 34px; height: 34px; padding: 0; border: 1px solid rgba(217,190,135,.3); border-radius: 50%; background: rgba(20,20,22,.7); color: var(--gold-bright, #e6c97a); font: 400 22px/1 Georgia, serif; cursor: pointer; display: grid; place-items: center; }
+.screen-x:hover, .screen-x:focus-visible { background: rgba(217,190,135,.18); outline: none; }

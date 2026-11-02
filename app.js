@@ -14,6 +14,7 @@
   let preparingHost = false;
   let showHostSetup = false;
   let changingLobbyHouse = false;
+  let nameDismissed = false;
   let lobbyCanChangeHouse = false;
   let gameCode = '';
   let savedCode = localStorage.getItem(roomCodeKey)?.toUpperCase() || '';
@@ -35,7 +36,7 @@
   const $ = id => document.getElementById(id);
   function setThronePage(mode) {
     const frame = $('throneFrame');
-    if (frame) frame.src = mode === 'entry' ? './throne-photo.html?mode=entry&v=15' : './throne-photo.html?v=15';
+    if (frame) frame.src = mode === 'entry' ? './throne-photo.html?mode=entry&v=17' : './throne-photo.html?v=17';
   }
   function transitionThrone(mode) {
     const frame = $('throneFrame');
@@ -894,7 +895,7 @@
   // Flow: host setup or throne selection → name → waiting room → game.
   function updateScreens() {
     const loggedIn = Boolean(state?.me);
-    const needName = !loggedIn && !enteredName;
+    const needName = !loggedIn && !enteredName && !nameDismissed;
     $('nameScreen').hidden = !needName;
     if (needName && !$('nameEntryInput').dataset.filled) { $('nameEntryInput').value = savedPlayerName(); $('rememberNameInput').checked = Boolean(savedPlayerName()); $('nameEntryInput').dataset.filled = '1'; }
     const hostSetup = showHostSetup || (loggedIn && state?.phase === 'LOBBY' && state.isHost && !state.settings?.configured);
@@ -1503,9 +1504,11 @@
         sendHousesToThrone();
       });
     }
+    if (event.data.type === 'iron-throne:back') backToEntry();
     if (event.data.type === 'iron-throne:pick' && typeof event.data.house === 'string') {
       setPickedHouse({ key: normHouse(event.data.house).slice(0, 40), name: String(event.data.name || event.data.house).slice(0, 60) });
       if (state?.me) changingLobbyHouse = false;
+      if (!enteredName) nameDismissed = false;
       render();
       if (!state?.me && gameCode && enteredName) doLogin(enteredName);
     }
@@ -1518,6 +1521,7 @@
       if (!result?.ok) {
         // Most often the name is already used in this lobby: ask for another one on the name card.
         enteredName = '';
+        nameDismissed = false;
         $('nameEntryInput').value = username; $('nameEntryInput').dataset.filled = '1';
         $('nameError').textContent = result?.message || 'Could not join the game.';
         render();
@@ -1529,6 +1533,40 @@
       socket.emit('request-state');
     });
   }
+
+  // Back out of the opening screens: X button, Escape, or a click outside the card.
+  function resetThrone() {
+    $('throneFrame')?.contentWindow?.postMessage({ type: 'iron-throne:reset' }, location.origin === 'null' ? '*' : location.origin);
+    sendHousesToThrone();
+  }
+  function closeNameScreen() {
+    nameDismissed = true;
+    $('nameError').textContent = '';
+    if (!state?.me && pickedHouse) { setPickedHouse(null); resetThrone(); }
+    render();
+  }
+  function backToEntry() {
+    if (state?.me) { changingLobbyHouse = false; render(); return; }
+    gameCode = '';
+    try { localStorage.removeItem(roomCodeKey); localStorage.removeItem(usernameKey); } catch (e) { /* storage unavailable */ }
+    showHostSetup = false;
+    preparingHost = false;
+    setPickedHouse(null);
+    setThronePage('entry');
+    render();
+  }
+  [['nameScreen', closeNameScreen], ['hostSetupScreen', () => { if (!state?.me) backToEntry(); }]].forEach(([id, close]) => {
+    const screen = $(id);
+    let downOnBackdrop = false;
+    screen.addEventListener('pointerdown', e => { downOnBackdrop = e.target === screen; });
+    screen.addEventListener('click', e => { if (e.target === screen && downOnBackdrop) close(); downOnBackdrop = false; });
+    screen.querySelector('[data-screen-x]')?.addEventListener('click', close);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (!$('nameScreen').hidden) closeNameScreen();
+    else if (!$('hostSetupScreen').hidden && !state?.me) backToEntry();
+  });
   $('nameForm').addEventListener('submit', event => {
     event.preventDefault();
     const name = $('nameEntryInput').value.trim().replace(/\s+/g, ' ');
