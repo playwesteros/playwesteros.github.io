@@ -504,7 +504,13 @@ function settingsConflict(next) {
 // Returns an error message if `playerId` may not take house `h`, otherwise null.
 function houseError(h, playerId) {
   const others = [...players.values()].filter(p => !p.left && p.houseId === h.id && p.id !== playerId).length;
-  if (isTeams()) return others >= gameSettings.teamSize ? `Team ${h.name} is full (${gameSettings.teamSize} players).` : null;
+  if (isTeams()) {
+    if (others >= gameSettings.teamSize) return `Team ${h.name} is full (${gameSettings.teamSize} players).`;
+    const maxTeams = Math.ceil(gameSettings.maxPlayers / gameSettings.teamSize);
+    const used = new Set([...players.values()].filter(p => !p.left && p.houseId && p.id !== playerId).map(p => p.houseId));
+    if (!others && used.size >= maxTeams) return `All ${maxTeams} teams are formed. Join an existing team.`;
+    return null;
+  }
   return others ? `House ${h.name} is already taken.` : null;
 }
 function isHost(player) { return Boolean(player && player.id === hostId); }
@@ -762,7 +768,7 @@ io.on('connection', socket => {
     const activeMembers = houseId => [...players.values()].filter(existing => !existing.left && existing.houseId === houseId);
     const open = houses.filter(candidate => !houseError(candidate, null) && !(isLastDragon() && candidate.id === 'targaryen'));
     if (!open.length) return fail('No house is open for a bot.');
-    const house = isTeams() ? [...open].sort((a, b) => activeMembers(a.id).length - activeMembers(b.id).length)[0] : open[randomInt(0, open.length - 1)];
+    const house = isTeams() ? [...open].sort((a, b) => (activeMembers(a.id).length === 0) - (activeMembers(b.id).length === 0) || activeMembers(a.id).length - activeMembers(b.id).length)[0] : open[randomInt(0, open.length - 1)];
     const bot = { id: randomUUID(), username: `Bot ${botNumber}`, token: `bot-${randomUUID()}`, houseId: house.id, vote: null, lastSpyRound: 0, connected: true, left: false, isBot: true, socketId: null };
     players.set(bot.id, bot);
     addEvent('normal', `${bot.username} joined House ${house.name}.`);

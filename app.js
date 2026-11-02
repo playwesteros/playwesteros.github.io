@@ -214,7 +214,12 @@
     const s = state.settings || {};
     if (house.id === 'targaryen' && s.gameType === 'LAST_DRAGON') return 'Not available in Last Dragon';
     const others = house.players.filter(p => !p.left && p.id !== excludeId).length;
-    if (s.gameType === 'TEAMS') return others >= (s.teamSize || 2) ? `Team full · ${others} of ${s.teamSize || 2}` : null;
+    if (s.gameType === 'TEAMS') {
+      const size = s.teamSize || 2, maxTeams = Math.ceil((s.maxPlayers || 8) / size);
+      if (others >= size) return `Team full · ${others} of ${size}`;
+      const used = new Set(state.players.filter(p => !p.left && p.houseId && p.id !== excludeId).map(p => p.houseId));
+      return !others && used.size >= maxTeams ? `All ${maxTeams} teams formed · join an existing team` : null;
+    }
     return others ? 'Already claimed by another player' : null;
   }
   const houseIsLocked = () => state?.settings?.gameType !== 'TEAMS' && Boolean(state?.me?.houseId);
