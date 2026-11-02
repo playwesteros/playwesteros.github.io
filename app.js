@@ -6,7 +6,7 @@
   const usernameKey = 'ironThroneUsername';
   const savedNameKey = 'ironThroneSavedName';
   const savedPlayerName = () => { try { return localStorage.getItem(savedNameKey) || ''; } catch (e) { return ''; } };
-  let enteredName = '';
+  let enteredName = savedPlayerName();
   const roomCodeKey = 'warOfWesterosGamePin';
   // House chosen on the throne screen before logging in. Claimed automatically right after login.
   const pickedHouseKey = 'ironThronePickedHouse';
@@ -919,15 +919,14 @@
   // Flow: host setup or throne selection → name → waiting room → game.
   function updateScreens() {
     const loggedIn = Boolean(state?.me);
-    const needName = !loggedIn && !gameCode && !enteredName;
+    const needName = !loggedIn && !enteredName;
     $('nameScreen').hidden = !needName;
     if (needName && !$('nameEntryInput').dataset.filled) { $('nameEntryInput').value = savedPlayerName(); $('rememberNameInput').checked = Boolean(savedPlayerName()); $('nameEntryInput').dataset.filled = '1'; }
     const hostSetup = showHostSetup || (loggedIn && state?.phase === 'LOBBY' && state.isHost && !state.settings?.configured);
-    const showThrone = changingLobbyHouse || (!loggedIn && (!gameCode || !pickedHouse));
+    const showThrone = changingLobbyHouse || !loggedIn;
     const waiting = loggedIn && state?.phase === 'LOBBY' && !hostSetup && !changingLobbyHouse;
     const inGame = loggedIn && state?.phase !== 'LOBBY' && state?.phase !== 'HAND_SELECTION';
     $('throneScreen').hidden = !showThrone;
-    $('loginScreen').hidden = loggedIn || !gameCode || showThrone;
     $('hostSetupScreen').hidden = !hostSetup;
     $('lobbyScreen').hidden = !waiting;
     $('kingSelectionScreen').hidden = !loggedIn || state?.phase !== 'HAND_SELECTION';
@@ -946,15 +945,6 @@
       limitOptions(state?.settings?.maxPlayers);
       updateDragonSetup();
       $('friendlyFireInput').checked = state?.settings?.friendlyFire !== false;
-    }
-    const chosen = $('chosenHouse');
-    if (chosen) {
-      const house = findPickedHouse();
-      chosen.hidden = !pickedHouse || loggedIn;
-      if (pickedHouse) {
-        chosen.style.setProperty('--house-color', house?.color || '#c8a86c');
-        chosen.innerHTML = `<div class="chosen-house-identity">${houseBanner(house, 'chosen-house-heraldry')}<div><small>YOUR HOUSE</small><strong>House ${escapeHtml(house?.name || pickedHouse.name.replace(/^house\s+/i, ''))}</strong></div></div><button class="button button-quiet button-small" type="button" data-action="change-house">Change</button>`;
-      }
     }
   }
 
@@ -991,6 +981,7 @@
   function openNameEditor() {
     $('lobbyEditMenu').close?.();
     $('lobbyNameInput').value = state?.me?.username || '';
+    $('lobbyRememberInput').checked = Boolean(savedPlayerName());
     $('lobbyNameDialog').showModal();
     $('lobbyNameInput').focus();
   }
@@ -1432,7 +1423,7 @@
 
   if (!socket) {
     setConnection(false, 'Socket.IO failed to load');
-    $('loginError').textContent = 'The realtime client library did not load. Check your internet connection or CDN access.';
+    showToast('The realtime client library did not load. Check your internet connection or CDN access.', 'error');
   } else {
     const forgetSaved = () => { savedCode = ''; localStorage.removeItem(roomCodeKey); localStorage.removeItem(usernameKey); };
     const offerReturn = () => {
@@ -1469,6 +1460,7 @@
         if (savedName) socket.emit('login', { username: savedName, clientToken }, result => {
           if (!result?.ok) showToast(result?.message || 'Could not restore your session.', 'error');
         });
+        else if (gameCode && pickedHouse && enteredName) doLogin(enteredName);
       };
       if (gameCode) socket.emit('join-game-room', { pin: gameCode, clientToken }, result => {
         if (!result?.ok) {
@@ -1517,7 +1509,6 @@
         localStorage.setItem(roomCodeKey, gameCode);
         localStorage.removeItem(usernameKey);
         setPickedHouse(null);
-        $('usernameInput').value = '';
         preparingHost = true;
         showHostSetup = true;
         render();
@@ -1533,7 +1524,6 @@
         localStorage.setItem(roomCodeKey, gameCode);
         localStorage.removeItem(usernameKey);
         setPickedHouse(null);
-        $('usernameInput').value = '';
         showHostSetup = false;
         transitionThrone('house');
         render();
@@ -1550,15 +1540,14 @@
   $('throneFrame')?.addEventListener('load', sendHousesToThrone);
 
   function doLogin(username) {
-    if (!socket?.connected) {
-      $('loginError').textContent = `Cannot reach ${SERVER_URL}. Start the server and check docs/config.js.`;
-      return;
-    }
-    $('loginError').textContent = '';
+    if (!socket?.connected) { showToast(`Cannot reach ${SERVER_URL}. Check your connection and try again.`, 'error'); return; }
     socket.emit('login', { username, clientToken }, result => {
       if (!result?.ok) {
-        $('usernameInput').value = username;
-        $('loginError').textContent = result?.message || 'Could not join the game.';
+        // Most often the name is already used in this lobby: ask for another one on the name card.
+        enteredName = '';
+        $('nameEntryInput').value = username; $('nameEntryInput').dataset.filled = '1';
+        $('nameError').textContent = result?.message || 'Could not join the game.';
+        render();
         return;
       }
       localStorage.setItem(usernameKey, username);
@@ -1567,10 +1556,6 @@
       socket.emit('request-state');
     });
   }
-  $('loginForm').addEventListener('submit', event => {
-    event.preventDefault();
-    doLogin($('usernameInput').value.trim());
-  });
   $('nameForm').addEventListener('submit', event => {
     event.preventDefault();
     const name = $('nameEntryInput').value.trim().replace(/\s+/g, ' ');
@@ -1579,6 +1564,7 @@
     enteredName = name;
     try { if ($('rememberNameInput').checked) localStorage.setItem(savedNameKey, name); else localStorage.removeItem(savedNameKey); } catch (e) { /* storage unavailable */ }
     render();
+    if (gameCode && pickedHouse && !state?.me) doLogin(name);
   });
   $('gameTypeInput').addEventListener('change', () => { limitOptions(); updateDragonSetup(); });
   $('maxPlayersInput').addEventListener('change', updateDragonSetup);
@@ -1616,7 +1602,7 @@
       if (!result?.ok) return showToast(result?.message || 'Could not update your name.', 'error');
       $('lobbyNameDialog').close();
       enteredName = username;
-      try { if (savedPlayerName()) localStorage.setItem(savedNameKey, username); } catch (e) { /* storage unavailable */ }
+      try { if ($('lobbyRememberInput').checked) localStorage.setItem(savedNameKey, username); else localStorage.removeItem(savedNameKey); } catch (e) { /* storage unavailable */ }
       showToast(result.message || 'Name updated.', 'success');
     });
   });
@@ -1853,7 +1839,6 @@
     setThronePage('entry');
     $('throneFrame')?.contentWindow?.postMessage({ type: 'iron-throne:reset' }, location.origin === 'null' ? '*' : location.origin);
     render();
-    $('usernameInput').value = '';
     // Prepare a fresh guest identity on this browser; the server keeps the old player slot disconnected.
     const makePart = () => (window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`);
     clientToken = `${makePart()}-${makePart()}`;

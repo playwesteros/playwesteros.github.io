@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="./style.css?v=58">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./app.js?v=72" defer></script>
+  <script src="./app.js?v=74" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -42,7 +42,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.9.1<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v2.9.3<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -97,27 +97,6 @@
     </section>
   </main>
 
-  <main id="loginScreen" class="login-wrap" hidden>
-    <section class="login-hero">
-      <p class="eyebrow">A REALM DIVIDED</p>
-      <h1>Power is taken.<br><em>Never simply given.</em></h1>
-      <p class="hero-copy">Choose your house. Build your strength. Win the court—or take the capital by force.</p>
-    </section>
-    <section class="login-card panel">
-      <div class="panel-kicker">ENTER THE REALM</div>
-      <h2>Join the council</h2>
-      <div id="chosenHouse" class="chosen-house" hidden></div>
-      <p class="muted">Choose the name the other houses will know you by.</p>
-      <form id="loginForm">
-        <label for="usernameInput">Your name</label>
-        <input id="usernameInput" name="username" maxlength="22" minlength="2" placeholder="e.g. Eddard Stark" autocomplete="nickname" required>
-        <button class="button button-primary button-full" type="submit">Enter the realm <span>→</span></button>
-      </form>
-      <p class="tiny-note"><strong>Prototype note:</strong> guest names are not password-protected. Do not use private or sensitive information.</p>
-      <div id="loginError" class="form-error" aria-live="polite"></div>
-    </section>
-  </main>
-
   <main id="lobbyScreen" class="realm-screen" hidden>
     <section class="realm-card panel">
       <p class="eyebrow">THE GREAT HALL</p>
@@ -149,6 +128,7 @@
     <form id="lobbyNameForm">
       <p class="eyebrow">YOUR PLAYER</p><h2>Change your name</h2>
       <label for="lobbyNameInput">Name</label><input id="lobbyNameInput" maxlength="22" minlength="2" required>
+      <label class="check-row" for="lobbyRememberInput"><input id="lobbyRememberInput" type="checkbox"> Remember my name for future games</label>
       <button class="button button-primary button-full" type="submit">Save name</button>
       <button class="button button-quiet button-full" type="button" data-action="close-name-dialog">Cancel</button>
     </form>
