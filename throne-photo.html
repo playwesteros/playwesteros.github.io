@@ -18,7 +18,7 @@
     header{position:absolute;z-index:2;top:0;left:0;right:0;padding:calc(max(env(safe-area-inset-top),12px) + 12px) 16px 20px;text-align:center;pointer-events:none;background:linear-gradient(180deg,rgba(5,7,9,.76),rgba(5,7,9,.28) 68%,transparent);transition:opacity .3s ease,filter .35s ease,transform .35s ease}
     h1{margin:0;font:700 clamp(1.45rem,4.6vw,2.8rem)/1.08 Cinzel,Georgia,serif;letter-spacing:.08em;color:#e7dfce;text-shadow:0 2px 14px #000,0 0 25px #000}
     .rule{width:min(250px,54vw);height:1px;margin:9px auto 7px;background:linear-gradient(90deg,transparent,#c8a86c,transparent);opacity:.8}
-    #w{margin:0;font:italic 1.14rem/1.2 "IM Fell English",Georgia,serif;color:#d2c8b6;text-shadow:0 2px 9px #000}
+    #w{max-width:min(560px,92vw);margin:0 auto;font:italic 1.14rem/1.2 "IM Fell English",Georgia,serif;color:#d2c8b6;text-shadow:0 2px 9px #000}
     #hint{display:block;margin-top:7px;font:600 .67rem/1.3 Cinzel,Georgia,serif;letter-spacing:.15em;text-transform:uppercase;color:#c8a86c;text-shadow:0 2px 8px #000}
     #hint.warn{color:#df8c83}
     #confirmHouse{pointer-events:auto;margin:9px auto 0;padding:8px 17px;border:1px solid #c8a86caa;border-radius:999px;background:#0b0d10e8;color:#ebd8ad;font:700 .68rem Cinzel,Georgia,serif;letter-spacing:.12em;text-transform:uppercase;box-shadow:0 4px 18px #0009}
@@ -75,8 +75,8 @@
 <body>
   <img id="sceneImage" src="./assets/throne-photo-background.png?v=1" alt="The Iron Throne in a shadowed stone hall">
   <header>
-    <h1 id="n">War of Westeros</h1><div class="rule"></div><p id="w">Choose your path</p>
-    <small id="hint">Host a game or join with a PIN</small>
+    <h1 id="n">War of Westeros</h1><div class="rule"></div><p id="w">“When you play the game of thrones, you win or you die. There is no middle ground.”</p>
+    <small id="hint">Cersei Lannister</small>
     <button id="confirmHouse" type="button" hidden>Confirm house</button>
   </header>
   <section id="entryActions" class="choice-panel entry-actions" aria-label="Start or join a game">
@@ -128,8 +128,8 @@
     function reset(){
       if(picked>=0){show(picked);setHint('Sworn. Now give your name…');return}
       if(previewed>=0){show(previewed);setHint('Tap again or confirm your house');confirmHouse.hidden=false;return}
-      n.textContent='War of Westeros';w.textContent=entryMode?'Choose your path':'Choose your house';
-      setHint(entryMode?'Host a game or join with a PIN':(isPhone()?'Tap a banner to preview':'Choose a banner to swear fealty'));
+      n.textContent='War of Westeros';w.textContent=entryMode?'“When you play the game of thrones, you win or you die. There is no middle ground.”':'Choose your house';
+      setHint(entryMode?'Cersei Lannister':(isPhone()?'Tap a banner to preview':'Choose a banner to swear fealty'));
       root.style.setProperty('--c','#c8a86c');confirmHouse.hidden=true;
     }
     function applyStatus(){document.querySelectorAll('.house-option').forEach(el=>{const i=+el.dataset.i,disabled=entryMode||H[i].status!=='open';el.disabled=disabled;el.classList.toggle('unavailable',disabled);el.classList.toggle('picked',i===picked);el.classList.toggle('preview',i===previewed);el.setAttribute('aria-label',`${H[i].name}${H[i].status!=='open'?` · ${H[i].note||'Not available'}`:''}`)})}

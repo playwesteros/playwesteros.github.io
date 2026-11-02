@@ -712,7 +712,6 @@ io.on('connection', socket => {
     if (phase !== 'LOBBY') return fail('House selection is closed after the lobby.');
     const h = findHouse(String(payload.houseId || '')); if (!h) return fail('That house does not exist.');
     if (isLastDragon() && h.id === 'targaryen') return fail('House Targaryen is not available in Last Dragon. The Dragons are hidden among the players.');
-    if (!isTeams() && player.houseId && player.houseId !== h.id) return fail('Your house is locked. You cannot change it once chosen.');
     const taken = houseError(h, player.id); if (taken) return fail(taken);
     const previous = player.houseId;
     player.houseId = h.id;

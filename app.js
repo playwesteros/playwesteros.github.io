@@ -36,7 +36,7 @@
   const $ = id => document.getElementById(id);
   function setThronePage(mode) {
     const frame = $('throneFrame');
-    if (frame) frame.src = mode === 'entry' ? './throne-photo.html?mode=entry&v=17' : './throne-photo.html?v=17';
+    if (frame) frame.src = mode === 'entry' ? './throne-photo.html?mode=entry&v=18' : './throne-photo.html?v=18';
   }
   function transitionThrone(mode) {
     const frame = $('throneFrame');
@@ -218,8 +218,7 @@
     }
     return others ? 'Already claimed by another player' : null;
   }
-  const houseIsLocked = () => state?.settings?.gameType !== 'TEAMS' && Boolean(state?.me?.houseId);
-  const houseChangeMsg = () => houseIsLocked() ? 'Your house is locked once you choose it.' : 'There are no other houses available right now.';
+  const houseChangeMsg = () => 'There are no other houses available right now.';
   // Teams must be as even as possible. Returns a message, or '' when fine.
   function teamProblem(list) {
     if (state.settings?.gameType !== 'TEAMS') return '';
@@ -240,7 +239,7 @@
     const gameTypeLabel = setup.gameType === 'LAST_DRAGON' ? `Last Dragon · ${plural(setup.dragonCount || 1, 'Dragon')} · ${setup.dragonRounds || 5} rounds` : setup.gameType === 'TEAMS' ? `Teams · up to ${setup.teamSize || 2} per team` : 'Classic';
     const ffLabel = setup.friendlyFire === false ? ' · Friendly fire off' : '';
     $('lobbySettings').textContent = `${gameTypeLabel} · ${activePlayers.length} of ${setup.maxPlayers} players${ffLabel}`;
-    lobbyCanChangeHouse = state.phase === 'LOBBY' && state.houses.some(h => h.id !== state.me.houseId && !minorHouseReason(h, state.me.id)) && !houseIsLocked();
+    lobbyCanChangeHouse = state.phase === 'LOBBY' && state.houses.some(h => h.id !== state.me.houseId && !minorHouseReason(h, state.me.id));
     lock(document.querySelector('[data-action="edit-menu-house"]'), lobbyCanChangeHouse ? '' : houseChangeMsg());
     const houseRank = id => { const i = state.houses.findIndex(h => h.id === id); return i < 0 ? state.houses.length : i; };
     const lobbyOrder = [...state.players].sort((a, b) => houseRank(a.houseId) - houseRank(b.houseId));
