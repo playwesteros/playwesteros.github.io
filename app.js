@@ -188,12 +188,6 @@
     else document.body.style.removeProperty('--accent');
   }
 
-  function allHouseOptions(excludeHouseId = null, includeEmpty = false) {
-    if (!state) return '<option value="">Connect to server first</option>';
-    const list = state.houses.filter(h => h.id !== excludeHouseId && (includeEmpty || h.players.length > 0 || h.capitalCount >= 0));
-    return list.map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
-  }
-
   function playerName(playerId) {
     return state?.players?.find(p => p.id === playerId)?.username || 'Unknown player';
   }
@@ -208,10 +202,6 @@
     const position = HOUSE_SPRITE_POSITION[house.id];
     if (!position) return '';
     return `<span class="${className} house-sprite" style="--sprite-x:${position[0]};--sprite-y:${position[1]}" role="img" aria-label="${escapeHtml(house.name)} house banner"></span>`;
-  }
-
-  function renderPlayers() {
-    $('lobbyPlayerList').innerHTML = state.players.map(p => `<span class="mini-player ${p.houseId ? 'assigned' : ''}">${escapeHtml(p.username)}${p.houseId ? ` · ${escapeHtml(prettyHouse(p.houseId))}` : ''}</span>`).join('');
   }
 
   // Why `house` can't be taken by player `excludeId` right now (null = available). Mirrors the server rules.
@@ -247,7 +237,6 @@
     $('lobbyCount').textContent = `${activePlayers.length} player${activePlayers.length === 1 ? '' : 's'}`;
     const setup = state.settings || { maxPlayers: 16, gameType: 'CLASSIC' };
     const gameTypeLabel = setup.gameType === 'LAST_DRAGON' ? `Last Dragon · ${plural(setup.dragonCount || 1, 'Dragon')} · ${setup.dragonRounds || 5} rounds` : setup.gameType === 'TEAMS' ? `Teams · up to ${setup.teamSize || 2} per team` : 'Classic';
-    if ($('houseIntro')) $('houseIntro').textContent = setup.gameType === 'TEAMS' ? `Join a team. Teams can hold up to ${setup.teamSize || 2} players and must be as even as possible to begin. You can switch teams until the game starts.` : 'Each player takes their own house, and the choice is locked once made.';
     const ffLabel = setup.friendlyFire === false ? ' · Friendly fire off' : '';
     $('lobbySettings').textContent = `${gameTypeLabel} · ${activePlayers.length} of ${setup.maxPlayers} players${ffLabel}`;
     lobbyCanChangeHouse = state.phase === 'LOBBY' && state.houses.some(h => h.id !== state.me.houseId && !minorHouseReason(h, state.me.id)) && !houseIsLocked();
@@ -294,18 +283,6 @@
     }).join('');
     $('handPlayerSelect').disabled = !candidates.length;
     lock($('handSelectionForm').querySelector('button[type="submit"]'), 'Choose a player to appoint first.');
-  }
-
-  function renderVotePanel() {
-    const candidateSelect = $('candidateSelect');
-    candidateSelect.innerHTML = state.voteCandidates.map(c => {
-      const house = state.houses.find(h => h.id === c.houseId);
-      return `<option value="${escapeHtml(c.id)}">${escapeHtml(c.username)}${house ? ` · House ${escapeHtml(house.name)}` : ''}</option>`;
-    }).join('');
-    candidateSelect.disabled = !state.me || state.me.vote !== null || state.voteCandidates.length === 0;
-    $('voteProgress').textContent = `${state.votesCast}/${state.voteTotal} votes cast`;
-    $('voteStatus').textContent = state.me?.vote ? `Your vote has been recorded for ${escapeHtml(playerName(state.me.vote))}.` : state.runoff ? 'Runoff election: only the tied candidates can receive votes.' : 'Your vote is private until the election closes.';
-    lock($('voteForm').querySelector('button[type="submit"]'), candidateSelect.disabled ? (state.me?.vote ? 'Your vote has already been cast.' : 'There is no candidate to vote for yet.') : '');
   }
 
   // ---- War: the target is chosen on the map ----
@@ -900,8 +877,6 @@
     $('phaseDescription').textContent = phaseInfo[2];
     updateRoundPill();
 
-    $('lobbyPanel').hidden = state.phase !== 'LOBBY';
-    $('electionPanel').hidden = state.phase !== 'KING_VOTE';
     $('resolutionPanel').hidden = state.phase !== 'RESOLUTION';
   }
 
@@ -939,7 +914,6 @@
     document.body.classList.toggle('in-game', inGame);
     document.body.classList.toggle('throne-open', showThrone);
     if (hostSetup) {
-      const maxSelect = $('maxPlayersInput');
       $('gameTypeInput').value = state?.settings?.gameType || 'CLASSIC';
       $('teamSizeInput').value = String(state?.settings?.teamSize || 2);
       limitOptions(state?.settings?.maxPlayers);
@@ -1388,7 +1362,6 @@
       return;
     }
     renderPhase();
-    renderPlayers();
     renderRoundOverview();
     renderRoundActions();
     renderAlliances();
@@ -1735,10 +1708,6 @@
     else if (action === 'claim-spoils') emitAction('claim-spoils', { spoilId: button.dataset.spoilId, claimHouseId: button.dataset.claim });
   });
 
-  $('voteForm').addEventListener('submit', event => {
-    event.preventDefault();
-    emitAction('vote-king', { candidateId: $('candidateSelect').value });
-  });
 
   $('recruitForm').addEventListener('submit', event => {
     event.preventDefault();

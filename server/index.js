@@ -71,9 +71,6 @@ let round;
 let hostId;
 let kingPlayerId;
 let handPlayerId;
-let runoff;
-let candidateIds;
-let voterIds;
 let gameSettings;
 let dragonIds;
 let gameOver;
@@ -100,9 +97,6 @@ function resetWorld(keepPlayers = true, rematch = false) {
   startHouseCount = 0;
   kingPlayerId = null;
   handPlayerId = null;
-  runoff = false;
-  candidateIds = [];
-  voterIds = [];
   houses = freshHouses();
   capitals = freshCapitals();
   alliances.length = 0;
@@ -121,7 +115,6 @@ function resetWorld(keepPlayers = true, rematch = false) {
   } else {
     for (const p of players.values()) {
       p.houseId = null;
-      p.vote = null;
       p.lastSpyRound = 0;
       p.traitor = false;
       p.isKing = false;
@@ -175,10 +168,10 @@ function scheduleHostDisconnect(roomCode) {
   hostDisconnectTimers.set(roomCode, timer);
 }
 function captureWorld() {
-  return { players, tokenToPlayerId, alliances, allianceOffers, treaties, spoils, notices, publicMessages, privateMessages, taxLedger, events, houses, capitals, phase, round, hostId, kingPlayerId, handPlayerId, runoff, candidateIds, voterIds, gameSettings, dragonIds, gameOver, startHouseCount };
+  return { players, tokenToPlayerId, alliances, allianceOffers, treaties, spoils, notices, publicMessages, privateMessages, taxLedger, events, houses, capitals, phase, round, hostId, kingPlayerId, handPlayerId, gameSettings, dragonIds, gameOver, startHouseCount };
 }
 function activateWorld(world) {
-  ({ players, tokenToPlayerId, alliances, allianceOffers, treaties, spoils, notices, publicMessages, privateMessages, taxLedger, events, houses, capitals, phase, round, hostId, kingPlayerId, handPlayerId, runoff, candidateIds, voterIds, gameSettings, dragonIds, gameOver, startHouseCount } = world);
+  ({ players, tokenToPlayerId, alliances, allianceOffers, treaties, spoils, notices, publicMessages, privateMessages, taxLedger, events, houses, capitals, phase, round, hostId, kingPlayerId, handPlayerId, gameSettings, dragonIds, gameOver, startHouseCount } = world);
 }
 const initialWorld = structuredClone(captureWorld());
 function withWorld(roomCode, callback) {
@@ -205,9 +198,7 @@ function addEvent(kind, text) {
   if (events.length > 80) events.length = 80;
 }
 function connectedPlayers() { return [...players.values()].filter(p => p.connected && !p.left); }
-function eligiblePlayers() { return [...players.values()].filter(p => p.connected && !p.left && p.houseId); }
 // Bots no longer recruit automatically; houses only grow when a player recruits.
-function runBotTurns() {}
 function recalculateCapitalCounts() {
   for (const h of houses) h.capitalCount = capitals.filter(c => c.ownerHouseId === h.id).length;
 }
@@ -301,7 +292,6 @@ function spyFindings(mission, target) {
   return { mole: options[randomInt(0, options.length - 1)] };
 }
 function capitalIncome(c) { const h = findHouse(c.ownerHouseId); return h ? incomePerCapital(h) + (c.id === 'casterly-rock' ? 3 : 0) : 0; }
-function houseIncome(h) { return capitals.filter(c => c.ownerHouseId === h.id).reduce((sum, c) => sum + capitalIncome(c), 0); }
 function currentHouseView(h) {
   if (!h) return null;
   const { money, infantry, navy, navyBuilding, dragons, infantryCost, navyCost, pendingAttack, hasAttackedThisRound, commandUsedRound, lockedUntilRound, spyReports, ledger, ...definition } = h;
@@ -332,8 +322,6 @@ function viewFor(playerId) {
   recalculateCapitalCounts();
   const me = playerId ? players.get(playerId) : null;
   const myHouse = me?.houseId ? findHouse(me.houseId) : null;
-  const voteCandidates = (candidateIds.length ? candidateIds : eligiblePlayers().map(p => p.id))
-    .map(id => players.get(id)).filter(Boolean).map(p => ({ id: p.id, username: p.username, houseId: p.houseId }));
   const visibleOffers = allianceOffers.filter(o => o.scope === 'public' || (myHouse && (o.fromHouseId === myHouse.id || o.toHouseId === myHouse.id)))
     .map(o => ({ ...o, isOutgoing: Boolean(myHouse && o.fromHouseId === myHouse.id), canRespond: Boolean(myHouse && o.toHouseId === myHouse.id) }));
   const visibleAlliances = alliances.filter(a => a.scope === 'public' || (myHouse && (a.houseA === myHouse.id || a.houseB === myHouse.id))).map(a => ({ ...a }));
@@ -350,7 +338,7 @@ function viewFor(playerId) {
     crownOffer: Boolean(me && capitals.some(c => c.vacant && c.offerTo === me.id)),
     throneVacant: capitals.some(c => c.vacant),
     isHost: Boolean(me && me.id === hostId), isKing: Boolean(me && me.id === kingPlayerId), isHand: Boolean(me && me.id === handPlayerId),
-    me: me ? { id: me.id, username: me.username, houseId: me.houseId, vote: me.vote, lastSpyRound: me.lastSpyRound, eliminated: Boolean(me.eliminated) } : null,
+    me: me ? { id: me.id, username: me.username, houseId: me.houseId, lastSpyRound: me.lastSpyRound, eliminated: Boolean(me.eliminated) } : null,
     myHouse: makePrivateHouseView(me?.w || myHouse),
     houses: houses.map(currentHouseView),
     players: [...players.values()].map(p => (me && me.id === kingPlayerId ? { ...playerPublic(p), traitor: Boolean(p.traitor) } : playerPublic(p))),
@@ -360,10 +348,6 @@ function viewFor(playerId) {
       return { id: d.id, round: d.round, kingName: d.kingName, kingHouseId: d.kingHouseId, message: d.message, gold: d.gold, infantry: d.infantry, navy: d.navy, isIssuer: issuer, myState: d.recipients.find(r => r.houseId === myHouse.id)?.state || null, recipients: me.id === handPlayerId ? d.recipients.map(r => ({ ...r })) : undefined };
     }) : [],
     capitals: capitals.map(c => ({ ...c, income: capitalIncome(c), residents: residentsOf(c).length })),
-    voteCandidates,
-    votesCast: voterIds.filter(id => players.get(id)?.vote).length,
-    voteTotal: voterIds.length,
-    runoff,
     allianceOffers: visibleOffers,
     alliances: visibleAlliances,
     treaties: myHouse ? treaties.filter(t => t.fromHouseId === myHouse.id || t.toHouseId === myHouse.id).map(t => ({ ...t, isOutgoing: t.fromHouseId === myHouse.id })) : [],
@@ -515,7 +499,6 @@ function houseError(h, playerId) {
 function nameTaken(name, exceptId) { const n = String(name).toLowerCase(); return [...players.values()].some(p => !p.left && p.id !== exceptId && p.username.toLowerCase() === n); }
 const nameTakenMsg = name => `The name “${name}” is already used in this lobby. Choose a different one.`;
 function isHost(player) { return Boolean(player && player.id === hostId); }
-function isCourt() { return phase === 'COURT'; }
 function canDiplomacy() { return phase === 'ACTION' || phase === 'COURT'; }
 function houseMembers(houseId) { return [...players.values()].filter(p => p.houseId === houseId && !p.left); }
 function houseIsBotOnly(houseId) { const m = houseMembers(houseId); return m.length > 0 && m.every(p => p.isBot); }
@@ -660,7 +643,7 @@ io.on('connection', socket => {
         if (phase !== 'LOBBY') return fail('This game has already started.');
         if (gameSettings.configured && [...players.values()].filter(existing => !existing.left).length >= gameSettings.maxPlayers) return fail('This game is full.');
         playerId = randomUUID();
-        player = { id: playerId, username: name, token, houseId: null, vote: null, lastSpyRound: 0, connected: true, left: false, socketId: socket.id };
+        player = { id: playerId, username: name, token, houseId: null, lastSpyRound: 0, connected: true, left: false, socketId: socket.id };
         players.set(playerId, player);
         tokenToPlayerId.set(token, playerId);
         isNew = true;
@@ -733,7 +716,6 @@ io.on('connection', socket => {
     const taken = houseError(h, player.id); if (taken) return fail(taken);
     const previous = player.houseId;
     player.houseId = h.id;
-    player.vote = null;
     if (previous !== h.id) addEvent('normal', `${player.username} joined House ${h.name}.`);
     return ok(`You have joined House ${h.name}.`);
   });
@@ -772,7 +754,7 @@ io.on('connection', socket => {
     const open = houses.filter(candidate => !houseError(candidate, null) && !(isLastDragon() && candidate.id === 'targaryen'));
     if (!open.length) return fail('No house is open for a bot.');
     const house = isTeams() ? [...open].sort((a, b) => (activeMembers(a.id).length === 0) - (activeMembers(b.id).length === 0) || activeMembers(a.id).length - activeMembers(b.id).length)[0] : open[randomInt(0, open.length - 1)];
-    const bot = { id: randomUUID(), username: `Bot ${botNumber}`, token: `bot-${randomUUID()}`, houseId: house.id, vote: null, lastSpyRound: 0, connected: true, left: false, isBot: true, socketId: null };
+    const bot = { id: randomUUID(), username: `Bot ${botNumber}`, token: `bot-${randomUUID()}`, houseId: house.id, lastSpyRound: 0, connected: true, left: false, isBot: true, socketId: null };
     players.set(bot.id, bot);
     addEvent('normal', `${bot.username} joined House ${house.name}.`);
     return ok(`${bot.username} joined the lobby as House ${house.name}.`);
@@ -870,17 +852,12 @@ io.on('connection', socket => {
       phase = 'ACTION';
       round = 1;
       for (const h of houses) h.hasAttackedThisRound = false;
-      runBotTurns();
       addEvent('important', `${king.username} appointed ${players.get(handPlayerId).username} as Hand of the King.`);
       addEvent('important', 'Round 1 begins. The game is underway.');
       return ok(`${king.username} appointed the Hand of the King. Round 1 begins.`);
     }
     handPlayerId = null;
     phase = 'HAND_SELECTION';
-    runoff = false;
-    voterIds = [];
-    candidateIds = [];
-    for (const p of players.values()) p.vote = null;
     addEvent('important', `${players.get(kingPlayerId)?.username || 'A player'} was chosen at random as the first king.`);
     return ok(`${players.get(kingPlayerId)?.username || 'A player'} is the first king. They must appoint a Hand of the King.`);
   });
@@ -913,7 +890,6 @@ io.on('connection', socket => {
     phase = 'ACTION';
     round = 1;
     for (const h of houses) h.hasAttackedThisRound = false;
-    runBotTurns();
     addEvent('important', 'Round 1 begins. The game is underway.');
     return ok(`${target.username} is the Hand of the King. Round 1 begins.`);
   });
@@ -1293,7 +1269,6 @@ io.on('connection', socket => {
           addEvent('normal', `Unpaid troops deserted ${p.username} of House ${h.name}.`);
         }
       }
-      runBotTurns();
       addEvent('important', `Round ${round} begins. Houses received capital income and paid army upkeep.`);
       return ok(`Round ${round} has begun. Capital income and army upkeep have been settled.`);
     }

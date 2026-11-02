@@ -170,7 +170,7 @@
     <section id="actionHub" class="action-hub" aria-label="Round menus" hidden>
       <button class="hub-button" type="button" data-action="open-hub" data-hub="money" data-cat="money"><span id="badgeMoney" class="gold-gain" hidden></span><span id="badgeMoneyN" class="hub-badge hub-badge-left" aria-live="polite" hidden></span><img src="./assets/game-coins.png?v=2" alt=""><h3>Money</h3><div class="hub-detail"><strong id="hubMoneyGold">—</strong><span id="hubMoneyIncome"></span><span id="hubMoneyCapitals"></span></div></button>
       <button class="hub-button" type="button" data-action="open-hub" data-hub="relations" data-cat="relations"><span id="badgeRelations" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=2" alt=""><h3>Relations</h3><div class="hub-detail"><strong id="hubRelAlliances">—</strong><span id="hubRelOffers"></span><span id="hubRelRole"></span></div></button>
-      <button class="hub-button" type="button" data-action="open-hub" data-hub="army" data-cat="army"><span id="badgeArmy" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-swords.png?v=2" alt=""><h3>Army</h3><div class="hub-detail"><strong id="hubArmyTotal">—</strong><span id="hubArmyDetail"></span><span id="hubArmyCosts"></span></div></button>
+      <button class="hub-button" type="button" data-action="open-hub" data-hub="army" data-cat="army"><img src="./assets/game-swords.png?v=2" alt=""><h3>Army</h3><div class="hub-detail"><strong id="hubArmyTotal">—</strong><span id="hubArmyDetail"></span><span id="hubArmyCosts"></span></div></button>
     </section>
 
     <div id="hubOverlay" class="hub-overlay" hidden>
@@ -427,23 +427,6 @@
     <div class="dashboard-grid">
 
       <section class="center-column">
-        <section id="lobbyPanel" class="panel section-panel">
-          <div class="section-head"><div><p class="panel-kicker">FIRST COME, FIRST SERVED</p><h2>Choose your house</h2></div><span class="subtle-label">House selection</span></div>
-          <p id="houseIntro" class="muted section-intro">Each player takes their own house, and the choice is locked once made.</p>
-          <div id="housePicker" class="house-picker"></div>
-          <div class="lobby-footer"><div id="lobbyStatus" class="muted small-text">Waiting for players…</div><div id="lobbyPlayerList" class="lobby-player-list"></div></div>
-        </section>
-
-        <section id="electionPanel" class="panel section-panel" hidden>
-          <div class="section-head"><div><p class="panel-kicker">THE GREAT COUNCIL</p><h2>Choose the king</h2></div><span id="voteProgress" class="subtle-label">0 votes cast</span></div>
-          <p class="muted section-intro">Each player gets one vote. If the council is tied, the tied candidates enter a runoff.</p>
-          <form id="voteForm" class="inline-form">
-            <div class="field-grow"><label for="candidateSelect">Your candidate</label><select id="candidateSelect" required></select></div>
-            <button class="button button-primary" type="submit">Cast vote</button>
-          </form>
-          <div id="voteStatus" class="muted small-text"></div>
-        </section>
-
         <section id="resolutionPanel" class="panel section-panel" hidden>
           <div class="section-head"><div><p class="panel-kicker">THE REALM HAS MOVED</p><h2>Round resolution</h2></div><span class="subtle-label">Public record</span></div>
           <p class="muted section-intro">Pending attacks are resolved here. Captured capitals transfer to the winning house, changing future income.</p>
