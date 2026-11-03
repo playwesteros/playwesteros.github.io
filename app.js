@@ -399,7 +399,7 @@
       const g = document.createElementNS(NS, 'g');
       const disc = document.createElementNS(NS, 'circle'); disc.setAttribute('cx', cx); disc.setAttribute('cy', cy); disc.setAttribute('r', r); disc.setAttribute('fill', '#1b1208'); disc.setAttribute('stroke', color); disc.setAttribute('stroke-width', '8');
       g.appendChild(disc);
-      g.appendChild(img('./assets/ui-army.png?v=3', cx - r * 0.78, cy - r * 0.78, r * 1.56));
+      g.appendChild(img('./assets/ui-army.png?v=4', cx - r * 0.78, cy - r * 0.78, r * 1.56));
       const w = 30 + String(count).length * 26, ph = 48;
       const pill = document.createElementNS(NS, 'rect'); pill.setAttribute('x', cx + r * 0.35); pill.setAttribute('y', cy + r * 0.25); pill.setAttribute('width', w); pill.setAttribute('height', ph); pill.setAttribute('rx', ph / 2); pill.setAttribute('fill', '#1b1208'); pill.setAttribute('stroke', color); pill.setAttribute('stroke-width', '5');
       g.appendChild(pill);

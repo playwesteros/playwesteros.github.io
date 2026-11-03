@@ -17,7 +17,7 @@
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
   <script src="./wheels.js?v=1"></script>
-  <script src="./app.js?v=80" defer></script>
+  <script src="./app.js?v=81" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -314,7 +314,7 @@
             <p id="armyPhaseNote" class="muted small-text"></p>
             <div class="sub-menu">
               <button class="hub-button sub-button" type="button" data-action="open-map" data-cat="map"><img src="./assets/ui-map.png?v=3" alt=""><h3>War map</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="recruit" data-cat="recruit"><img src="./assets/ui-army.png?v=3" alt=""><h3>Recruit &amp; Disband</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="recruit" data-cat="recruit"><img src="./assets/ui-army.png?v=4" alt=""><h3>Recruit &amp; Disband</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="spies" data-cat="spies"><img src="./assets/game-spy.png?v=3" alt=""><h3>Spies</h3></button>
 
             </div>
@@ -329,7 +329,7 @@
                 </tbody></table>
                 <p id="upkeepNote" class="muted small-text"></p>
                 <div class="action-grid"><form id="recruitForm" class="action-card">
-              <img class="action-icon-image" src="./assets/ui-army.png?v=3" alt=""><h3>Build your army</h3><p class="muted small-text">Infantry costs <b id="infantryCostLabel">4</b> gold each. Navy costs <b id="navyCostLabel">5</b>.</p>
+              <img class="action-icon-image" src="./assets/ui-army.png?v=4" alt=""><h3>Build your army</h3><p class="muted small-text">Infantry costs <b id="infantryCostLabel">4</b> gold each. Navy costs <b id="navyCostLabel">5</b>.</p>
               <label for="unitSelect">Unit type</label><select id="unitSelect"><option value="infantry">Infantry</option><option value="navy">Navy</option></select>
               <label for="unitAmount">Quantity (1–10)</label><input id="unitAmount" type="number" min="1" max="10" value="2" required>
               <button class="button button-primary button-full" type="submit">Recruit units</button>
