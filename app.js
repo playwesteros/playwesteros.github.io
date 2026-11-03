@@ -479,26 +479,27 @@
     $('spyReports').innerHTML = state.spyReports.length ? `<div class="subsection-title">Your intelligence reports</div>${state.spyReports.map(spyReportMarkup).join('')}` : '';
   }
 
-  const SPY_PARAMS = { troops: [0.35, 0.045, 0.75, 0.03], movement: [0.35, 0.045, 0.75, 0.03], ravens: [0.15, 0.04, 0.25, 0.015], mole: [0.15, 0.04, 0.80, 0.03] };
-  const SPY_LABEL = { troops: 'Count troops', movement: 'Watch movements', ravens: 'Shoot ravens', mole: 'Place a mole' };
+  const SPY_PARAMS = { wealth: [0.30, 0.045, 0.60, 0.03], messages: [0.20, 0.04, 0.40, 0.02], war: [0.35, 0.045, 0.75, 0.03] };
+  const SPY_LABEL = { wealth: 'Wealth', messages: 'Messages', war: 'War' };
   function spyOddsFor(spend, targetId, mission) {
-    const [sb, sp, db, dp] = SPY_PARAMS[mission] || SPY_PARAMS.troops;
+    const [sb, sp, db, dp] = SPY_PARAMS[mission] || SPY_PARAMS.war;
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
     return { success: clamp(sb + sp * (spend - 2) - (targetId === 'targaryen' ? 0.15 : 0), 0.05, 0.95), caught: clamp(db - dp * (spend - 2), 0.05, 0.9) };
   }
   function spyReportMarkup(r) {
-    const mission = r.mission || 'troops';
+    const mission = r.mission || 'war';
     const status = r.success ? 'successful' : r.caught ? 'caught' : 'failed';
     const head = `<div><b class="row-who">${bannerOf(r.targetHouseId)}${escapeHtml(capName(r.targetName))}</b><span>Round ${r.round} · ${escapeHtml(SPY_LABEL[mission])} · ${status}${r.spent ? ` · ${r.spent} gold` : ''}</span></div>`;
     if (!r.success) return `<article class="spy-report spy-failed">${head}<p>${r.caught ? 'Your agents were captured. The enemy knows who sent them.' : 'Your agents returned with nothing.'}</p></article>`;
     const f = r.findings || {};
     let body = '';
-    if (mission === 'troops') body = `<p>${f.infantry} infantry · ${f.navy} ships · ${f.dragons} dragons</p>`;
-    else if (mission === 'movement') body = `<p>${f.movingOn ? `Their army is marching on ${escapeHtml(f.movingOn)}.` : 'No army movement seen.'}</p>`;
-    else if (mission === 'ravens') body = (f.letters || []).length ? f.letters.map(l => `<p><b>${escapeHtml(l.from)}</b> to ${escapeHtml(l.to)}: “${escapeHtml(l.text)}”</p>`).join('') : '<p>No ravens were flying.</p>';
-    else if (f.mole?.kind === 'wealth') body = `<p>Their treasury holds ${f.mole.gold} gold.</p>`;
-    else if (f.mole?.kind === 'alliance') body = `<p>Secret alliance with ${f.mole.houses.map(id => `House ${escapeHtml(capName(prettyHouse(id)))}`).join(', ')}.</p>`;
-    else if (f.mole?.kind === 'dragon') body = `<p>${f.mole.hasDragon ? 'A Dragon hides in this house.' : 'No Dragon hides in this house.'}</p>`;
+    if (mission === 'wealth') body = f.kind === 'total' ? `<p>Their treasury holds about ${f.gold} gold.</p>` : `<p>Recently they earned ${f.earned} gold and spent ${f.spent}.</p>`;
+    else if (mission === 'messages') {
+      if (f.kind === 'raven') body = `<p>Raven intercepted. <b>${escapeHtml(f.letter.from)}</b> to ${escapeHtml(f.letter.to)}: “${escapeHtml(f.letter.text)}”</p>`;
+      else if (f.kind === 'alliance') body = `<p>Secret alliance with ${f.houses.map(id => `House ${escapeHtml(capName(prettyHouse(id)))}`).join(', ')}.</p>`;
+      else body = '<p>No ravens flew and no secrets surfaced.</p>';
+    } else if (f.kind === 'movement') body = `<p>Their army is marching on ${escapeHtml(f.movingOn || 'an unknown city')}: about ${f.infantry} infantry, ${f.navy} ships${f.dragons ? `, ${f.dragons} dragon${f.dragons === 1 ? '' : 's'}` : ''}. Counts may be off by 1 or 2.</p>`;
+    else body = `<p>About ${f.infantry} infantry · ${f.navy} ships · ${f.dragons} dragons. Counts may be off by 1 or 2.${f.marching ? '' : ' No army on the march.'}</p>`;
     return `<article class="spy-report">${head}${body}</article>`;
   }
   function updateSpyForm() {
@@ -1383,6 +1384,7 @@
     updateSelectBanners();
     updateRecruitButton();
     if (state.myHouse) { updateAttackLock(); updateSpyForm(); updateDisbandButton(); }
+    window.__wheels?.refresh(state);
     if (wasFocused) {
       const element = $(wasFocused);
       if (element && !element.disabled) {

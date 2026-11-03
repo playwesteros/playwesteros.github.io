@@ -256,40 +256,46 @@ function evictResidents(c) { for (const p of players.values()) if (p.cityId === 
 function incomePerCapital(h) { return 15 + (h.id === 'tyrell' ? 3 : 0); }
 function armySize(h) { return h.infantry + h.navy + h.dragons; }
 const SPY_MISSIONS = {
-  troops: { label: 'Count troops', successBase: 0.35, successPer: 0.045, dangerBase: 0.75, dangerPer: 0.03 },
-  movement: { label: 'Watch movements', successBase: 0.35, successPer: 0.045, dangerBase: 0.75, dangerPer: 0.03 },
-  ravens: { label: 'Shoot ravens', successBase: 0.15, successPer: 0.04, dangerBase: 0.25, dangerPer: 0.015 },
-  mole: { label: 'Place a mole', successBase: 0.15, successPer: 0.04, dangerBase: 0.80, dangerPer: 0.03 }
+  wealth: { label: 'Wealth', successBase: 0.30, successPer: 0.045, dangerBase: 0.60, dangerPer: 0.03 },
+  messages: { label: 'Messages', successBase: 0.20, successPer: 0.04, dangerBase: 0.40, dangerPer: 0.02 },
+  war: { label: 'War', successBase: 0.35, successPer: 0.045, dangerBase: 0.75, dangerPer: 0.03 }
 };
 function spyOdds(spend, targetId, mission) {
-  const m = SPY_MISSIONS[mission] || SPY_MISSIONS.troops;
+  const m = SPY_MISSIONS[mission] || SPY_MISSIONS.war;
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   return { success: clamp(m.successBase + m.successPer * (spend - 2) - (targetId === 'targaryen' ? 0.15 : 0), 0.05, 0.95), caught: clamp(m.dangerBase - m.dangerPer * (spend - 2), 0.05, 0.9) };
 }
 function spyFindings(mission, target) {
-  if (mission === 'troops') return { infantry: houseSum(target.id, 'infantry'), navy: houseSum(target.id, 'navy'), dragons: houseSum(target.id, 'dragons') };
-  if (mission === 'movement') {
-    const moving = houseWallets(target.id).find(w => w.pendingAttack);
-    const cap = moving ? findCapital(moving.pendingAttack.targetCapitalId) : null;
-    return { movingOn: cap?.name || null };
+  const pick = list => list[randomInt(0, list.length - 1)];
+  const fuzz = n => Math.max(0, n + pick([-2, -1, 1, 2]));
+  if (mission === 'wealth') {
+    if (Math.random() < 0.5) return { kind: 'total', gold: houseSum(target.id, 'money') };
+    let earned = 0, spent = 0;
+    for (const w of houseWallets(target.id)) for (const e of (w.ledger || [])) {
+      if (e.res !== 'gold' || e.round < Math.max(1, round - 1)) continue;
+      if (e.delta > 0) earned += e.delta; else spent -= e.delta;
+    }
+    return { kind: 'recent', earned, spent };
   }
-  if (mission === 'ravens') {
+  if (mission === 'messages') {
+    const options = [];
     const memberIds = new Set(houseMembers(target.id).map(p => p.id));
     const letters = [];
     for (const m of privateMessages) {
       if (memberIds.has(m.senderId) || (m.targets || []).some(t => memberIds.has(t.id))) letters.push({ from: m.senderName, fromHouseId: m.senderHouseId, to: (m.targets || []).map(t => t.name).join(', '), text: m.message });
     }
-    for (const t of treaties) {
-      if (t.fromHouseId === target.id || t.toHouseId === target.id) letters.push({ from: `House ${capWord(houseName(t.fromHouseId))}`, fromHouseId: t.fromHouseId, to: `House ${capWord(houseName(t.toHouseId))}`, text: [t.gold && `${t.gold} gold`, t.infantry && `${t.infantry} infantry`, t.navy && `${t.navy} ships`].filter(Boolean).join(', ') + (t.message ? `: ${t.message}` : '') });
-    }
-    return { letters: letters.slice(-3).reverse() };
+    if (letters.length) options.push({ kind: 'raven', letter: pick(letters) });
+    const secret = alliances.filter(a => a.scope === 'secret' && [a.houseA, a.houseB].includes(target.id)).map(a => (a.houseA === target.id ? a.houseB : a.houseA));
+    if (secret.length) options.push({ kind: 'alliance', houses: secret });
+    return options.length ? pick(options) : { kind: 'none' };
   }
-  // mole
-  const options = [{ kind: 'wealth', gold: houseSum(target.id, 'money') }];
-  const secret = alliances.filter(a => a.scope === 'secret' && [a.houseA, a.houseB].includes(target.id)).map(a => (a.houseA === target.id ? a.houseB : a.houseA));
-  if (secret.length) options.push({ kind: 'alliance', houses: secret });
-  if (gameSettings.gameType === 'LAST_DRAGON') options.push({ kind: 'dragon', houseId: target.id, hasDragon: houseMembers(target.id).some(p => dragonIds.includes(p.id)) });
-  return { mole: options[randomInt(0, options.length - 1)] };
+  // war: an approximate troop count, or the army on the march with its approximate size (off by 1 or 2)
+  const moving = houseWallets(target.id).find(w => w.pendingAttack);
+  if (moving && Math.random() < 0.5) {
+    const cap = findCapital(moving.pendingAttack.targetCapitalId);
+    return { kind: 'movement', movingOn: cap?.name || null, infantry: fuzz((moving.pendingAttack.units?.infantry) || 0), navy: fuzz((moving.pendingAttack.units?.navy) || 0), dragons: (moving.pendingAttack.units?.dragons) || 0 };
+  }
+  return { kind: 'count', infantry: fuzz(houseSum(target.id, 'infantry')), navy: fuzz(houseSum(target.id, 'navy')), dragons: houseSum(target.id, 'dragons'), marching: Boolean(moving) };
 }
 function capitalIncome(c) { const h = findHouse(c.ownerHouseId); return h ? incomePerCapital(h) + (c.id === 'casterly-rock' ? 3 : 0) : 0; }
 function currentHouseView(h) {
@@ -942,7 +948,7 @@ io.on('connection', socket => {
     h.money -= spendCost;
     note(h, 'gold', -spendCost, `Spy mission against House ${target.name}`);
     player.lastSpyRound = round;
-    const mission = SPY_MISSIONS[payload.mission] ? payload.mission : 'troops';
+    const mission = SPY_MISSIONS[payload.mission] ? payload.mission : 'war';
     const odds = spyOdds(spend, target.id, mission);
     const success = Math.random() < odds.success;
     const caught = !success && Math.random() < odds.caught;
