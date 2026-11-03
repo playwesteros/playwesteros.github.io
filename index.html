@@ -16,8 +16,8 @@
   <link rel="stylesheet" href="./style.css?v=63">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
-  <script src="./wheels.js?v=2"></script>
-  <script src="./app.js?v=82" defer></script>
+  <script src="./wheels.js?v=3"></script>
+  <script src="./app.js?v=83" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -348,6 +348,12 @@
               <label for="spyMission">Mission</label><select id="spyMission"><option value="">Choose a mission</option><option value="wealth">Wealth</option><option value="messages">Messages</option><option value="war">War</option></select>
               <label for="spyGold">Gold to spend (2–20)</label><div class="spy-gold-row"><input id="spyGold" type="number" min="2" max="20" placeholder="2–20" inputmode="numeric"><div id="spyOdds" class="spy-odds"></div></div>
               <button class="button button-secondary button-full" type="submit">Attempt spy mission</button>
+            </form>
+            <form id="dragonSpyForm" class="action-card" hidden>
+              <img class="action-icon-image" src="./assets/ui-dragon.png?v=4" alt=""><h3>Hunt the Dragons</h3><p class="muted small-text">Learn if a Dragon hides in a house. Spend 2–20 gold.</p>
+              <label for="dragonSpyTarget">Target house</label><select id="dragonSpyTarget" required></select>
+              <label for="dragonSpyGold">Gold to spend (2–20)</label><div class="spy-gold-row"><input id="dragonSpyGold" type="number" min="2" max="20" placeholder="2–20" inputmode="numeric"><div id="dragonSpyOdds" class="spy-odds"></div></div>
+              <button class="button button-secondary button-full" type="submit">Hunt for a Dragon</button>
             </form></div>
                 <div id="spyReports" class="spy-reports"></div>
               </section>

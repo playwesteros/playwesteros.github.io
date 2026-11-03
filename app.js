@@ -458,6 +458,10 @@
     const prevSpy = $('spyTarget').value;
     $('spyTarget').innerHTML = '<option value="">Choose a house</option>' + state.houses.filter(h => h.id !== house.id && (h.players || []).some(p => !p.left)).map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
     if ([...$('spyTarget').options].some(o => o.value === prevSpy)) $('spyTarget').value = prevSpy;
+    const prevDr = $('dragonSpyTarget').value;
+    $('dragonSpyTarget').innerHTML = $('spyTarget').innerHTML;
+    if ([...$('dragonSpyTarget').options].some(o => o.value === prevDr)) $('dragonSpyTarget').value = prevDr;
+    $('dragonSpyForm').hidden = state.settings?.gameType !== 'LAST_DRAGON';
     const prevGift = $('giftTarget').value;
     $('giftTarget').innerHTML = '<option value="">Choose a player</option>' + state.players.filter(p => p.id !== state.me.id && !p.left && !p.eliminated && p.houseId).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.username)} · House ${escapeHtml(state.houses.find(x => x.id === p.houseId)?.name || '')}</option>`).join('');
     if ([...$('giftTarget').options].some(o => o.value === prevGift)) $('giftTarget').value = prevGift;
@@ -479,8 +483,8 @@
     $('spyReports').innerHTML = state.spyReports.length ? `<div class="subsection-title">Your intelligence reports</div>${state.spyReports.map(spyReportMarkup).join('')}` : '';
   }
 
-  const SPY_PARAMS = { wealth: [0.30, 0.045, 0.60, 0.03], messages: [0.20, 0.04, 0.40, 0.02], war: [0.35, 0.045, 0.75, 0.03] };
-  const SPY_LABEL = { wealth: 'Wealth', messages: 'Messages', war: 'War' };
+  const SPY_PARAMS = { wealth: [0.30, 0.045, 0.60, 0.03], messages: [0.20, 0.04, 0.40, 0.02], war: [0.35, 0.045, 0.75, 0.03], dragon: [0.15, 0.04, 0.80, 0.03] };
+  const SPY_LABEL = { wealth: 'Wealth', messages: 'Messages', war: 'War', dragon: 'Dragons' };
   function spyOddsFor(spend, targetId, mission) {
     const [sb, sp, db, dp] = SPY_PARAMS[mission] || SPY_PARAMS.war;
     const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -498,9 +502,22 @@
       if (f.kind === 'raven') body = `<p>Raven intercepted. <b>${escapeHtml(f.letter.from)}</b> to ${escapeHtml(f.letter.to)}: “${escapeHtml(f.letter.text)}”</p>`;
       else if (f.kind === 'alliance') body = `<p>Secret alliance with ${f.houses.map(id => `House ${escapeHtml(capName(prettyHouse(id)))}`).join(', ')}.</p>`;
       else body = '<p>No ravens flew and no secrets surfaced.</p>';
-    } else if (f.kind === 'movement') body = `<p>Their army is marching on ${escapeHtml(f.movingOn || 'an unknown city')}: about ${f.infantry} infantry, ${f.navy} ships${f.dragons ? `, ${f.dragons} dragon${f.dragons === 1 ? '' : 's'}` : ''}. Counts may be off by 1 or 2.</p>`;
+    } else if (mission === 'dragon') body = f.hasDragon ? '<p>A Dragon hides in this house.</p>' : '<p>No Dragon hides in this house.</p>';
+    else if (f.kind === 'movement') body = `<p>Their army is marching on ${escapeHtml(f.movingOn || 'an unknown city')}: about ${f.infantry} infantry, ${f.navy} ships${f.dragons ? `, ${f.dragons} dragon${f.dragons === 1 ? '' : 's'}` : ''}. Counts may be off by 1 or 2.</p>`;
     else body = `<p>About ${f.infantry} infantry · ${f.navy} ships · ${f.dragons} dragons. Counts may be off by 1 or 2.${f.marching ? '' : ' No army on the march.'}</p>`;
     return `<article class="spy-report">${head}${body}</article>`;
+  }
+  function updateDragonSpyForm() {
+    if (!state?.myHouse || $('dragonSpyForm').hidden) return;
+    const raw = $('dragonSpyGold').value.trim(), spend = Number(raw);
+    const valid = raw !== '' && Number.isInteger(spend) && spend >= 2 && spend <= 20;
+    if (valid && $('dragonSpyTarget').value) {
+      const o = spyOddsFor(spend, $('dragonSpyTarget').value, 'dragon');
+      const diff = o.success >= 0.5 ? 'Easy' : o.success >= 0.3 ? 'Medium' : 'Hard';
+      const danger = o.caught >= 0.6 ? 'High' : o.caught >= 0.35 ? 'Medium' : 'Low';
+      $('dragonSpyOdds').innerHTML = `<span>Difficulty <b class="lvl-${diff === 'Easy' ? 'good' : diff === 'Medium' ? 'mid' : 'bad'}">${diff}</b> \u00b7 ${Math.round(o.success * 100)}%</span><span>Danger <b class="lvl-${danger === 'Low' ? 'good' : danger === 'Medium' ? 'mid' : 'bad'}">${danger}</b> \u00b7 ${Math.round(o.caught * 100)}%</span>`;
+    } else $('dragonSpyOdds').innerHTML = '';
+    lock($('dragonSpyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastDragonSpyRound === state.round ? 'You have already hunted for dragons this round.' : !$('dragonSpyTarget').value ? 'Choose a target house.' : !valid ? 'Spend 2\u201320 gold.' : state.myHouse.money < spend ? 'Not enough gold.' : '');
   }
   function updateSpyForm() {
     const house = state?.myHouse;
@@ -533,6 +550,12 @@
   $('spyGold').addEventListener('input', updateSpyForm);
   $('spyMission').addEventListener('change', updateSpyForm);
   $('spyTarget').addEventListener('change', updateSpyForm);
+  $('dragonSpyGold').addEventListener('input', updateDragonSpyForm);
+  $('dragonSpyTarget').addEventListener('change', updateDragonSpyForm);
+  $('dragonSpyForm').addEventListener('submit', event => {
+    event.preventDefault();
+    emitAction('spy', { targetHouseId: $('dragonSpyTarget').value, mission: 'dragon', spend: Number($('dragonSpyGold').value) });
+  });
 
   function updateDisbandButton() {
     const house = state?.myHouse;
@@ -749,7 +772,7 @@
   }
 
   const HUBS = { money: ['YOUR TREASURY', 'Money', 'hubMoney'], relations: ['COURT & DIPLOMACY', 'Relations', 'hubRelations'], army: ['FORCES & WAR', 'Army', 'hubArmy'] };
-  const SUB_LABEL = { gift: 'Send money & troops', reports: 'Reports', alliances: 'Alliances', treaties: 'Treaties & subsidies', messages: 'Messages', decrees: 'Decrees', hand: 'Hand’s ledger', recruit: 'Recruit & disband', spies: 'Spies' };
+  const SUB_LABEL = { gift: 'Send money & troops', reports: 'Reports', alliances: 'Alliances', treaties: 'Pay taxes & tribute', messages: 'Messages', decrees: 'Decrees', hand: 'Hand’s ledger', recruit: 'Recruit & disband', spies: 'Spies' };
   let currentSub = null;
   function showSub(name) {
     currentSub = name || null;
@@ -1241,7 +1264,7 @@
   }
 
   // House dropdowns: the real <select> stays hidden (value + change events), a custom list shows each house's banner and colour, ordered by house.
-  const HOUSE_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget', 'giftTarget', 'newHandSelect', 'handPlayerSelect'];
+  const HOUSE_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget', 'dragonSpyTarget', 'giftTarget', 'newHandSelect', 'handPlayerSelect'];
   const houseIndex = id => { const i = (state?.houses || []).findIndex(h => h.id === id); return i < 0 ? 99 : i; };
   const houseOfValue = value => {
     const house = state.houses.find(x => x.id === value);
@@ -1383,7 +1406,7 @@
     }
     updateSelectBanners();
     updateRecruitButton();
-    if (state.myHouse) { updateAttackLock(); updateSpyForm(); updateDisbandButton(); }
+    if (state.myHouse) { updateAttackLock(); updateSpyForm(); updateDragonSpyForm(); updateDisbandButton(); }
     window.__wheels?.refresh(state);
     if (wasFocused) {
       const element = $(wasFocused);

@@ -258,7 +258,8 @@ function armySize(h) { return h.infantry + h.navy + h.dragons; }
 const SPY_MISSIONS = {
   wealth: { label: 'Wealth', successBase: 0.30, successPer: 0.045, dangerBase: 0.60, dangerPer: 0.03 },
   messages: { label: 'Messages', successBase: 0.20, successPer: 0.04, dangerBase: 0.40, dangerPer: 0.02 },
-  war: { label: 'War', successBase: 0.35, successPer: 0.045, dangerBase: 0.75, dangerPer: 0.03 }
+  war: { label: 'War', successBase: 0.35, successPer: 0.045, dangerBase: 0.75, dangerPer: 0.03 },
+  dragon: { label: 'Dragons', successBase: 0.15, successPer: 0.04, dangerBase: 0.80, dangerPer: 0.03 }
 };
 function spyOdds(spend, targetId, mission) {
   const m = SPY_MISSIONS[mission] || SPY_MISSIONS.war;
@@ -289,6 +290,7 @@ function spyFindings(mission, target) {
     if (secret.length) options.push({ kind: 'alliance', houses: secret });
     return options.length ? pick(options) : { kind: 'none' };
   }
+  if (mission === 'dragon') return { kind: 'dragon', hasDragon: houseMembers(target.id).some(p => dragonIds.includes(p.id)) };
   // war: an approximate troop count, or the army on the march with its approximate size (off by 1 or 2)
   const moving = houseWallets(target.id).find(w => w.pendingAttack);
   if (moving && Math.random() < 0.5) {
@@ -344,7 +346,7 @@ function viewFor(playerId) {
     crownOffer: Boolean(me && capitals.some(c => c.vacant && c.offerTo === me.id)),
     throneVacant: capitals.some(c => c.vacant),
     isHost: Boolean(me && me.id === hostId), isKing: Boolean(me && me.id === kingPlayerId), isHand: Boolean(me && me.id === handPlayerId),
-    me: me ? { id: me.id, username: me.username, houseId: me.houseId, lastSpyRound: me.lastSpyRound, eliminated: Boolean(me.eliminated) } : null,
+    me: me ? { id: me.id, username: me.username, houseId: me.houseId, lastSpyRound: me.lastSpyRound, lastDragonSpyRound: me.lastDragonSpyRound || 0, eliminated: Boolean(me.eliminated) } : null,
     myHouse: makePrivateHouseView(me?.w || myHouse),
     houses: houses.map(currentHouseView),
     players: [...players.values()].map(p => (me && me.id === kingPlayerId ? { ...playerPublic(p), traitor: Boolean(p.traitor) } : playerPublic(p))),
@@ -937,7 +939,9 @@ io.on('connection', socket => {
     const check = requireHouse(player); if (check.ok === false) return check;
     const h = check;
     if (phase !== 'ACTION') return fail('Spies can only be sent during the action phase.');
-    if (player.lastSpyRound === round) return fail('You have already sent spies this round.');
+    const isDragonHunt = payload.mission === 'dragon';
+    if (isDragonHunt && !isLastDragon()) return fail('Dragon hunts only happen in Last Dragon games.');
+    if (isDragonHunt ? player.lastDragonSpyRound === round : player.lastSpyRound === round) return fail(isDragonHunt ? 'You have already hunted for dragons this round.' : 'You have already sent spies this round.');
     const target = findHouse(String(payload.targetHouseId || ''));
     if (!target || target.id === h.id) return fail('Choose another house as your target.');
     if (!houseMembers(target.id).length) return fail('That house has no players in this game.');
@@ -947,7 +951,7 @@ io.on('connection', socket => {
     if (h.money < spendCost) return fail(`You chose to spend ${spend} gold, but your house only has ${h.money}.`);
     h.money -= spendCost;
     note(h, 'gold', -spendCost, `Spy mission against House ${target.name}`);
-    player.lastSpyRound = round;
+    if (isDragonHunt) player.lastDragonSpyRound = round; else player.lastSpyRound = round;
     const mission = SPY_MISSIONS[payload.mission] ? payload.mission : 'war';
     const odds = spyOdds(spend, target.id, mission);
     const success = Math.random() < odds.success;

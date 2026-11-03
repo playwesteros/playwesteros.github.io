@@ -86,6 +86,7 @@
     {id:'unitAmount',unit:'units',big:1,icon:()=>UNIT_ICON[$('unitSelect')?.value]||'ui-spear',min:()=>1,max:()=>10},
     {id:'disbandAmount',unit:'units',big:1,icon:()=>UNIT_ICON[$('disbandUnit')?.value]||'ui-spear',min:()=>1,max:s=>Math.max(1,hm(s,$('disbandUnit')?.value||'infantry'))},
     {id:'spyGold',unit:'gold',big:1,icon:'game-coins',min:()=>2,max:()=>20},
+    {id:'dragonSpyGold',unit:'gold',big:1,icon:'game-coins',min:()=>2,max:()=>20},
     {id:'attackInfantry',unit:'infantry',icon:'ui-spear',min:()=>0,max:s=>hm(s,'infantry')},
     {id:'attackNavy',unit:'ships',icon:'ui-ship',min:()=>0,max:s=>hm(s,'navy')},
     {id:'attackDragons',unit:'dragons',icon:'ui-dragon',min:()=>0,max:s=>hm(s,'dragons')}
