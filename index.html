@@ -13,11 +13,11 @@
   <meta name="description" content="A temporary multiplayer Great Houses strategy game prototype.">
   <title>War of Westeros — Multiplayer Strategy</title>
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=1">
-  <link rel="stylesheet" href="./style.css?v=62">
+  <link rel="stylesheet" href="./style.css?v=63">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
   <script src="./config.js?v=17" defer></script>
   <script src="./wheels.js?v=2"></script>
-  <script src="./app.js?v=81" defer></script>
+  <script src="./app.js?v=82" defer></script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -43,7 +43,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v2.9.8<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v2.9.9<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -219,8 +219,8 @@
             <p id="relationsPhaseNote" class="muted small-text"></p>
             <div class="sub-menu">
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="alliances" data-cat="alliances"><span id="badgeSubAlliances" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-handshake.png?v=3" alt=""><h3>Alliances</h3></button>
-              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="treaties" data-cat="treaties" id="subTreaties"><span id="badgeSubTreaties" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/ui-letter.png?v=3" alt=""><h3>Treaties &amp; Subsidies</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="messages" data-cat="messages"><span id="badgeSubMessages" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/game-raven.png?v=3" alt=""><h3>Messages</h3></button>
+              <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="treaties" data-cat="treaties" id="subTreaties"><span id="badgeSubTreaties" class="hub-badge" aria-live="polite" hidden></span><img src="./assets/ui-letter.png?v=3" alt=""><h3>Pay Taxes &amp; Tribute</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="decrees" data-cat="decrees" id="subDecrees" hidden><img src="./assets/game-throne.png?v=3" alt=""><h3>Decrees</h3></button>
               <button class="hub-button sub-button" type="button" data-action="open-sub" data-sub="hand" data-cat="hand" id="subHand" hidden><img src="./assets/game-hand.png?v=3" alt=""><h3>Hand’s Ledger</h3></button>
             </div>
@@ -240,7 +240,7 @@
             <div class="sub-page" data-sub="treaties" data-cat="treaties" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section class="panel section-panel hub-block">
-                <div class="section-head"><div><p class="panel-kicker">GOLD, TROOPS &amp; DECREES</p><h2>Treaties &amp; subsidies</h2></div></div>
+                <div class="section-head"><div><p class="panel-kicker">GOLD, TROOPS &amp; DECREES</p><h2>Pay taxes &amp; tribute</h2></div></div>
                 <div class="diplomacy-grid"><form id="treatyForm" class="action-card">
               <img class="action-icon-image" src="./assets/game-raven.png?v=3" alt=""><h3>Make a treaty</h3><p class="muted small-text">Send gold, troops or ships with a message.</p>
               <label for="treatyTarget">House</label><select id="treatyTarget" required></select>
