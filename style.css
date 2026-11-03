@@ -846,3 +846,11 @@ body.house-themed .footer { border-color: var(--line); }
 .dec-off{display:none!important}
 .decree-pick{display:flex;flex-direction:column;gap:6px;max-width:340px;margin:4px 0 16px}
 .decree-pick label{font-size:.76rem;letter-spacing:.14em;text-transform:uppercase;opacity:.75}
+.wv-head{display:grid;place-items:center;height:34px;margin-bottom:4px}
+.wv-icon{width:30px;height:30px;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+.hdrop-icon{width:28px;height:28px;flex:0 0 28px;object-fit:contain}
+.army-mode{margin:0 0 14px}
+.seg{display:inline-flex;border:1px solid var(--line-bright,#3a3d44);border-radius:8px;overflow:hidden}
+.seg button{background:transparent;color:var(--muted,#a29a86);border:0;border-right:1px solid var(--line-bright,#3a3d44);padding:9px 18px;font:inherit;cursor:pointer}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:color-mix(in srgb,var(--gold,#c8a86c) 22%,#101318);color:var(--gold-bright,#e6c97a);box-shadow:inset 0 -2px 0 var(--gold,#c8a86c)}

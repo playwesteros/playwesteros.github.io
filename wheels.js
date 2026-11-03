@@ -7,6 +7,7 @@
   const el=(n,a,p)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
 
   const ROW=40;
+  const IMG=name=>'./assets/'+name+'.png?v=4';
   function Wheel(mount,o){
     let min=0,max=0,value=0,items=[];
     const rows=o.rows||3,pad=((rows-1)/2)*ROW;
@@ -17,7 +18,10 @@
     view.appendChild(list);
     const band=document.createElement('div');band.className='wv-band';band.style.height=ROW+'px';band.style.top=pad+'px';
     const cap=document.createElement('div');cap.className='wv-cap';
-    root.append(view,band,cap);mount.appendChild(root);
+    const head=document.createElement('div');head.className='wv-head';
+    const ic=document.createElement('img');ic.className='wv-icon';ic.alt='';head.appendChild(ic);
+    function setIcon(name){if(name){const src=IMG(name);if(ic.getAttribute('src')!==src)ic.setAttribute('src',src);head.hidden=false}else head.hidden=true}
+    root.append(view,band,cap);mount.append(head,root);
     const clamp=v=>Math.max(min,Math.min(max,Math.round(v)));
     function build(){
       list.textContent='';items=[];
@@ -68,24 +72,68 @@
     view.addEventListener('keydown',e=>{const big=Math.max(1,Math.round((max-min)/10));
       const m={ArrowUp:1,ArrowRight:1,ArrowDown:-1,ArrowLeft:-1,PageUp:big,PageDown:-big};
       if(e.key in m){e.preventDefault();set(value+m[e.key])}else if(e.key==='Home'){e.preventDefault();set(min)}else if(e.key==='End'){e.preventDefault();set(max)}});
-    return {setRange,get value(){return value}};
+    return {setRange,setIcon,get value(){return value}};
   }
 
+  const UNIT_ICON={infantry:'ui-spear',navy:'ui-ship',dragons:'ui-dragon'};
   const hm=(s,k)=>Math.max(0,Number(s.myHouse?.[k])||0);
   const cost=()=>Number(($('unitSelect')?.value==='navy'?$('navyCostLabel'):$('infantryCostLabel'))?.textContent)||4;
   const SPECS=[];
   [['gift','giftGold','giftInfantry','giftNavy'],['treaty','treatyGold','treatyInfantry','treatyNavy'],['decree','decreeGold','decreeInfantry','decreeNavy']].forEach(([,g,i,n])=>{
-    SPECS.push({id:g,unit:'gold',min:()=>0,max:s=>hm(s,'money')},{id:i,unit:'infantry',min:()=>0,max:s=>hm(s,'infantry')},{id:n,unit:'ships',min:()=>0,max:s=>hm(s,'navy')});
+    SPECS.push({id:g,unit:'gold',icon:'game-coins',min:()=>0,max:s=>hm(s,'money')},{id:i,unit:'infantry',icon:'ui-spear',min:()=>0,max:s=>hm(s,'infantry')},{id:n,unit:'ships',icon:'ui-ship',min:()=>0,max:s=>hm(s,'navy')});
   });
   SPECS.push(
-    {id:'unitAmount',unit:'units',big:1,min:()=>1,max:()=>10},
-    {id:'disbandAmount',unit:'units',big:1,min:()=>1,max:s=>Math.max(1,hm(s,$('disbandUnit')?.value||'infantry'))},
-    {id:'spyGold',unit:'gold',big:1,min:()=>2,max:()=>20},
-    {id:'attackInfantry',unit:'infantry',min:()=>0,max:s=>hm(s,'infantry')},
-    {id:'attackNavy',unit:'ships',min:()=>0,max:s=>hm(s,'navy')},
-    {id:'attackDragons',unit:'dragons',min:()=>0,max:s=>hm(s,'dragons')}
+    {id:'unitAmount',unit:'units',big:1,icon:()=>UNIT_ICON[$('unitSelect')?.value]||'ui-spear',min:()=>1,max:()=>10},
+    {id:'disbandAmount',unit:'units',big:1,icon:()=>UNIT_ICON[$('disbandUnit')?.value]||'ui-spear',min:()=>1,max:s=>Math.max(1,hm(s,$('disbandUnit')?.value||'infantry'))},
+    {id:'spyGold',unit:'gold',big:1,icon:'game-coins',min:()=>2,max:()=>20},
+    {id:'attackInfantry',unit:'infantry',icon:'ui-spear',min:()=>0,max:s=>hm(s,'infantry')},
+    {id:'attackNavy',unit:'ships',icon:'ui-ship',min:()=>0,max:s=>hm(s,'navy')},
+    {id:'attackDragons',unit:'dragons',icon:'ui-dragon',min:()=>0,max:s=>hm(s,'dragons')}
   );
   SPECS.forEach(s=>{if(s.id.startsWith('decree')&&s.id!=='decreeMessage')s.max=()=>20});
+  // Coloured dropdowns with an icon, in the style of the player pickers.
+  const DROPS={
+    unitSelect:{infantry:['ui-spear','#c8a86c'],navy:['ui-ship','#4f8fb5']},
+    disbandUnit:{infantry:['ui-spear','#c8a86c'],navy:['ui-ship','#4f8fb5'],dragons:['ui-dragon','#d9602f']},
+    spyMission:{wealth:['game-coins','#d9b24a'],messages:['game-raven','#9fb4c9'],war:['game-swords','#c9574c']},
+    decreeKind:{tax:['game-coins','#d9b24a'],hand:['game-hand','#8fa8c4'],traitor:['game-chain','#b5483f'],crown:['game-throne','#c8a86c']}
+  };
+  const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  function drop(id){
+    const sel=$(id),meta=DROPS[id];if(!sel)return;
+    let dd=sel.nextElementSibling&&sel.nextElementSibling.classList.contains('hdrop')?sel.nextElementSibling:null;
+    if(!dd){
+      dd=document.createElement('div');dd.className='hdrop';
+      dd.innerHTML='<button type="button" class="hdrop-btn" aria-haspopup="listbox"></button><div class="hdrop-list" role="listbox"></div>';
+      sel.classList.add('hdrop-native');sel.after(dd);
+      dd.querySelector('.hdrop-btn').addEventListener('click',()=>{if(sel.disabled)return;const open=!dd.classList.contains('open');document.querySelectorAll('.hdrop.open').forEach(d=>d.classList.remove('open'));dd.classList.toggle('open',open)});
+      dd.querySelector('.hdrop-list').addEventListener('click',e=>{const it=e.target.closest('.hdrop-item');if(!it)return;sel.value=it.dataset.value;sel.dispatchEvent(new Event('change',{bubbles:true}));dd.classList.remove('open');drop(id)});
+    }
+    const row=o=>{const m=meta[o.value];return (m?`<img class="hdrop-icon" src="${IMG(m[0])}" alt="">`:'')+`<span>${esc(o.textContent)}</span>`};
+    const cur=sel.selectedOptions[0];
+    dd.querySelector('.hdrop-btn').innerHTML=cur&&meta[cur.value]?row(cur):'<span class="muted">Choose…</span>';
+    dd.style.setProperty('--house-color',(cur&&meta[cur.value]?meta[cur.value][1]:'')||'');
+    dd.classList.toggle('has-house',Boolean(cur&&meta[cur.value]));
+    dd.querySelector('.hdrop-list').innerHTML=[...sel.options].filter(o=>meta[o.value]).map(o=>`<div class="hdrop-item ${o.value===sel.value?'sel':''}" role="option" data-value="${esc(o.value)}" style="--house-color:${meta[o.value][1]}">${row(o)}</div>`).join('');
+  }
+  const dropAll=()=>Object.keys(DROPS).forEach(drop);
+  // Recruit and disband share one card: pick the action, then the unit.
+  function recruitMenu(){
+    const rf=$('recruitForm'),df=$('disbandForm');if(!rf||!df||$('armyMode'))return;
+    const box=document.createElement('div');box.className='army-mode seg';box.id='armyMode';box.setAttribute('role','group');box.setAttribute('aria-label','Action');
+    box.innerHTML='<button type="button" data-v="recruit" aria-pressed="true">Recruit</button><button type="button" data-v="disband" aria-pressed="false">Disband</button>';
+    rf.parentElement.insertAdjacentElement('beforebegin',box);
+    const apply=()=>{const m=box.querySelector('[aria-pressed="true"]').dataset.v;rf.classList.toggle('dec-off',m!=='recruit');df.classList.toggle('dec-off',m!=='disband')};
+    box.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;box.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));apply()});
+    apply();
+  }
+  const FORM_ICON={recruitForm:{infantry:'ui-army',navy:'ui-ship'},disbandForm:{infantry:'ui-soldier',navy:'ui-ship',dragons:'ui-dragon'}};
+  function formIcons(){
+    [['recruitForm','unitSelect'],['disbandForm','disbandUnit']].forEach(([f,s])=>{
+      const img=$(f)?.querySelector('.action-icon-image'),name=FORM_ICON[f][$(s)?.value];
+      if(img&&name){const src=IMG(name);if(img.getAttribute('src')!==src)img.setAttribute('src',src)}
+    });
+  }
   let last=null;
   function build(spec){
     const input=$(spec.id);if(!input||spec.wheel)return;
@@ -97,17 +145,19 @@
   }
   function refresh(state){
     last=state;if(!state||!state.myHouse)return;
+    recruitMenu();dropAll();formIcons();
     SPECS.forEach(spec=>{
       build(spec);if(!spec.wheel)return;
       const min=spec.min(state),max=spec.max(state),raw=spec.input.value.trim(),cur=raw===''?min:Number(raw);
       spec.wheel.setRange(min,max,Number.isFinite(cur)?cur:min);
+      spec.wheel.setIcon(typeof spec.icon==='function'?spec.icon():spec.icon);
       const want=String(spec.wheel.value);
       if(spec.input.value!==want){spec.input.value=want;spec.input.dispatchEvent(new Event('input',{bubbles:true}))}
       spec.input.disabled=false;
     });
   }
   document.addEventListener('submit',()=>{[120,500,1000].forEach(t=>setTimeout(()=>refresh(last),t))});
-  document.addEventListener('change',e=>{if(e.target&&(e.target.id==='unitSelect'||e.target.id==='disbandUnit'))refresh(last)});
+  document.addEventListener('change',e=>{if(e.target&&(e.target.id==='unitSelect'||e.target.id==='disbandUnit')){refresh(last)}else if(e.target&&e.target.id==='spyMission')drop('spyMission')});
   // One decree menu: a dropdown picks which decree to write.
   function decreeMenu(){
     const page=document.querySelector('.sub-page[data-sub="decrees"]');if(!page||$('decreeKind'))return;
@@ -118,7 +168,7 @@
     const parts={tax:['decreeForm','kingDecrees'],hand:['newHandForm'],traitor:['kingTools'],crown:['kingForfeit']};
     const all=[...new Set(Object.values(parts).flat())];
     const apply=()=>{const on=parts[$('decreeKind').value];all.forEach(id=>{const e=$(id);if(e)e.classList.toggle('dec-off',!on.includes(id))})};
-    $('decreeKind').addEventListener('change',apply);apply();
+    $('decreeKind').addEventListener('change',()=>{apply();drop('decreeKind')});apply();drop('decreeKind');
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',decreeMenu);else decreeMenu();
   window.__wheels={refresh};
