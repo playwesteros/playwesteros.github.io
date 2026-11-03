@@ -119,6 +119,7 @@ function resetWorld(keepPlayers = true, rematch = false) {
       p.traitor = false;
       p.isKing = false;
       p.isHand = false;
+      delete p.ai;
       p.eliminated = false;
       delete p.w; p.cityId = null;
     }
@@ -376,7 +377,9 @@ function ack(callback, result) {
 }
 function fail(message) { return { ok: false, message }; }
 function ok(message) { return { ok: true, message }; }
+const HANDLERS = {};
 function action(socket, eventName, handler) {
+  HANDLERS[eventName] = handler;
   socket.on(eventName, (payload = {}, callback) => {
     try {
       const roomCode = socket.data.gameCode;
@@ -1061,12 +1064,6 @@ io.on('connection', socket => {
     if (areAllied(check.id, target.id)) return fail('Your houses already have an alliance.');
     if (allianceOffers.some(o => o.fromHouseId === check.id && o.toHouseId === target.id)) return fail('Your house already has an outstanding offer to that house.');
     if (allianceOffers.some(o => o.fromHouseId === target.id && o.toHouseId === check.id)) return fail(`House ${target.name} already offered you an alliance. Accept it in the Relations menu.`);
-    if (houseIsBotOnly(target.id)) {
-      alliances.push({ id: randomUUID(), houseA: check.id, houseB: target.id, scope, createdRound: round });
-      addEvent('important', `House ${target.name} accepted an alliance with House ${check.name}.`);
-      notify('alliance', [check.id, target.id], [], 'An alliance is forged', `House ${capWord(check.name)} and House ${capWord(target.name)} now stand together.`, [check.id, target.id]);
-      return ok(`House ${target.name} accepted your alliance.`);
-    }
     allianceOffers.unshift({ id: randomUUID(), fromHouseId: check.id, toHouseId: target.id, scope, round });
     addEvent('normal', scope === 'public' ? `House ${check.name} publicly offered an alliance to House ${target.name}.` : `House ${check.name} sent a secret alliance offer.`);
     return ok('Alliance offer sent.');
@@ -1120,11 +1117,6 @@ io.on('connection', socket => {
     const treaty = { id: randomUUID(), fromPlayerId: player.id, fromHouseId: h.id, toHouseId: target.id, gold, infantry, navy, message, round, status: 'pending' };
     treaties.unshift(treaty);
     addEvent('normal', `House ${h.name} sent a treaty to House ${target.name}.`);
-    if (houseIsBotOnly(target.id)) {
-      closeTreaty(treaty, 'accepted');
-      addEvent('important', `House ${target.name} accepted a treaty from House ${h.name}.`);
-      return ok(`House ${target.name} accepted your treaty.`);
-    }
     return ok('Treaty sent. Your offering is held until they reply.');
   });
 
@@ -1362,6 +1354,181 @@ function fightBattle(attacker, allyHouse) {
     if (allyHouse) allyHouse.pendingAttack = null;
   }
 }
+
+// ---- Bot players ----------------------------------------------------------
+// Bots play through the same action handlers as people (HANDLERS), on a slow timer so the table can follow them.
+const HOUSE_WORDS = { stark: 'Winter is coming.', lannister: 'A Lannister always pays his debts.', baratheon: 'Ours is the Fury.', targaryen: 'Fire and Blood.', tyrell: 'Growing Strong.', greyjoy: 'We Do Not Sow.', martell: 'Unbowed, Unbent, Unbroken.', arryn: 'As High as Honor.' };
+const pickOne = list => list[randomInt(0, list.length - 1)];
+function botAi(bot) {
+  if (!bot.ai) bot.ai = { aggr: 0.3 + Math.random() * 0.6, diplo: 0.3 + Math.random() * 0.6, due: {}, turnFor: 0, turnAt: 0, turnDone: false, dipRound: 0 };
+  return bot.ai;
+}
+function botDo(bot, name, payload) {
+  try { const r = HANDLERS[name] ? HANDLERS[name](bot, payload, null) : null; return Boolean(r && r.ok !== false); }
+  catch (error) { console.error(`Bot action ${name} failed:`, error); return false; }
+}
+// True once a randomised "thinking" delay has passed for this item; after it returns true it is spent for good.
+function botReady(bot, key, min = 2500, max = 8000) {
+  const ai = botAi(bot), now = Date.now();
+  if (!(key in ai.due)) { ai.due[key] = now + randomInt(min, max); return false; }
+  if (now < ai.due[key]) return false;
+  ai.due[key] = Infinity;
+  return true;
+}
+const botLeads = bot => houseMembers(bot.houseId).filter(p => p.isBot && !p.eliminated)[0]?.id === bot.id;
+function botSay(bot, text, toPlayer) {
+  if (toPlayer && !toPlayer.isBot) return botDo(bot, 'send-chat', { scope: 'secret', targetPlayerIds: [toPlayer.id], message: text });
+  return botDo(bot, 'send-chat', { scope: 'public', message: text });
+}
+function botReply(bot, text, sender) {
+  const t = text.toLowerCase(), h = bot.w, words = HOUSE_WORDS[bot.houseId] || '';
+  if (/alli|ally|pact|join|together/.test(t)) {
+    if (sender && areAllied(bot.houseId, sender.houseId)) return `We already stand together. ${words}`;
+    return pickOne([`An alliance? Perhaps. Let us see if your deeds match your words. ${words}`, 'I will hear your terms. Do not waste my time.', 'Friends are useful. Enemies are expensive. Let us talk.']);
+  }
+  if (/attack|war|fight|kill|destroy|invade|threat|crush/.test(t)) return pickOne([`Come, then. My banners are many and my patience is short. ${words}`, 'Threats are wind. My army is steel.', 'You would be wise to measure your army before you measure your words.']);
+  if (/gold|coin|money|pay|tax|tribute|loan|send|help/.test(t)) return pickOne(['Gold is not wheat to be scattered. Make your case.', `I keep ${h.money > 25 ? 'a healthy' : 'a thin'} purse, and I keep it close.`, 'Earn my trust and my coin may follow.']);
+  if (/king|crown|throne|hand|rule/.test(t)) return pickOne(['The Iron Throne finds the ambitious. Mind your head.', 'A crown is only heavy for those who wear it badly.', 'Many want the throne. Few survive it.']);
+  if (/peace|truce|friend|thank|sorry/.test(t)) return pickOne(['Peace is good for trade. For now.', 'Kind words cost nothing. I will remember them.', 'We shall see.']);
+  if (/spy|raven|secret|traitor/.test(t)) return pickOne(['Ravens fly both ways, my lord.', 'Every house has secrets. Mine are well guarded.', 'Careful whom you accuse.']);
+  return pickOne([words || 'We shall see.', 'I hear you. Speak plainly and I may answer in kind.', `House ${capWord(h.name)} marks your words.`]);
+}
+function botAttackPlan(bot) {
+  const h = bot.w, ai = botAi(bot);
+  let best = null;
+  for (const c of capitals) {
+    if (c.contested || (!c.vacant && !c.ownerHouseId) || c.ownerPlayerId === bot.id || c.ownerHouseId === bot.houseId) continue;
+    if (c.ownerHouseId && areAllied(bot.houseId, c.ownerHouseId)) continue;
+    const home = (c.ownerHouseId === 'stark' && c.id === 'winterfell') || (c.ownerHouseId === 'martell' && c.id === 'sunspear') || (c.ownerHouseId === 'arryn' && c.id === 'the-eyrie');
+    const need = c.vacant ? 1 : c.defense + 3 + (home ? 2 : 0) - (ai.aggr > 0.7 ? 1 : 0);
+    const units = { infantry: 0, navy: 0, dragons: 0 };
+    let left = need;
+    const takeInf = Math.min(h.infantry, left); units.infantry = takeInf; left -= takeInf;
+    if (left > 0 && c.id !== 'winterfell') { const n = Math.min(h.navy, left); units.navy = n; left -= n; }
+    if (left > 0 && h.dragons) { const d = Math.min(h.dragons, Math.ceil(left / 6)); units.dragons = d; left -= d * 6; }
+    if (left > 0 || forceStrength(units) < 1) continue;
+    if (units.infantry < h.infantry && !c.vacant) units.infantry += 1;
+    const score = (c.id === 'kings-landing' ? 8 : 0) + (c.vacant ? 6 : 0) + (c.ownerHouseId ? 2 : 0) - need * 0.4 + Math.random();
+    if (!best || score > best.score) best = { c, units, score };
+  }
+  if (!best) return null;
+  if (!best.c.vacant && Math.random() > 0.08 + ai.aggr * 0.27) return null;
+  return best;
+}
+function botTurn(bot) {
+  const h = bot.w, ai = botAi(bot);
+  // Recruit with what the treasury can spare, keeping the army no larger than income can feed.
+  const income = playerIncome(bot);
+  const roomForTroops = Math.floor(income * 1.1) + 3 - armySize(h);
+  const spendable = h.money - Math.max(0, armySize(h) - 8);
+  if (roomForTroops > 0 && spendable >= h.infantryCost) {
+    const n = Math.min(10, roomForTroops, Math.floor(spendable * (0.6 + ai.aggr * 0.4) / h.infantryCost));
+    if (n >= 1) botDo(bot, 'purchase', { unit: 'infantry', amount: n });
+  }
+  if (h.navy < 4 && Math.random() < 0.25 && h.money >= h.navyCost * 2 && armySize(h) + 2 <= Math.floor(income * 1.1) + 3) botDo(bot, 'purchase', { unit: 'navy', amount: randomInt(1, 2) });
+  // Attack, and take the throne when it can be taken.
+  let target = null;
+  if (round >= 3 && !h.pendingAttack && !h.hasAttackedThisRound) {
+    const plan = botAttackPlan(bot);
+    if (plan && botDo(bot, 'plan-attack', { targetCapitalId: plan.c.id, ...plan.units })) target = plan.c;
+  }
+  // Seek friends: offer an alliance and a word to its leader.
+  const mine = alliances.filter(a => [a.houseA, a.houseB].includes(bot.houseId)).length;
+  if (ai.dipRound !== round && mine < 3 && Math.random() < ai.diplo * 0.75) {
+    ai.dipRound = round;
+    const options = houses.filter(x => x.id !== bot.houseId && houseMembers(x.id).length && !houseFallen(x) && !areAllied(bot.houseId, x.id) && x.id !== target?.ownerHouseId
+      && !allianceOffers.some(o => (o.fromHouseId === bot.houseId && o.toHouseId === x.id) || (o.fromHouseId === x.id && o.toHouseId === bot.houseId)));
+    if (options.length) {
+      const pick = pickOne(options);
+      if (botDo(bot, 'offer-alliance', { targetHouseId: pick.id, scope: Math.random() < 0.3 ? 'secret' : 'public' })) {
+        const to = houseMembers(pick.id).find(p => !p.isBot);
+        if (to) botSay(bot, pickOne([`House ${capWord(h.name)} offers you an alliance. Together we would be hard to break. ${HOUSE_WORDS[bot.houseId] || ''}`, `Let us not waste strength on each other, House ${capWord(pick.name)}. Accept my alliance.`]), to);
+      }
+    }
+  } else if (Math.random() < 0.2) {
+    botSay(bot, pickOne([HOUSE_WORDS[bot.houseId] || 'The realm is watching.', `House ${capWord(h.name)} is watching the realm.`, 'Trust is a luxury in this game.', 'Some will rise this round. Some will not.']));
+  }
+}
+function botTick() {
+  if (gameOver || !canDiplomacy()) return false;
+  const bots = [...players.values()].filter(p => p.isBot && !p.left && !p.eliminated && p.w && p.houseId && !houseFallen(findHouse(p.houseId)));
+  let acted = false;
+  const now = Date.now();
+  for (const bot of bots) {
+    const ai = botAi(bot), h = bot.w, lead = botLeads(bot);
+    const done = v => { if (v) acted = true; };
+    // The crown is offered to this bot.
+    const throne = capitals.find(c => c.id === 'kings-landing');
+    if (throne?.vacant && throne.offerTo === bot.id && botReady(bot, `crown${round}`)) done(botDo(bot, 'crown-choice', { accept: Math.random() < 0.55 + ai.aggr * 0.4 }));
+    // King: name a Hand when there is none, and charge taxes.
+    if (bot.id === kingPlayerId) {
+      const hand = handPlayerId ? players.get(handPlayerId) : null;
+      if ((!hand || hand.left || hand.eliminated) && botReady(bot, `hand${round}:${handPlayerId || ''}`, 3000, 9000)) {
+        const pool = [...players.values()].filter(p => p.id !== bot.id && !p.left && !p.eliminated && p.houseId);
+        const friends = pool.filter(p => areAllied(bot.houseId, p.houseId));
+        if (pool.length) done(botDo(bot, 'replace-hand', { playerId: pickOne(friends.length ? friends : pool).id }));
+      }
+      if (h.commandUsedRound !== round && botReady(bot, `decree${round}`, 5000, 14000) && Math.random() < 0.7) {
+        done(botDo(bot, 'issue-decree', { gold: randomInt(3, 8), infantry: 0, navy: 0, message: pickOne(['The crown requires its due.', 'Tribute for the Iron Throne.', 'Pay your taxes, loyal lords.']) }));
+      }
+    }
+    // Answer alliance offers and treaties for a house with only bots.
+    if (lead && houseIsBotOnly(bot.houseId)) {
+      for (const o of allianceOffers.filter(x => x.toHouseId === bot.houseId)) {
+        if (!botReady(bot, `ao${o.id}`)) continue;
+        const marching = h.pendingAttack && findCapital(h.pendingAttack.targetCapitalId)?.ownerHouseId === o.fromHouseId;
+        const crowded = alliances.filter(a => [a.houseA, a.houseB].includes(bot.houseId)).length >= 3;
+        done(botDo(bot, 'respond-alliance', { offerId: o.id, accept: !marching && Math.random() < (crowded ? 0.2 : 0.4 + ai.diplo * 0.45) }));
+      }
+      for (const t of treaties.filter(x => x.status === 'pending' && x.toHouseId === bot.houseId)) {
+        if (botReady(bot, `tr${t.id}`)) done(botDo(bot, 'respond-treaty', { treatyId: t.id, accept: Math.random() < 0.9 }));
+      }
+    }
+    // Decide whether to pay a royal decree.
+    for (const d of taxLedger) {
+      const r = d.recipients.find(x => x.houseId === bot.houseId && x.state === 'pending');
+      if (!r || d.kingPlayerId === bot.id || !botReady(bot, `dec${d.id}`, 3000, 10000)) continue;
+      const afford = h.money >= d.gold && h.infantry >= d.infantry && h.navy >= d.navy;
+      const friend = areAllied(bot.houseId, d.kingHouseId);
+      const willing = Math.random() < 0.3 + ai.diplo * 0.3 + (friend ? 0.25 : 0) - (d.gold > h.money * 0.5 ? 0.25 : 0);
+      if (afford && willing) done(botDo(bot, 'respond-decree', { decreeId: d.id }));
+    }
+    // Settle disputed spoils in its own favour.
+    for (const s of spoils) {
+      if (s.status !== 'open' || ![s.houseA, s.houseB].includes(bot.houseId) || s.claims[bot.houseId]) continue;
+      if (lead && botReady(bot, `sp${s.id}`)) done(botDo(bot, 'claim-spoils', { spoilId: s.id, claimHouseId: bot.houseId }));
+    }
+    // Reply to private messages, and to public ones that name it.
+    const sees = privateMessages.filter(m => m.senderId !== bot.id && (m.targets || []).some(t => t.id === bot.id) && m.round >= round - 1);
+    const pub = publicMessages.filter(m => m.senderId !== bot.id && m.round >= round - 1 && players.get(m.senderId) && !players.get(m.senderId).isBot
+      && (m.message.toLowerCase().includes(bot.username.toLowerCase()) || (lead && houseIsBotOnly(bot.houseId) && m.message.toLowerCase().includes(`house ${h.name.toLowerCase()}`))));
+    for (const m of [...sees, ...pub]) {
+      const sender = players.get(m.senderId);
+      if (!sender || sender.isBot || !botReady(bot, `msg${m.id}`, 3000, 9000)) continue;
+      const text = botReply(bot, m.message, sender);
+      const sent = botSay(bot, text, m.scope === 'secret' ? sender : null);
+      if (sent && /alli|ally|pact|join|together/.test(m.message.toLowerCase()) && sender.houseId && sender.houseId !== bot.houseId && !areAllied(bot.houseId, sender.houseId)
+        && !allianceOffers.some(o => (o.fromHouseId === bot.houseId && o.toHouseId === sender.houseId) || (o.fromHouseId === sender.houseId && o.toHouseId === bot.houseId)) && Math.random() < 0.3 + ai.diplo * 0.5) {
+        botDo(bot, 'offer-alliance', { targetHouseId: sender.houseId, scope: m.scope === 'secret' ? 'secret' : 'public' });
+      }
+      done(sent);
+      break;
+    }
+    // Once per round, take a turn during the action phase.
+    if (phase === 'ACTION') {
+      if (ai.turnFor !== round) { ai.turnFor = round; ai.turnAt = now + randomInt(4000, 16000); ai.turnDone = false; }
+      if (!ai.turnDone && now >= ai.turnAt) { ai.turnDone = true; botTurn(bot); acted = true; }
+    }
+  }
+  return acted;
+}
+setInterval(() => {
+  for (const code of [...gameRooms.keys()]) {
+    const room = gameRooms.get(code);
+    if (!room || !room.players || ![...room.players.values()].some(p => p.isBot)) continue;
+    try { withWorld(code, () => { if (botTick()) broadcastState(code); }); } catch (error) { console.error('Bot tick failed:', error); }
+  }
+}, 2500);
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Iron Throne multiplayer server listening on port ${PORT}`);
