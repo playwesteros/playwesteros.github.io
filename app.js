@@ -1153,8 +1153,18 @@
     const player = state.players.find(p => p.id === person.id);
     return { id: person.id, name: person.username, houseId: player?.houseId || null };
   }
+  // A king with no Hand is taken straight to the decrees menu to appoint one (once per round until they have).
+  let handPromptKey = null;
+  function maybePromptHand() {
+    if (!state?.me || !state.isKing || state.hand || !['ACTION', 'RESOLUTION'].includes(state.phase)) { if (!state?.isKing || state?.hand) handPromptKey = null; return; }
+    if (announceShowing || !$('announceOverlay').hidden || !$('decreeOverlay').hidden) return;
+    const key = `${state.me.id}:${state.round}`;
+    if (handPromptKey === key) return;
+    handPromptKey = key;
+    openHub('relations', 'decrees');
+  }
   function checkRoleChanges() {
-    if (!state?.me || !gameCode) return;
+    if (!state?.me || !gameCode || document.hidden) return;
     loadAnnounced();
     if (state.phase === 'LOBBY') {
       if (announced.king || announced.hand) { announced = { king: null, hand: null }; saveAnnounced(); }
@@ -1172,9 +1182,14 @@
     if (!announceShowing) showNextAnnouncement();
   }
   // ---- Event notices: alliances, traitor labels, attacks, battle results ----
-  const NOTICE_LABEL = { decree: 'ROYAL DECREE', crown: 'THE CROWN', desertion: 'DESERTION', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT' };
-  const NOTICE_MID = { 'spy-caught': 'game-spy', alliance: 'game-handshake', 'alliance-broken': 'game-chain', attacked: 'game-swords', 'battle-won': 'game-swords', 'battle-lost': 'game-swords' };
-  const NOTICE_GOOD = new Set(['alliance', 'battle-won']);
+  const NOTICE_LABEL = { decree: 'ROYAL DECREE', crown: 'THE CROWN', desertion: 'DESERTION', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT', siege: 'UNDER SIEGE', sacked: 'SACKED', 'city-fell': 'YOUR CITY FELL' };
+  const NOTICE_MID = { 'spy-caught': 'game-spy', alliance: 'game-handshake', 'alliance-broken': 'game-chain', attacked: 'game-swords', 'battle-won': 'game-swords', 'battle-lost': 'game-swords', siege: 'game-swords', sacked: 'game-swords' };
+  const NOTICE_GOOD = new Set(['alliance', 'battle-won', 'spy-caught']);
+  const NOTICE_NEUTRAL = new Set(['decree', 'crown', 'notice']); // news, not good or bad: no red/green edge
+  // After being away, only these still matter: a broken alliance, a siege, or your own city falling.
+  const BACKLOG_KINDS = new Set(['alliance-broken', 'siege', 'city-fell']);
+  let wasAway = true; // true on page load and whenever the tab was hidden
+  document.addEventListener('visibilitychange', () => { if (document.hidden) wasAway = true; else if (state) { checkNotices(); checkRoleChanges(); } });
   const noticeKey = () => `warOfWesterosNotices:${gameCode}`;
   let seenNoticeIds = null;
   function checkNotices() {
@@ -1185,9 +1200,14 @@
       seenNoticeIds = new Set(raw ? JSON.parse(raw) : []);
       if (!raw) (state.notices || []).forEach(n => seenNoticeIds.add(n.id));
     }
+    if (document.hidden) { wasAway = true; return; } // popups wait until the tab is visible again
     const fresh = (state.notices || []).filter(n => !seenNoticeIds.has(n.id)).reverse();
+    const backlog = wasAway && fresh.length > 2;
+    wasAway = false;
     if (!fresh.length) return;
-    fresh.forEach(n => { seenNoticeIds.add(n.id); announceQueue.push({ notice: n }); });
+    fresh.forEach(n => seenNoticeIds.add(n.id));
+    // A pile of missed popups collapses to what still matters; the latest king and hand are announced by checkRoleChanges.
+    (backlog ? fresh.filter(n => BACKLOG_KINDS.has(n.kind)) : fresh).forEach(n => announceQueue.push({ notice: n }));
     try { localStorage.setItem(noticeKey(), JSON.stringify([...seenNoticeIds].slice(-150))); } catch { /* storage unavailable */ }
     if (!announceShowing) showNextAnnouncement();
   }
@@ -1200,6 +1220,7 @@
     if (!item) {
       announceShowing = false; $('announceOverlay').hidden = true;
       checkDecreePopup(); // a decree that arrived meanwhile follows straight after
+      maybePromptHand();
       return;
     }
     announceShowing = true;
@@ -1249,7 +1270,7 @@
       $('announceStage').classList.add('is-notice');
       $('announceStage').innerHTML = banners.length === 2 && mid ? `${banners[0]}<img class="notice-mid" src="./assets/${mid}.png?v=3" alt="">${banners[1]}` : banners.join('');
       $('announceName').innerHTML = `<span class="notice-text">${escapeHtml(n.text)}</span>`;
-      $('announceOverlay').querySelector('.announce-card').dataset.tone = NOTICE_GOOD.has(n.kind) ? 'good' : 'bad';
+      $('announceOverlay').querySelector('.announce-card').dataset.tone = NOTICE_GOOD.has(n.kind) ? 'good' : NOTICE_NEUTRAL.has(n.kind) ? '' : 'bad';
       $('announceOverlay').hidden = false;
       clearTimeout(announceTimer);
       announceTimer = setTimeout(closeAnnouncement, 7000);
@@ -1396,8 +1417,8 @@
     renderWaitingRoom();
     renderEndgame();
     renderCrownOffer();
+    checkNotices(); // event notices first, so e.g. "sacked" comes before the new king popup
     checkRoleChanges();
-    checkNotices();
     if (state.phase === 'HAND_SELECTION') {
       renderKingSelection();
       updateSelectBanners();
@@ -1413,6 +1434,7 @@
     renderHub();
     renderMap();
     checkDecreePopup();
+    maybePromptHand();
 
     for (const [id, value] of Object.entries(savedValues)) {
       const element = $(id);
