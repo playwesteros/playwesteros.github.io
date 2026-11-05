@@ -47,10 +47,11 @@
     </div>
     <div class="topbar-right">
       <span id="connectionPill" class="status-pill status-offline"><i></i><span>Connecting</span></span>
+      <span id="phaseTimer" class="phase-timer" title="Time left in this phase" hidden></span>
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v1.0.6<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v1.0.7<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -101,6 +102,7 @@
         <label class="check-row" for="friendlyFireInput"><input id="friendlyFireInput" name="friendlyFire" type="checkbox" checked> Friendly fire</label>
         <p class="muted small-text setup-note">On: players can attack cities held by their own house, and allies can attack each other (the alliance breaks). Off: neither is allowed.</p>
         <p id="gameTypeNote" class="muted small-text setup-note"></p>
+        <button class="button button-secondary button-full" type="button" data-action="adv-open-setup">Advanced settings…</button>
         <button class="button button-primary button-full" type="submit">Save setup and continue to house selection <span>→</span></button>
         <div id="hostSetupError" class="form-error" aria-live="polite"></div>
       </form>
@@ -120,6 +122,37 @@
     </section>
   </main>
 
+  <div id="playerMenu" class="player-menu" role="menu" aria-label="Your settings" hidden>
+    <div class="pm-head"><strong id="pmName"></strong><small id="pmHouse"></small></div>
+    <div class="pm-scroll">
+    <button class="pm-item" type="button" role="menuitem" data-action="pm-name">Change name</button>
+    <div class="pm-field"><label for="pmScheme">Colour scheme</label><select id="pmScheme"></select></div>
+    <details class="pm-popups"><summary>Popups</summary><p class="muted small-text">Your choice overrides the host’s popup settings.</p><div id="pmPopupList"></div></details>
+    <button id="pmHost" class="pm-item" type="button" role="menuitem" data-action="pm-host" hidden>Host game settings…</button>
+    </div>
+    <button class="pm-item pm-leave" type="button" role="menuitem" data-action="pm-leave">Leave game</button>
+  </div>
+  <dialog id="advDialog" class="lobby-dialog adv-dialog">
+    <form id="advForm">
+      <p class="eyebrow">HOST ONLY</p><h2>Advanced game settings</h2>
+      <p id="advLockNote" class="muted small-text" hidden>The game has begun, so only popups, the round timer and players can change now.</p>
+      <fieldset class="adv-group" id="advRules"><legend>Rules</legend>
+        <label class="check-row"><input id="advAlliances" type="checkbox"> Allow alliances</label>
+        <label class="check-row"><input id="advHand" type="checkbox"> Hand of the King</label>
+        <label class="check-row"><input id="advBuffs" type="checkbox"> House buffs &amp; nerfs</label>
+      </fieldset>
+      <fieldset class="adv-group" id="advHouses"><legend>Houses in the game</legend><div id="advHouseList" class="adv-grid"></div></fieldset>
+      <fieldset class="adv-group"><legend>Round time limit</legend>
+        <select id="advTimer"><option value="0">No limit</option><option value="60">1 minute</option><option value="120">2 minutes</option><option value="180">3 minutes</option><option value="300">5 minutes</option><option value="600">10 minutes</option><option value="900">15 minutes</option></select>
+        <p class="muted small-text">Applies to the action and court phases. Resolution moves on after 20 seconds.</p>
+      </fieldset>
+      <fieldset class="adv-group"><legend>Popups shown to everyone</legend><div id="advPopupList" class="adv-grid"></div><p class="muted small-text">Players can still override these for themselves.</p></fieldset>
+      <fieldset class="adv-group" id="advPlayersBox"><legend>Players</legend><div id="advPlayers"></div></fieldset>
+      <div id="advError" class="form-error" aria-live="polite"></div>
+      <div class="adv-actions"><button class="button button-primary button-full" type="submit">Save settings</button>
+      <button class="button button-quiet button-full" type="button" data-action="adv-close">Cancel</button></div>
+    </form>
+  </dialog>
   <dialog id="lobbyEditMenu" class="lobby-dialog">
     <p class="eyebrow">YOUR PLAYER</p><h2>What would you like to change?</h2>
     <button class="button button-secondary button-full" type="button" data-action="edit-menu-name">Change name</button>

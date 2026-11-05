@@ -183,7 +183,8 @@
 
   // ---- The whole interface wears your house colour ----
   function applyTheme() {
-    const house = state?.me?.houseId ? state.houses.find(h => h.id === state.me.houseId) : null;
+    const pref = schemePref();
+    const house = pref === 'none' ? null : pref !== 'auto' && state?.houses?.some(h => h.id === pref) ? state.houses.find(h => h.id === pref) : (state?.me?.houseId ? state.houses.find(h => h.id === state.me.houseId) : null);
     document.body.classList.toggle('house-themed', Boolean(house));
     if (house?.color) document.body.style.setProperty('--accent', house.color);
     else document.body.style.removeProperty('--accent');
@@ -208,6 +209,7 @@
   // Why `house` can't be taken by player `excludeId` right now (null = available). Mirrors the server rules.
   function minorHouseReason(house, excludeId) {
     const s = state.settings || {};
+    if ((s.disabledHouses || []).includes(house.id)) return 'Not in this game';
     if (house.id === 'targaryen' && s.gameType === 'LAST_DRAGON') return 'Not available in Last Dragon';
     const others = house.players.filter(p => !p.left && p.id !== excludeId).length;
     if (s.gameType === 'TEAMS') {
@@ -955,7 +957,7 @@
     if (!frame?.contentWindow || !state?.houses) return;
     const houses = state.houses.map(h => {
       const reason = minorHouseReason(h, state.me?.id);
-      const hiddenHouse = h.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON';
+      const hiddenHouse = (h.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON') || (state.settings?.disabledHouses || []).includes(h.id);
       const locked = Boolean(reason) && !reason.startsWith('Already claimed') && !reason.startsWith('Team full');
       const claimed = Boolean(reason) && !locked;
       return {
@@ -993,7 +995,7 @@
     if (!bot) return;
     editingBotId = botId;
     $('botNameInput').value = bot.username;
-    $('botHouseSelect').innerHTML = state.houses.filter(h => !(h.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON')).map(h => {
+    $('botHouseSelect').innerHTML = state.houses.filter(h => !(h.id === 'targaryen' && state.settings?.gameType === 'LAST_DRAGON') && !(state.settings?.disabledHouses || []).includes(h.id)).map(h => {
       const unavailable = Boolean(minorHouseReason(h, bot.id));
       return `<option value="${escapeHtml(h.id)}" ${unavailable ? 'disabled' : ''}>${escapeHtml(h.name)}</option>`;
     }).join('');
@@ -1156,6 +1158,7 @@
   // A king with no Hand is taken straight to the decrees menu to appoint one (once per round until they have).
   let handPromptKey = null;
   function maybePromptHand() {
+    if (state?.settings?.handEnabled === false) return;
     if (!state?.me || !state.isKing || state.hand || !['ACTION', 'RESOLUTION'].includes(state.phase)) { if (!state?.isKing || state?.hand) handPromptKey = null; return; }
     if (announceShowing || !$('announceOverlay').hidden || !$('decreeOverlay').hidden) return;
     const key = `${state.me.id}:${state.round}`;
@@ -1175,7 +1178,7 @@
       const next = roleSnapshot(state[role]);
       const prev = announced[role];
       if (!next || (prev && prev.id === next.id)) continue;
-      announceQueue.push({ role, prev, next });
+      if (popupAllowed('king-hand') && !state.gameOver) announceQueue.push({ role, prev, next }); // no "new king" popup on the move that ends the game
       announced[role] = next;
     }
     saveAnnounced();
@@ -1206,7 +1209,7 @@
     if (!fresh.length) return;
     fresh.forEach(n => seenNoticeIds.add(n.id));
     // A pile of missed popups collapses to what still matters; the latest king and hand are announced by checkRoleChanges.
-    (backlog ? fresh.filter(n => BACKLOG_KINDS.has(n.kind)) : fresh).forEach(n => announceQueue.push({ notice: n }));
+    (backlog ? fresh.filter(n => BACKLOG_KINDS.has(n.kind)) : fresh).filter(n => !NOTICE_POPUP[n.kind] || popupAllowed(NOTICE_POPUP[n.kind])).forEach(n => announceQueue.push({ notice: n }));
     try { localStorage.setItem(noticeKey(), JSON.stringify([...seenNoticeIds].slice(-150))); } catch { /* storage unavailable */ }
     if (!announceShowing) showNextAnnouncement();
   }
@@ -1401,6 +1404,10 @@
     updateScreens();
     applyTheme();
     if (!state) return;
+    applyRuleVisibility();
+    tickPhaseTimer();
+    if ($('advDialog').open) renderAdvPlayers();
+    if (!$('playerMenu').hidden) renderPlayerMenu();
     // Preserve all form selections and text while another player causes a shared-state update.
     const savedValues = {};
     document.querySelectorAll('input[id], select[id], textarea[id]').forEach(element => {
@@ -1414,9 +1421,9 @@
     claimPickedHouse();
 
     renderWaitingRoom();
+    checkNotices(); // event notices first (siege, sacked...), then the victory/defeat screen, then new king/Hand
     renderEndgame();
     renderCrownOffer();
-    checkNotices(); // event notices first, so e.g. "sacked" comes before the new king popup
     checkRoleChanges();
     if (state.phase === 'HAND_SELECTION') {
       renderKingSelection();
@@ -1646,7 +1653,7 @@
   $('hostSetupForm').addEventListener('submit', event => {
     event.preventDefault();
     $('hostSetupError').textContent = '';
-    const settings = { maxPlayers: Number($('maxPlayersInput').value), gameType: $('gameTypeInput').value, teamSize: Number($('teamSizeInput').value || 2), dragonCount: Number($('dragonCountInput').value || 1), dragonRounds: Number($('dragonRoundsInput').value || 5), friendlyFire: $('friendlyFireInput').checked };
+    const settings = { ...advDraft, maxPlayers: Number($('maxPlayersInput').value), gameType: $('gameTypeInput').value, teamSize: Number($('teamSizeInput').value || 2), dragonCount: Number($('dragonCountInput').value || 1), dragonRounds: Number($('dragonRoundsInput').value || 5), friendlyFire: $('friendlyFireInput').checked };
     socket.emit(preparingHost ? 'set-room-settings' : 'set-game-settings', preparingHost ? { ...settings, clientToken } : settings, result => {
       if (!result?.ok) $('hostSetupError').textContent = result?.message || 'Could not save game setup.';
       else {
@@ -1755,6 +1762,13 @@
       else openNameEditor();
       return;
     }
+    if (action === 'pm-name') { closePlayerMenu(); openNameEditor(); return; }
+    if (action === 'pm-host') { closePlayerMenu(); openAdvanced('live'); return; }
+    if (action === 'pm-leave') { closePlayerMenu(); if (window.confirm('Leave this game?')) $('logoutButton').click(); return; }
+    if (action === 'adv-open-setup') { openAdvanced('setup'); return; }
+    if (action === 'adv-close') { $('advDialog').close(); return; }
+    if (action === 'adv-mute') { emitAction('mute-player', { playerId: button.dataset.playerId, muted: button.dataset.muted === '1' }); return; }
+    if (action === 'adv-kick') { const t = state?.players?.find(p => p.id === button.dataset.playerId); if (t && window.confirm(`Remove ${t.username} from the game?`)) emitAction('kick-player', { playerId: t.id }); return; }
     if (action === 'edit-menu-name') { openNameEditor(); return; }
     if (action === 'edit-menu-house') { openHouseChooser(); return; }
     if (action === 'close-edit-menu') { $('lobbyEditMenu').close(); return; }
@@ -1884,8 +1898,133 @@
     $('chatMessage').value = '';
   });
 
+
+  // ---- Personal settings dropdown (press the throne in the corner) ----
+  const POPUP_TYPES = [
+    { id: 'alliance', label: 'Alliance formed', kinds: ['alliance'] },
+    { id: 'alliance-broken', label: 'Alliance broken', kinds: ['alliance-broken'] },
+    { id: 'battle', label: 'Battle won or lost', kinds: ['battle-won', 'battle-lost'] },
+    { id: 'attacked', label: 'Your city attacked', kinds: ['attacked'] },
+    { id: 'city-fell', label: 'Your city fell', kinds: ['city-fell'] },
+    { id: 'siege', label: 'King’s Landing under siege', kinds: ['siege'] },
+    { id: 'sacked', label: 'King’s Landing sacked', kinds: ['sacked'] },
+    { id: 'crown', label: 'Crown news', kinds: ['crown'] },
+    { id: 'king-hand', label: 'New king or Hand', kinds: [] },
+    { id: 'decree', label: 'Royal decree sent', kinds: ['decree'] },
+    { id: 'spy-caught', label: 'Spies caught', kinds: ['spy-caught'] },
+    { id: 'desertion', label: 'Troops deserted', kinds: ['desertion'] },
+    { id: 'traitor', label: 'Branded a traitor', kinds: ['traitor'] }
+  ];
+  const NOTICE_POPUP = Object.fromEntries(POPUP_TYPES.flatMap(t => t.kinds.map(k => [k, t.id])));
+  const SETUP_HOUSES = [['stark', 'Stark'], ['lannister', 'Lannister'], ['baratheon', 'Baratheon'], ['targaryen', 'Targaryen'], ['tyrell', 'Tyrell'], ['greyjoy', 'Greyjoy'], ['martell', 'Martell'], ['arryn', 'Arryn']];
+  function readPref(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch { return fallback; } }
+  function writePref(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ } }
+  // A player's own choice (Show / Hide) beats the host's setting; "Default" follows the host.
+  function popupAllowed(id) {
+    const mine = readPref('warOfWesterosPopupPrefs', {})[id];
+    if (mine === 'show') return true;
+    if (mine === 'hide') return false;
+    return !(state?.settings?.disabledPopups || []).includes(id);
+  }
+  const schemePref = () => readPref('warOfWesterosScheme', 'auto');
+
+  function closePlayerMenu() { $('playerMenu').hidden = true; }
+  function renderPlayerMenu() {
+    const me = state?.me;
+    $('pmName').textContent = me?.username || '';
+    const house = me?.houseId ? state.houses.find(h => h.id === me.houseId) : null;
+    $('pmHouse').textContent = house ? `House ${capName(house.name)}` : 'No house yet';
+    const scheme = schemePref();
+    $('pmScheme').innerHTML = [['auto', house ? `My house (${capName(house.name)})` : 'My house'], ['none', 'None (classic gold)'], ...state.houses.map(h => [h.id, `House ${capName(h.name)}`])]
+      .map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === scheme ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
+    const prefs = readPref('warOfWesterosPopupPrefs', {});
+    $('pmPopupList').innerHTML = POPUP_TYPES.map(t => {
+      const off = (state.settings?.disabledPopups || []).includes(t.id);
+      return `<div class="pm-popup-row"><span>${escapeHtml(t.label)}</span><select data-popup-pref="${t.id}" aria-label="${escapeHtml(t.label)}"><option value="default" ${!prefs[t.id] ? 'selected' : ''}>Host: ${off ? 'off' : 'on'}</option><option value="show" ${prefs[t.id] === 'show' ? 'selected' : ''}>Always show</option><option value="hide" ${prefs[t.id] === 'hide' ? 'selected' : ''}>Never show</option></select></div>`;
+    }).join('');
+    $('pmHost').hidden = !state.isHost;
+  }
+  function togglePlayerMenu() {
+    const menu = $('playerMenu');
+    if (!menu.hidden) { closePlayerMenu(); return; }
+    renderPlayerMenu();
+    const r = document.querySelector('.brand-mark').getBoundingClientRect();
+    menu.style.top = `${Math.round(r.bottom + 8)}px`;
+    menu.style.left = `${Math.max(8, Math.round(r.left))}px`;
+    menu.hidden = false;
+  }
+  $('pmScheme').addEventListener('change', () => { writePref('warOfWesterosScheme', $('pmScheme').value); applyTheme(); });
+  $('pmPopupList').addEventListener('change', event => {
+    const sel = event.target.closest('[data-popup-pref]'); if (!sel) return;
+    const prefs = readPref('warOfWesterosPopupPrefs', {});
+    if (sel.value === 'default') delete prefs[sel.dataset.popupPref]; else prefs[sel.dataset.popupPref] = sel.value;
+    writePref('warOfWesterosPopupPrefs', prefs);
+  });
+  document.addEventListener('click', event => { if (!$('playerMenu').hidden && !event.target.closest('#playerMenu, .brand-mark')) closePlayerMenu(); });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') closePlayerMenu(); });
+
+  // ---- Host advanced settings ----
+  let advMode = 'live'; // 'setup': the room is still being created, so the choices ride along with the setup form
+  let advDraft = { alliancesEnabled: true, handEnabled: true, houseBuffs: true, disabledHouses: [], disabledPopups: [], roundSeconds: 0 };
+  const advFrom = src => ({ alliancesEnabled: src.alliancesEnabled !== false, handEnabled: src.handEnabled !== false, houseBuffs: src.houseBuffs !== false, disabledHouses: [...(src.disabledHouses || [])], disabledPopups: [...(src.disabledPopups || [])], roundSeconds: Number(src.roundSeconds || 0) });
+  function renderAdvPlayers() {
+    const list = (state?.players || []).filter(p => !p.left && p.id !== state.me?.id);
+    $('advPlayersBox').hidden = advMode === 'setup';
+    $('advPlayers').innerHTML = list.length ? list.map(p => `<div class="adv-player"><span>${escapeHtml(p.username)}${p.isBot ? ' <small>(bot)</small>' : ''}${p.muted ? ' <small>muted</small>' : ''}</span>${p.isBot ? '' : `<button class="button button-quiet button-small" type="button" data-action="adv-mute" data-player-id="${escapeHtml(p.id)}" data-muted="${p.muted ? '0' : '1'}">${p.muted ? 'Unmute' : 'Mute'}</button>`}<button class="button button-danger button-small" type="button" data-action="adv-kick" data-player-id="${escapeHtml(p.id)}">Remove</button></div>`).join('') : '<p class="muted small-text">No other players yet.</p>';
+  }
+  function openAdvanced(mode) {
+    advMode = mode;
+    const src = mode === 'setup' ? (state?.settings?.configured ? advFrom(state.settings) : advDraft) : advFrom(state.settings || {});
+    const lobby = mode === 'setup' || state?.phase === 'LOBBY';
+    $('advAlliances').checked = src.alliancesEnabled; $('advHand').checked = src.handEnabled; $('advBuffs').checked = src.houseBuffs;
+    $('advTimer').value = String(src.roundSeconds);
+    if (![...$('advTimer').options].some(o => o.value === String(src.roundSeconds))) { const o = new Option(`${Math.round(src.roundSeconds / 60)} minutes`, String(src.roundSeconds)); $('advTimer').add(o); $('advTimer').value = o.value; }
+    $('advHouseList').innerHTML = SETUP_HOUSES.map(([id, name]) => `<label class="check-row"><input type="checkbox" data-adv-house="${id}" ${src.disabledHouses.includes(id) ? '' : 'checked'}> ${name}</label>`).join('');
+    $('advPopupList').innerHTML = POPUP_TYPES.map(t => `<label class="check-row"><input type="checkbox" data-adv-popup="${t.id}" ${src.disabledPopups.includes(t.id) ? '' : 'checked'}> ${escapeHtml(t.label)}</label>`).join('');
+    $('advRules').disabled = !lobby; $('advHouses').disabled = !lobby; $('advLockNote').hidden = lobby;
+    $('advError').textContent = '';
+    renderAdvPlayers();
+    $('advDialog').showModal();
+  }
+  $('advForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const payload = {
+      alliancesEnabled: $('advAlliances').checked, handEnabled: $('advHand').checked, houseBuffs: $('advBuffs').checked,
+      disabledHouses: [...document.querySelectorAll('[data-adv-house]')].filter(i => !i.checked).map(i => i.dataset.advHouse),
+      disabledPopups: [...document.querySelectorAll('[data-adv-popup]')].filter(i => !i.checked).map(i => i.dataset.advPopup),
+      roundSeconds: Number($('advTimer').value || 0)
+    };
+    if (advMode === 'setup') { advDraft = advFrom(payload); $('advDialog').close(); return; }
+    if (!socket?.connected) { $('advError').textContent = 'Not connected to the game server yet.'; return; }
+    socket.emit('set-advanced-settings', payload, result => {
+      if (!result?.ok) $('advError').textContent = result?.message || 'Could not save settings.';
+      else { showToast(result.message || 'Game settings saved.', 'success'); $('advDialog').close(); }
+    });
+  });
+
+  // ---- Rules the host switched off + round countdown ----
+  function applyRuleVisibility() {
+    const s = state?.settings || {};
+    const noAlliances = s.alliancesEnabled === false, noHand = s.handEnabled === false;
+    const allianceBtn = document.querySelector('#hubRelations [data-sub="alliances"][data-action="open-sub"]');
+    if (allianceBtn) allianceBtn.hidden = noAlliances;
+    if (noAlliances && currentSub === 'alliances') showSub(null);
+    $('newHandForm').hidden = noHand;
+  }
+  function tickPhaseTimer() {
+    const el = $('phaseTimer');
+    const ends = state?.phaseEndsAt;
+    if (!ends || state.gameOver || !state.me) { el.hidden = true; return; }
+    const left = Math.max(0, Math.ceil((ends - Date.now()) / 1000));
+    el.hidden = false;
+    el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    el.classList.toggle('is-low', left <= 15);
+  }
+  setInterval(tickPhaseTimer, 500);
+
   $('homeLink').addEventListener('click', event => {
     event.preventDefault();
+    if (state?.me && event.target.closest('.brand-mark')) { togglePlayerMenu(); return; }
     if (!window.confirm('Return to the start page? You will leave this game session.')) return;
     localStorage.removeItem(usernameKey);
     localStorage.removeItem(tokenKey);

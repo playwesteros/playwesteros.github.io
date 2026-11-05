@@ -1402,6 +1402,7 @@ function resolveDueAttacks() {
 function fightBattle(attacker, allyHouse) {
   {
     const order = attacker.pendingAttack;
+    const noticesBefore = new Set(notices.map(n => n.id)), wasOver = Boolean(gameOver);
     const target = findCapital(order.targetCapitalId);
     const ffOff = !gameSettings.friendlyFire && target && target.ownerHouseId && (target.ownerHouseId === attacker.id || areAllied(attacker.id, target.ownerHouseId));
     if (!target || (!target.ownerHouseId && !target.vacant) || target.ownerPlayerId === attacker.playerId || ffOff) {
@@ -1458,6 +1459,8 @@ function fightBattle(attacker, allyHouse) {
       }
       addEvent('battle', target.vacant || defense < 0 ? `House ${attacker.name} marched into the empty ${target.name} unopposed.` : `House ${attacker.name} captured ${target.name} from House ${defender?.name || 'an unknown house'} (attack ${attackStrength} vs. defense ${defense}).`);
       checkVictory();
+      // The move that ends the game: only the siege popup (if any) and then the victory/defeat screen. Drop the sacked / city-fell / battle popups it created.
+      if (gameOver && !wasOver) notices = notices.filter(n => noticesBefore.has(n.id) || n.kind === 'siege');
     } else {
       addEvent('battle', `House ${attacker.name} failed to capture ${target.name} (attack ${attackStrength} vs. defense ${defense}).`);
       const lost = [attacker.id, allyHouse?.id].filter(Boolean);
