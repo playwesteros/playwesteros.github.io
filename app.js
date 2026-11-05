@@ -36,7 +36,7 @@
   const $ = id => document.getElementById(id);
   function setThronePage(mode) {
     const frame = $('throneFrame');
-    if (frame) frame.src = mode === 'entry' ? './throne-photo.html?mode=entry&v=18' : './throne-photo.html?v=18';
+    if (frame) frame.src = mode === 'entry' ? './throne-photo.html?mode=entry&v=19' : './throne-photo.html?v=19';
   }
   function transitionThrone(mode) {
     const frame = $('throneFrame');
@@ -1194,8 +1194,16 @@
   }
   function showNextAnnouncement() {
     const item = announceQueue.shift();
-    if (!item) { announceShowing = false; $('announceOverlay').hidden = true; return; }
+    if (!item) {
+      announceShowing = false; $('announceOverlay').hidden = true;
+      checkDecreePopup(); // a decree that arrived meanwhile follows straight after
+      return;
+    }
     announceShowing = true;
+    // Back-to-back popups: the overlay stays up and only the card changes, fading in as the new content lands.
+    const swapCard = $('announceOverlay').querySelector('.announce-card');
+    swapCard.classList.remove('swap-out', 'swap-in');
+    if (!$('announceOverlay').hidden) { void swapCard.offsetWidth; swapCard.classList.add('swap-in'); }
     if (item.reveal) {
       const r = item.reveal;
       const house = state.houses.find(h => h.id === r.houseId);
@@ -1257,10 +1265,18 @@
     clearTimeout(announceTimer);
     announceTimer = setTimeout(closeAnnouncement, item.prev ? 7000 : 5500);
   }
+  let announceClosing = false;
   function closeAnnouncement() {
     clearTimeout(announceTimer);
-    $('announceOverlay').hidden = true;
-    setTimeout(showNextAnnouncement, 350);
+    if (announceClosing) return; // ignore extra taps while the card is mid-transition
+    const overlay = $('announceOverlay');
+    if (overlay.hidden) { showNextAnnouncement(); return; }
+    const card = overlay.querySelector('.announce-card');
+    const more = announceQueue.length > 0;
+    // More popups waiting: fade the card out and straight into the next one, no gap. Otherwise fade the whole overlay away.
+    if (more) { card.classList.remove('swap-in'); card.classList.add('swap-out'); } else overlay.classList.add('is-leaving');
+    announceClosing = true;
+    setTimeout(() => { announceClosing = false; overlay.classList.remove('is-leaving'); card.classList.remove('swap-out'); showNextAnnouncement(); }, 260);
   }
 
   // House dropdowns: the real <select> stays hidden (value + change events), a custom list shows each house's banner and colour, ordered by house.
