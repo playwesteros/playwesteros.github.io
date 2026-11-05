@@ -780,7 +780,10 @@
     if (!pane) return;
     pane.querySelectorAll('.sub-menu').forEach(menu => { menu.hidden = Boolean(currentSub); });
     pane.querySelectorAll('.sub-page').forEach(page => { page.hidden = page.dataset.sub !== currentSub; });
-    $('hubTitle').textContent = HUBS[currentHub][1] + (currentSub ? ` · ${SUB_LABEL[currentSub]}` : '');
+    // Header: small text = category (Money), big text = the menu you are in (Send money & troops).
+    $('hubEyebrow').textContent = currentSub ? HUBS[currentHub][1] : HUBS[currentHub][0];
+    $('hubTitle').textContent = currentSub ? SUB_LABEL[currentSub] : HUBS[currentHub][1];
+    $('hubBack').hidden = !currentSub;
     $('hubOverlay').querySelector('.hub-sheet').dataset.cat = currentSub || currentHub;
     $('hubOverlay').querySelector('.hub-sheet-body').scrollTop = 0;
     updateBadges();
@@ -853,7 +856,7 @@
     tog.hidden = !older;
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
     $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
-    const fb = $('forfeitCrownButton'); $('kingForfeit').hidden = !state.isKing; $('subTreaties').hidden = state.isKing; if (state.isKing && currentSub === 'treaties') showSub(null); if (fb) { lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
+    const fb = $('forfeitCrownButton'); $('kingForfeit').hidden = !state.isKing; $('subTreaties').hidden = state.isKing || state.isHand; if ((state.isKing || state.isHand) && currentSub === 'treaties') showSub(null); if (fb) { lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
     $('armyNavy').textContent = h.navy + (h.navyBuilding ? ` (+${h.navyBuilding} building)` : '');
