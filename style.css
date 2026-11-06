@@ -925,3 +925,5 @@ body.mobile-device .hub-sheet-head { padding: 12px 12px 10px; }
 
 .adv-group .check-row { display: flex; align-items: center; gap: 0; }
 .adv-actions { position: sticky; bottom: -22px; margin: 0 -22px -22px; padding: 12px 22px 22px; background: linear-gradient(180deg, transparent, #151719 22%); }
+
+button.round-pill.is-ready { background: color-mix(in srgb, #5fae6b 28%, transparent); color: #bfe8c5; border-color: #5fae6b; }

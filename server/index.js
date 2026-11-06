@@ -78,7 +78,7 @@ let startHouseCount;
 
 // ---- Advanced host settings ----------------------------------------------
 const POPUP_KINDS = ['alliance', 'alliance-broken', 'spy-caught', 'decree', 'crown', 'siege', 'sacked', 'city-fell', 'attacked', 'battle', 'desertion', 'traitor', 'king-hand'];
-const ADVANCED_DEFAULTS = { alliancesEnabled: true, handEnabled: true, houseBuffs: true, disabledHouses: [], disabledPopups: [], roundSeconds: 0 };
+const ADVANCED_DEFAULTS = { alliancesEnabled: true, handEnabled: true, houseBuffs: true, disabledHouses: [], disabledPopups: [], roundSeconds: 0, readyMode: 'bypass' };
 const buffsOn = () => gameSettings.houseBuffs !== false;
 const handOn = () => gameSettings.handEnabled !== false;
 const alliancesOn = () => gameSettings.alliancesEnabled !== false;
@@ -128,10 +128,12 @@ function resetWorld(keepPlayers = true, rematch = false) {
       p.lastSpyRound = 0;
       p.traitor = false;
       p.isKing = false;
+      p.ready = false;
       p.isHand = false;
       delete p.ai;
       p.eliminated = false;
       delete p.w; p.cityId = null;
+      if (p.pendingName) { if (!nameTaken(p.pendingName, p.id)) p.username = p.pendingName; delete p.pendingName; }
     }
     if (rematch) for (const p of players.values()) { p.houseId = keptHouses.get(p.id) || null; }
   }
@@ -360,6 +362,7 @@ function viewFor(playerId) {
     phase, round, hostId, king: kingPlayerId && players.has(kingPlayerId) ? { id: kingPlayerId, username: players.get(kingPlayerId).username } : null,
     hand: handPlayerId && players.has(handPlayerId) ? { id: handPlayerId, username: players.get(handPlayerId).username } : null,
     settings: { ...gameSettings },
+    ready: { ...readyInfo(), me: Boolean(me && me.ready) },
     phaseEndsAt: gameSettings.roundSeconds > 0 && !gameOver && phaseTimers.get(activeRoomCode)?.key === `${round}:${phase}` ? phaseTimers.get(activeRoomCode).endsAt : null,
     gameOver: gameOver ? { ...gameOver, winners: gameOver.winners } : null,
     dragonsLeft: isLastDragon() ? dragonIds.filter(id => !dragonDefeated(id)).length : null,
@@ -367,7 +370,7 @@ function viewFor(playerId) {
     crownOffer: Boolean(me && capitals.some(c => c.vacant && c.offerTo === me.id)),
     throneVacant: capitals.some(c => c.vacant),
     isHost: Boolean(me && me.id === hostId), isKing: Boolean(me && me.id === kingPlayerId), isHand: Boolean(me && me.id === handPlayerId),
-    me: me ? { id: me.id, username: me.username, houseId: me.houseId, lastSpyRound: me.lastSpyRound, lastDragonSpyRound: me.lastDragonSpyRound || 0, eliminated: Boolean(me.eliminated) } : null,
+    me: me ? { id: me.id, username: me.username, pendingName: me.pendingName || null, houseId: me.houseId, lastSpyRound: me.lastSpyRound, lastDragonSpyRound: me.lastDragonSpyRound || 0, eliminated: Boolean(me.eliminated) } : null,
     myHouse: makePrivateHouseView(me?.w || myHouse),
     houses: houses.map(currentHouseView),
     players: [...players.values()].map(p => (me && me.id === kingPlayerId ? { ...playerPublic(p), traitor: Boolean(p.traitor) } : playerPublic(p))),
@@ -514,7 +517,8 @@ function parseAdvanced(payload, prev = {}) {
   const disabledPopups = [...new Set((Array.isArray(get('disabledPopups')) ? get('disabledPopups') : []).map(String))].filter(k => POPUP_KINDS.includes(k));
   const roundSeconds = Number(get('roundSeconds') || 0);
   if (roundSeconds !== 0 && (!Number.isInteger(roundSeconds) || roundSeconds < 30 || roundSeconds > 3600)) return { error: 'Choose a round time limit between 30 seconds and 60 minutes, or none.' };
-  return { alliancesEnabled: get('alliancesEnabled') !== false, handEnabled: get('handEnabled') !== false, houseBuffs: get('houseBuffs') !== false, disabledHouses, disabledPopups, roundSeconds };
+  const readyMode = ['wait', 'bypass', 'off'].includes(get('readyMode')) ? get('readyMode') : 'bypass';
+  return { alliancesEnabled: get('alliancesEnabled') !== false, handEnabled: get('handEnabled') !== false, houseBuffs: get('houseBuffs') !== false, disabledHouses, disabledPopups, roundSeconds, readyMode };
 }
 // Enough houses must stay in the game for the player limit.
 function housesProblem(cfg) {
@@ -549,8 +553,12 @@ function houseError(h, playerId) {
   return others ? `House ${h.name} is already taken.` : null;
 }
 // Names only have to be unique inside one lobby.
-function nameTaken(name, exceptId) { const n = String(name).toLowerCase(); return [...players.values()].some(p => !p.left && p.id !== exceptId && p.username.toLowerCase() === n); }
+function nameTaken(name, exceptId) { const n = String(name).toLowerCase(); return [...players.values()].some(p => !p.left && p.id !== exceptId && (p.username.toLowerCase() === n || (p.pendingName && p.pendingName.toLowerCase() === n))); }
 const nameTakenMsg = name => `The name “${name}” is already used in this lobby. Choose a different one.`;
+// Players who can press Ready: everyone in the game except the host (who decides when to move on).
+function readyPlayers() { return [...players.values()].filter(p => !p.left && !p.isBot && !p.eliminated && p.houseId && p.connected && p.id !== hostId); }
+function readyInfo() { const list = readyPlayers(); return { mode: gameSettings.readyMode || 'bypass', ready: list.filter(p => p.ready).length, total: list.length }; }
+function clearReady() { for (const p of players.values()) p.ready = false; }
 function isHost(player) { return Boolean(player && player.id === hostId); }
 function canDiplomacy() { return phase === 'ACTION' || phase === 'COURT'; }
 function houseMembers(houseId) { return [...players.values()].filter(p => p.houseId === houseId && !p.left); }
@@ -790,6 +798,11 @@ io.on('connection', socket => {
     const name = String(payload.username || '').trim().replace(/\s+/g, ' ');
     if (name.length < 2 || name.length > 22) return fail('Name must be between 2 and 22 characters.');
     if (nameTaken(name, player.id)) return fail(nameTakenMsg(name));
+    if (phase !== 'LOBBY') {
+      if (name === player.username) { delete player.pendingName; return ok('Your name stays the same.'); }
+      player.pendingName = name;
+      return ok(`Your new name, ${name}, will take effect after this game ends.`);
+    }
     player.username = name;
     return ok('Your name has been updated.');
   });
@@ -1010,7 +1023,7 @@ io.on('connection', socket => {
     const h = check;
     const unit = payload.unit;
     const amount = Number(payload.amount);
-    if (!Number.isInteger(amount) || amount < 1 || amount > 10) return fail('Choose a whole number of units between 1 and 10.');
+    if (!Number.isInteger(amount) || amount < 1) return fail('Choose a whole number of units, at least 1.');
     if (!['infantry', 'navy'].includes(unit)) return fail('That unit type is not available.');
     const cost = unit === 'infantry' ? h.infantryCost : h.navyCost;
     const total = cost * amount;
@@ -1027,7 +1040,8 @@ io.on('connection', socket => {
     const h = requireHouse(player); if (h.ok === false) return h;
     if (phase !== 'ACTION') return fail('Units can be disbanded during the action phase.');
     const unit = String(payload.unit || '');
-    if (!['infantry', 'navy', 'dragons'].includes(unit)) return fail('Choose a unit type to disband.');
+    if (unit === 'dragons') return fail('Dragons cannot be disbanded.');
+    if (!['infantry', 'navy'].includes(unit)) return fail('Choose a unit type to disband.');
     const amount = Number(payload.amount);
     if (!Number.isInteger(amount) || amount < 1) return fail('Choose a whole number of units to disband.');
     if (amount > h[unit]) return fail(`You only have ${h[unit]} ${unit}.`);
@@ -1321,11 +1335,23 @@ io.on('connection', socket => {
     return ok('Message sent.');
   });
 
-  action(socket, 'advance-phase', (player) => {
+  action(socket, 'advance-phase', (player, payload = {}) => {
     const check = requirePlayer(player); if (check.ok === false) return check;
     if (!isHost(player)) return fail('Only the host can advance the game.');
     if (gameOver) return fail('The game is over. Return to the lobby to play again.');
+    const ri = readyInfo();
+    if (ri.mode === 'wait' && ri.ready < ri.total) return fail(`Waiting for everyone to be ready (${ri.ready}/${ri.total}).`);
+    if (ri.mode === 'bypass' && ri.ready < ri.total && !payload.force) return fail(`Only ${ri.ready} of ${ri.total} players are ready.`);
     return advancePhase();
+  });
+
+  action(socket, 'toggle-ready', player => {
+    const check = requirePlayer(player); if (check.ok === false) return check;
+    if (gameOver || !['ACTION', 'COURT', 'RESOLUTION'].includes(phase)) return fail('There is nothing to be ready for right now.');
+    if ((gameSettings.readyMode || 'bypass') === 'off') return fail('Ready buttons are turned off in this game.');
+    if (!readyPlayers().includes(player)) return fail('You do not need to press ready.');
+    player.ready = !player.ready;
+    return ok(player.ready ? 'You are ready.' : 'You are no longer ready.');
   });
 
   action(socket, 'reset-game', (player) => {
@@ -1337,7 +1363,8 @@ io.on('connection', socket => {
 });
 
 // Moves the round on: action -> court -> resolution -> next round. Used by the host's button and the round timer.
-function advancePhase() {
+function advancePhase() { clearReady(); return advancePhaseStep(); }
+function advancePhaseStep() {
   if (phase === 'ACTION') {
     phase = 'COURT';
     addEvent('important', `Round ${round} action phase ended. Court is now in session.`);

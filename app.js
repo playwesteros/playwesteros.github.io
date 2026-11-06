@@ -575,7 +575,7 @@
     const cost = unit === 'navy' ? house.navyCost : house.infantryCost;
     lock(button, state.phase !== 'ACTION' ? 'Recruiting is only possible during the action phase.'
       : house.lockedByEmbargo ? 'A royal embargo blocks your recruitment this round.'
-      : !Number.isInteger(amount) || amount < 1 || amount > 10 ? 'Choose a whole number of units between 1 and 10.'
+      : !Number.isInteger(amount) || amount < 1 ? 'Choose a whole number of units, at least 1.'
       : cost * amount > house.money ? `That costs ${cost * amount} gold, but your house only has ${house.money}.` : '');
   }
 
@@ -619,10 +619,23 @@
       return;
     }
     const step = state.isHost ? HOST_STEPS[state.phase] : null;
+    const rd = state.ready || { mode: 'off', ready: 0, total: 0 };
+    const canReady = !state.isHost && rd.mode !== 'off' && ['ACTION', 'COURT', 'RESOLUTION'].includes(state.phase) && state.myHouse && !state.me?.eliminated;
+    if (canReady) {
+      pill.textContent = rd.me ? 'READY ✓' : `ROUND ${state.round} · READY`;
+      pill.dataset.action = 'toggle-ready';
+      pill.title = rd.me ? 'Tap to cancel' : 'Tell the host you are done';
+      pill.disabled = false;
+      pill.classList.add('round-pill-action');
+      pill.classList.toggle('is-ready', Boolean(rd.me));
+      return;
+    }
+    pill.classList.remove('is-ready');
     if (step) {
-      pill.textContent = `ROUND ${state.round} · ${step[0]} →`;
+      const count = rd.mode !== 'off' && rd.total ? ` (${rd.ready}/${rd.total})` : '';
+      pill.textContent = `ROUND ${state.round} · ${step[0]}${count} →`;
       pill.dataset.action = 'advance-phase';
-      pill.title = step[1];
+      pill.title = rd.mode === 'wait' && rd.ready < rd.total ? 'Waiting for everyone to be ready' : step[1];
       pill.disabled = false;
       pill.classList.add('round-pill-action');
     } else {
@@ -983,7 +996,7 @@
 
   function openNameEditor() {
     $('lobbyEditMenu').close?.();
-    $('lobbyNameInput').value = state?.me?.username || '';
+    $('lobbyNameInput').value = state?.me?.pendingName || state?.me?.username || '';
     $('lobbyRememberInput').checked = Boolean(savedPlayerName());
     $('lobbyNameDialog').showModal();
     $('lobbyNameInput').focus();
@@ -1812,7 +1825,12 @@
     }
     if (action === 'select-house') emitAction('select-house', { houseId: button.dataset.houseId });
     else if (action === 'start-game') emitAction('start-game');
-    else if (action === 'advance-phase') emitAction('advance-phase');
+    else if (action === 'toggle-ready') emitAction('toggle-ready');
+    else if (action === 'advance-phase') {
+      const rd = state?.ready;
+      if (rd && rd.mode === 'bypass' && rd.ready < rd.total && !window.confirm(`Only ${rd.ready} of ${rd.total} players are ready. Move on anyway?`)) return;
+      emitAction('advance-phase', { force: true });
+    }
     else if (action === 'respond-alliance') emitAction('respond-alliance', { offerId: button.dataset.offerId, accept: button.dataset.accept === 'true' });
     else if (action === 'break-alliance') emitAction('break-alliance', { allianceId: button.dataset.allianceId });
     else if (action === 'respond-decree') {
@@ -1965,8 +1983,8 @@
 
   // ---- Host advanced settings ----
   let advMode = 'live'; // 'setup': the room is still being created, so the choices ride along with the setup form
-  let advDraft = { alliancesEnabled: true, handEnabled: true, houseBuffs: true, disabledHouses: [], disabledPopups: [], roundSeconds: 0 };
-  const advFrom = src => ({ alliancesEnabled: src.alliancesEnabled !== false, handEnabled: src.handEnabled !== false, houseBuffs: src.houseBuffs !== false, disabledHouses: [...(src.disabledHouses || [])], disabledPopups: [...(src.disabledPopups || [])], roundSeconds: Number(src.roundSeconds || 0) });
+  let advDraft = { alliancesEnabled: true, handEnabled: true, houseBuffs: true, disabledHouses: [], disabledPopups: [], roundSeconds: 0, readyMode: 'bypass' };
+  const advFrom = src => ({ alliancesEnabled: src.alliancesEnabled !== false, handEnabled: src.handEnabled !== false, houseBuffs: src.houseBuffs !== false, disabledHouses: [...(src.disabledHouses || [])], disabledPopups: [...(src.disabledPopups || [])], roundSeconds: Number(src.roundSeconds || 0), readyMode: ['wait', 'bypass', 'off'].includes(src.readyMode) ? src.readyMode : 'bypass' });
   function renderAdvPlayers() {
     const list = (state?.players || []).filter(p => !p.left && p.id !== state.me?.id);
     $('advPlayersBox').hidden = advMode === 'setup';
@@ -1977,7 +1995,7 @@
     const src = mode === 'setup' ? (state?.settings?.configured ? advFrom(state.settings) : advDraft) : advFrom(state.settings || {});
     const lobby = mode === 'setup' || state?.phase === 'LOBBY';
     $('advAlliances').checked = src.alliancesEnabled; $('advHand').checked = src.handEnabled; $('advBuffs').checked = src.houseBuffs;
-    $('advTimer').value = String(src.roundSeconds);
+    $('advTimer').value = String(src.roundSeconds); $('advReady').value = src.readyMode;
     if (![...$('advTimer').options].some(o => o.value === String(src.roundSeconds))) { const o = new Option(`${Math.round(src.roundSeconds / 60)} minutes`, String(src.roundSeconds)); $('advTimer').add(o); $('advTimer').value = o.value; }
     $('advHouseList').innerHTML = SETUP_HOUSES.map(([id, name]) => `<label class="check-row"><input type="checkbox" data-adv-house="${id}" ${src.disabledHouses.includes(id) ? '' : 'checked'}> ${name}</label>`).join('');
     $('advPopupList').innerHTML = POPUP_TYPES.map(t => `<label class="check-row"><input type="checkbox" data-adv-popup="${t.id}" ${src.disabledPopups.includes(t.id) ? '' : 'checked'}> ${escapeHtml(t.label)}</label>`).join('');
@@ -1992,7 +2010,7 @@
       alliancesEnabled: $('advAlliances').checked, handEnabled: $('advHand').checked, houseBuffs: $('advBuffs').checked,
       disabledHouses: [...document.querySelectorAll('[data-adv-house]')].filter(i => !i.checked).map(i => i.dataset.advHouse),
       disabledPopups: [...document.querySelectorAll('[data-adv-popup]')].filter(i => !i.checked).map(i => i.dataset.advPopup),
-      roundSeconds: Number($('advTimer').value || 0)
+      roundSeconds: Number($('advTimer').value || 0), readyMode: $('advReady').value
     };
     if (advMode === 'setup') { advDraft = advFrom(payload); $('advDialog').close(); return; }
     if (!socket?.connected) { $('advError').textContent = 'Not connected to the game server yet.'; return; }

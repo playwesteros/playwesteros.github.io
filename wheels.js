@@ -83,10 +83,10 @@
     SPECS.push({id:g,unit:'gold',icon:'game-coins',min:()=>0,max:s=>hm(s,'money')},{id:i,unit:'infantry',icon:'ui-spear',min:()=>0,max:s=>hm(s,'infantry')},{id:n,unit:'ships',icon:'ui-ship',min:()=>0,max:s=>hm(s,'navy')});
   });
   SPECS.push(
-    {id:'unitAmount',unit:'units',big:1,icon:()=>UNIT_ICON[$('unitSelect')?.value]||'ui-spear',min:()=>1,max:()=>10},
+    {id:'unitAmount',unit:'units',big:1,icon:()=>UNIT_ICON[$('unitSelect')?.value]||'ui-spear',min:()=>1,max:s=>Math.max(1,Math.floor(hm(s,'money')/cost()))},
     {id:'disbandAmount',unit:'units',big:1,icon:()=>UNIT_ICON[$('disbandUnit')?.value]||'ui-spear',min:()=>1,max:s=>Math.max(1,hm(s,$('disbandUnit')?.value||'infantry'))},
-    {id:'spyGold',unit:'gold',big:1,icon:'game-coins',min:()=>2,max:()=>20},
-    {id:'dragonSpyGold',unit:'gold',big:1,icon:'game-coins',min:()=>2,max:()=>20},
+    {id:'spyGold',unit:'gold',big:1,icon:'game-coins',min:()=>2,max:s=>Math.max(2,Math.min(20,hm(s,'money')))},
+    {id:'dragonSpyGold',unit:'gold',big:1,icon:'game-coins',min:()=>2,max:s=>Math.max(2,Math.min(20,hm(s,'money')))},
     {id:'attackInfantry',unit:'infantry',icon:'ui-spear',min:()=>0,max:s=>hm(s,'infantry')},
     {id:'attackNavy',unit:'ships',icon:'ui-ship',min:()=>0,max:s=>hm(s,'navy')},
     {id:'attackDragons',unit:'dragons',icon:'ui-dragon',min:()=>0,max:s=>hm(s,'dragons')}
