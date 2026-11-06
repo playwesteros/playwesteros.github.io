@@ -2,6 +2,11 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.1.2 (Nov 6, 2026)
+- **Ships sail through water.** Fleets now follow the real coastline: the shortest route through open sea between two cities, plus a short march if a city is inland. Ships travel at 1200 map units per round (infantry 300, dragons 700), so they beat armies on most trips, though sailing around the whole continent can still take a round or two.
+- **Sand-blue sea.** The war map's water is now a sand blue instead of parchment, and the internal region borders are clipped to the land.
+- **Watch the dice.** Every siege battle's dice animation now plays for the whole table, not just the houses involved, and the Battles list in the reports page has a "Watch the dice" button to replay recent battles.
+
 ## v1.1.1 (Nov 6, 2026)
 - **Smarter bots.** Bots now understand plain-language requests in chat: ask for gold, troops, an attack on a house or city, help, peace, their spy intel, or to follow you. They decide using trust, alliances, their stance toward you, the king's crown and a random buffer, and they can say yes, say no, or lie.
 - **Spying and intel.** Bots send spies every round, read the reports (army counts, marches, secret pacts, intercepted ravens) and share valuable finds with allies. They can also hold back or lie to help themselves, and catch lies that contradict their own spies.

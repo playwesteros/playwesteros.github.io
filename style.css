@@ -450,7 +450,7 @@ body.mobile-device .footer { display: none; }
 }
 
 /* Old-style realm map */
-.realm-map { display: block; width: 100%; height: auto; max-height: calc(100vh - 150px); border-radius: 6px; box-shadow: 0 6px 24px #0008; background: #d9c28c; user-select: none; }
+.realm-map { display: block; width: 100%; height: auto; max-height: calc(100vh - 150px); border-radius: 6px; box-shadow: 0 6px 24px #0008; background: #9dbac3; user-select: none; }
 .map-cap { cursor: pointer; outline: none; }
 .map-cap .cap-pop { transition: transform .18s cubic-bezier(.3,1.4,.5,1); }
 .map-cap .cap-dot { fill: #7d2a14; stroke: #f3e6c2; stroke-width: 1.4; transition: fill .18s; }

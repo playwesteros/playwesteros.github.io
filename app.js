@@ -327,12 +327,15 @@
     if (inf > h.infantry || nav > h.navy || dr > h.dragons) return `You only have ${h.infantry} infantry, ${h.navy} ships and ${h.dragons} dragons to send.`;
     return '';
   }
-  const TRAVEL_SPEED = { infantry: 300, navy: 450, dragons: 700 }; // map units per round (same as the server)
+  const TRAVEL_SPEED = { infantry: 300, navy: 1200, dragons: 700 }; // map units per round (same as the server); ships use state.shipTravel because they sail around the coast
   function travelFor(target) {
     const from = state.capitals.find(c => c.id === state.myHouse?.cityId);
     if (!from || !target) return { infantry: 1, navy: 1, dragons: 1 };
     const d = Math.hypot(from.x - target.x, from.y - target.y);
-    return Object.fromEntries(Object.entries(TRAVEL_SPEED).map(([k, v]) => [k, Math.max(1, Math.ceil(d / v))]));
+    const out = Object.fromEntries(Object.entries(TRAVEL_SPEED).map(([k, v]) => [k, Math.max(1, Math.ceil(d / v))]));
+    const sail = state.shipTravel?.[from.id]?.[target.id];
+    if (sail) out.navy = sail;
+    return out;
   }
   function travelNote() {
     const t = state.capitals.find(c => c.id === warTargetId);
@@ -907,7 +910,12 @@
     $('armyDragons').textContent = h.dragons;
     $('armyInfantryCost').textContent = `${h.infantryCost} gold`;
     $('armyNavyCost').textContent = `${h.navyCost} gold`;
-    $('battleReports').innerHTML = (state.events || []).filter(e => e.kind === 'battle').map(e => `<div class="resolution-item"><span>R${e.round}</span><p>${escapeHtml(e.text)}</p></div>`).join('') || '<p class="muted small-text">No battles have been fought yet.</p>';
+    $('battleReports').innerHTML = (state.events || []).filter(e => e.kind === 'battle').map(e => `<div class="resolution-item"><span>R${e.round}</span><p>${escapeHtml(e.text)}${e.battle ? ` <button class="button button-quiet button-small" type="button" data-replay="${escapeHtml(e.battle.id)}">Watch the dice</button>` : ''}</p></div>`).join('') || '<p class="muted small-text">No battles have been fought yet.</p>';
+    $('battleReports').querySelectorAll('[data-replay]').forEach(btn => btn.addEventListener('click', () => {
+      const ev = (state.events || []).find(e => e.battle && e.battle.id === btn.dataset.replay); if (!ev) return;
+      announceQueue.push({ notice: { id: `replay-${ev.battle.id}`, kind: 'battle-report', title: `Battle at ${ev.battle.capitalName}`, text: ev.text, banners: [], battle: ev.battle } });
+      if (!announceShowing) { announceShowing = true; showNextAnnouncement(); }
+    }));
     $('armyPhaseNote').textContent = state.phase === 'ACTION' ? '' : 'Recruiting, spying and declaring war open during the action phase.';
     $('relationsPhaseNote').textContent = diploOpen() ? '' : 'Alliances, treaties, decrees and war councils open during the action and court phases. Messages can be sent at any time.';
     // King's ledger

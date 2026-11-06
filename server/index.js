@@ -53,10 +53,70 @@ const CAPITAL_DEFS = [
   { id: 'kings-landing', x: 585, y: 1421, name: 'King’s Landing', region: 'The Crownlands', icon: '👑', defense: 6, originalHouseId: null }
 ];
 
-// Travel: map distance (in map units) between capitals, covered at a different speed per unit type, rounded up to whole rounds.
-const TRAVEL_SPEED = { infantry: 300, navy: 450, dragons: 700 };
+// Travel: infantry and dragons cross the map in a straight line; ships must sail around the coast through open water.
+// SEA is the traced coastline as an 8-unit grid (1 = open sea connected to the ocean), see shipRoute().
+const TRAVEL_SPEED = { infantry: 300, navy: 1200, dragons: 700 };
+const SEA = { w: 118, h: 216, cell: 8, y0: 287, bits: Buffer.from('/z8AAAAAAAAA8P///////w8AAAAAAAAA/L////////8AAPgDAAAA/+///////38AAP8AAADg//P//////x8A4D8AAAD8f/z//////x8A+AEAAID/H////////wcAfwAAAMB/zP///////wPgHwAAAPAf8v///////wP8DwAAAPwP+P///////8H//wEAAP8D/v////////j/fwAAgP+B////////////HwAAwP/A////////////AwAA8H/w//////////8/AAAA+B/+//////////8HAAAA/uf//////////38AAACA/////////////w8AAADA//////////8//wMAAAD4//////////+D/wEAAAD8///////////g/wAAAAD//////////7//HwAAAAD/////////////AwAAAAD8/P//////////AAAAAAAG//////////9/AAAAAADA//////////8PAAAAAADw///////7v/8BAAAAAAD8/////z/87z8AAAAAAAD//////wf88wcAAAAAAMD//////w//CQAAAAAAAPD//////4d/AAAAAAAAAPz//////8MPAAAAAAAAAP//////f+AAAAAAAAAAwP//////HxgAAAAAAAAA8P//////BwAAAAAAAAAA/v//////AwAAAAAAAACY////////AAAAAAAAAADv//////8fAAAAAAAAAMD7//////8BAAAAAAAAAPD+/////38AAAAAAAAAAPz//////38AAAAAAAAAgP///////x8AAAAAAAAA8P///////wEAAAAAAABg/v///////wAAAAAAAAD4////////PwAAAAAAAAD/////////BwAAAAAAAMD///////8HAAAAAAAAAPD///////8AAAAAAAAAAPj//////z8AAAAAAAAAAPz//////w8AAAAAAAAAAP///////wEAAAAAAAAAgP//////fwAAAAAAAAAA+P//////HwAAAAAAAAAA/P//////AwAAAAAAAAAA/v//////AAAAAAAAAACA//////8/AAAAAAAAAADA//////8PAAAAAAAAAADg//////8DAAAAAAAAAAD4//////8AAAAAAAAAAAD+/////38AAAAAAAAAAID//////88AAAAAAAAAAOD//////zsAAAAAAAAAIPD//////w8AAAAAAAAA+PD//////wcAAAAAAAAA//D//////wEAAAAAAADA/////////wAAAAAAAADw////////PwAAAAAAAAD+////////DwAAAAAAAID/////////AwAAAAAgAOD/////////AwAAAAAIAPj/////////AAEeAAACAP////////9/8PEPAIABwP///////////38AAPAA+P//////////yQAAADwA/v////////9/AAAAAI/7//////////8PAAAA4Of///////////8AAAAA/v//////////Pw8AAACA////////////DwcAAADg//7/////////gQAAAAD4v/////////8/AAAAAAD/P///9/////8PAAAAAMB////P//////8BAAAAAPj////8/////z8AAAAAAP7/D57//////w8AAAAAwP//AYD//////wcADAAA+P9jAHD//////wP8BwAA/n8AAG7/////////AwAA/xMAwOD/////////AQCA/wAAGPz+////////AADAAAAAgB//////////AAAAAAAA+IP/////////AAAAAABgD8b///////8/AAAAAAB4wP////////8PAAAAAAAD8P////////8HAAAAAAAA+P////////8DAAAAAAAA/P////////8AAAAAAAAA/////////z8AAAAAAADA///////v/wcAAAAAAAD4///////xfwAAAAAAAAD+////////BwAAAAAAAMD/////////wQcAAAAAAPj/////+ff/+AEAAAAA4P////8/b/j/fwAAAAAA+P/////PfN7/PwAAAAAAf//////j/fP/DwAAAADwAP7///8gP/z/AQAAAAAAgP///z/AD/9/AAAAAAAA8P///x+8k/8DAAAAAAAA///////H/38AAAAAAADg/////3/w/w8AAAAAAAD8/////wz+/wEAAAAAAID//////8/nIwAAAAAAAPj///////8AAAAAAAAAgP///////z8AAAAAAAAA8P///////w8AAAAAAAAAf////////wcAAAAAAADgz////////wEAAAAAAAD4+f//////PwAAAAAAAAAf/v//////DwAAAAAAAPyB/v//////AQAAAACA+T/w//////9/AAAAAADA/wP8//////8fAAAAAAAAAAD///////8DAAAAAAAAAPD///////8AAAAAAAAAAP///////zsAAAAAAAAA4P///////w4AAAAAAAAA/v//////3wMAAAAAAADAx///////ewAAAAAAAAD+////////BwAAAAAAAMCP//////9/AAAAAAAAAPj///////8PAAAAAAAAAP7///////8BAAAAAAAAgP/+/////z8AAAAAAAAA4L///////w8AAAAAAAAA/M////////gAAAAAAAAA//f/////Px8AAAAAAADw//n//////wcAAAAAAAD8f/7//////wEAAAAAAID/n///////fwAAAAAAAOD/8///////DwAAAAAAAPB//v//////AQAAAAAAAPyH////////AAAAAAAAAGfw//////8/AAAAAAAAAAD8//////8PAAAAAAAAAAD///////8BAAAAAAAAAOD//////38AAAAAAAAAAPj//////w8AAAAAAAAAAMD//////wMAAAAAAAAAAPD//////wAAAAAAAAAAAP7/////PwAAAAAAAAAAgP//////DwAAAAAAAAAA4P//////AwAAAAAAAAAA/P//////AAAAAAAAAACA9/////8/AAAAAAAAAAD4+f////8PAAAAAAAAAAA+/P////8DAAAAAAAAAIAP//////8BAAAAAAAAAODD//////8AAAAAAAAAAPjx/////z8AAAAAAAAAAP7+/////w8AAAAAAAAAwH///////w8AAAAAAAAA+P///////wcAAAAAAADw////////P38AAAAAAAD4////////+x8AAAAAAAD/////////PQcAAAAAAED8/////////QAAAAAAAAD++///////DwAAAAAAAIAR/P//////AQAAAAAAAACA////////AAAAAAAAAADw//////9/AAAAAAAAAAD+//////83AAAAAAAAAMD//////z8IAAAAAAAAAPz//////w8AAAAAAIAAAO///////wEAAAAAADAA4P3/////PwAAAAAA2B8BeP//////DwAAAAAA/v8P/v////9/AAAAAADA//+H//////8PAAAAAADw///z//////8DAAAAAAD8/+///////38AAAAAAID//////////x8AAAAAAOD//////////wcAAAAAAPj//////////wAAAAAAAP//////////PwAAAAAAwL//////////HwAAAAAA/P///+//////BwAAAAAA+v//f/n/////AwAAAAAAAP//T///////YAAAAAAAAP//QPn///8/HgAAAAAAAAIfAPj/////AwAAAAAAAAABAPz///9/AAAAAAAAAAAAAP////8HAAAAAAAAAAAA4P////8BAAAAAAAAAAAA/P////8AAAAAAAAAAAD8/////38AQAAAAAAAAMD//////x8AGAAAAAAAAPD//////w8AAwAAAAAAAP///////wfgAAAAAAAAwP///////gN8AAAAAAAA8P////+//4AfAAAAAAAA///////f//8HAAAABgDg///////n//8BAACA44P////////x/38AAMDh/////////3/4/x8Az////////////x///w/w/////////////+f/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////', 'base64') };
+const seaAt = (i, j) => i >= 0 && j >= 0 && i < SEA.w && j < SEA.h && ((SEA.bits[(j * SEA.w + i) >> 3] >> ((j * SEA.w + i) & 7)) & 1) === 1;
+function nearestSea(x, y) {
+  const ci = Math.floor(x / SEA.cell), cj = Math.floor((y - SEA.y0) / SEA.cell);
+  let best = null;
+  for (let r = 0; r < 70 && !best; r++) {
+    let bd = Infinity;
+    for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+      if (Math.max(Math.abs(di), Math.abs(dj)) !== r || !seaAt(ci + di, cj + dj)) continue;
+      const d = Math.hypot((ci + di + 0.5) * SEA.cell - x, (cj + dj + 0.5) * SEA.cell + SEA.y0 - y);
+      if (d < bd) { bd = d; best = { i: ci + di, j: cj + dj, d }; }
+    }
+  }
+  return best;
+}
+const shipCache = new Map();
+// Shortest sailing route between two cities: A* over open-sea cells (no cutting corners through land).
+function shipRoute(from, to) {
+  const key = `${from.id}>${to.id}`;
+  if (shipCache.has(key)) return shipCache.get(key);
+  const a = nearestSea(from.x, from.y), b = nearestSea(to.x, to.y);
+  let result = null;
+  if (a && b) {
+    const W = SEA.w, idx = (i, j) => j * W + i, g = new Map([[idx(a.i, a.j), 0]]), prev = new Map(), open = [[0, a.i, a.j]], done = new Set();
+    const h = (i, j) => Math.hypot(i - b.i, j - b.j) * SEA.cell;
+    while (open.length) {
+      open.sort((x, y) => x[0] - y[0]);
+      const [, i, j] = open.shift(), k = idx(i, j);
+      if (done.has(k)) continue; done.add(k);
+      if (i === b.i && j === b.j) break;
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+        if (!di && !dj) continue;
+        const ni = i + di, nj = j + dj;
+        if (!seaAt(ni, nj) || (di && dj && (!seaAt(i + di, j) || !seaAt(i, j + dj)))) continue;
+        const nk = idx(ni, nj), cost = g.get(k) + (di && dj ? 1.4142 : 1) * SEA.cell;
+        if (cost < (g.has(nk) ? g.get(nk) : Infinity)) { g.set(nk, cost); prev.set(nk, k); open.push([cost + h(ni, nj), ni, nj]); }
+      }
+    }
+    const end = idx(b.i, b.j);
+    if (g.has(end)) {
+      const pts = []; for (let k = end; k !== undefined; k = prev.get(k)) pts.push([(k % W + 0.5) * SEA.cell, (Math.floor(k / W) + 0.5) * SEA.cell + SEA.y0]);
+      result = { sea: g.get(end), legs: a.d + b.d, points: pts.reverse() };
+    }
+  }
+  shipCache.set(key, result);
+  return result;
+}
+// Rounds a fleet needs: sailing at ship speed, plus any march overland between a city and the nearest coast.
+function shipRounds(from, to) {
+  const r = shipRoute(from, to);
+  const t = r ? r.sea / TRAVEL_SPEED.navy + r.legs / TRAVEL_SPEED.infantry : Math.hypot(from.x - to.x, from.y - to.y) * 1.6 / TRAVEL_SPEED.navy;
+  return Math.max(1, Math.ceil(t - 1e-9));
+}
+let shipTableCache = null;
+function shipTable() {
+  if (!shipTableCache) { shipTableCache = {}; for (const a of CAPITAL_DEFS) { shipTableCache[a.id] = {}; for (const b of CAPITAL_DEFS) if (a.id !== b.id) shipTableCache[a.id][b.id] = shipRounds(a, b); } }
+  return shipTableCache;
+}
 function travelRounds(from, to, unit) {
   if (!from || !to) return 1;
+  if (unit === 'navy') return shipRounds(from, to);
   const dist = Math.hypot(from.x - to.x, from.y - to.y);
   return Math.max(1, Math.ceil(dist / TRAVEL_SPEED[unit]));
 }
@@ -393,6 +453,7 @@ function viewFor(playerId) {
       const issuer = d.kingPlayerId === me.id;
       return { id: d.id, round: d.round, kingName: d.kingName, kingHouseId: d.kingHouseId, message: d.message, gold: d.gold, infantry: d.infantry, navy: d.navy, isIssuer: issuer, myState: d.recipients.find(r => r.houseId === myHouse.id)?.state || null, recipients: me.id === handPlayerId ? d.recipients.map(r => ({ ...r })) : undefined };
     }) : [],
+    shipTravel: shipTable(),
     capitals: capitals.map(({ siege, ...c }) => ({ ...c, siege: siegePublic({ siege }), income: capitalIncome(c), residents: residentsOf(c).length })),
     allianceOffers: visibleOffers,
     alliances: visibleAlliances,
@@ -1581,10 +1642,12 @@ function fightSiegeRound(c) {
   const ids = [...new Set([...att.map(d => d.houseId), ...def.map(d => d.houseId)])];
   const mapDie = d => ({ v: d.v, unit: d.unit, houseId: d.houseId, lost: Boolean(d.lost) });
   const battle = { id: randomUUID(), capitalId: c.id, capitalName: c.name, battleNo: s.battles, round, attackers: att.map(mapDie), defenders: def.map(mapDie), pairs, attLost, defLost, result };
-  const involved = [...new Set([...ids, ...s.attackers.map(e => e.houseId)])];
+  const involved = [...new Set([...ids, ...s.attackers.map(e => e.houseId), ...houses.filter(x => houseMembers(x.id).length).map(x => x.id)])]; // the whole table watches the dice
   const note2 = notify('battle-report', involved, [], `Battle at ${c.name}`, `Attackers lost ${attLost}, defenders lost ${defLost}.`, [...new Set(att.map(d => d.houseId))].slice(0, 1).concat(c.ownerHouseId ? [c.ownerHouseId] : []));
   note2.battle = battle;
   addEvent('battle', `Siege of ${c.name}, battle ${s.battles}: attackers lost ${attLost}, defenders lost ${defLost}.`);
+  if (events[0]) events[0].battle = battle; // kept so anyone can replay the dice from the battle log
+  events.filter(e => e.battle).slice(12).forEach(e => { delete e.battle; });
   if (result === 'continues') return;
   const entries = s.attackers;
   const reliefEntries = s.relief;
