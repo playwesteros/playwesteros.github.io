@@ -79,16 +79,16 @@
       <button class="screen-x" type="button" data-screen-x="host" aria-label="Close">×</button>
       <p class="eyebrow">HOST ONLY · MATCH SETUP</p>
       <h1>Prepare the game</h1>
-      <p class="muted">Choose how many players may join and which game type to use before opening the hall.</p>
+      <p class="muted">Choose the game type and how many players may join before opening the hall.</p>
       <form id="hostSetupForm" class="host-setup-form">
-        <label for="maxPlayersInput">Player limit</label>
-        <select id="maxPlayersInput" name="maxPlayers" required></select>
         <label for="gameTypeInput">Game type</label>
         <select id="gameTypeInput" name="gameType" required>
           <option value="CLASSIC">Classic</option>
           <option value="TEAMS">Teams</option>
           <option value="LAST_DRAGON">Last Dragon</option>
         </select>
+        <label for="maxPlayersInput">Player limit</label>
+        <select id="maxPlayersInput" name="maxPlayers" required></select>
         <div id="teamSetup" hidden>
           <label for="teamSizeInput">Players per team</label>
           <select id="teamSizeInput" name="teamSize"><option value="2">Teams of 2</option><option value="3">Teams of 3</option><option value="4">Teams of 4</option></select>
