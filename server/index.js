@@ -42,16 +42,29 @@ const HOUSE_DEFS = [
 ];
 
 const CAPITAL_DEFS = [
-  { id: 'winterfell', name: 'Winterfell', region: 'The North', icon: '❄', defense: 5, originalHouseId: 'stark' },
-  { id: 'casterly-rock', name: 'Casterly Rock', region: 'The Westerlands', icon: '⛰', defense: 5, originalHouseId: 'lannister' },
-  { id: 'storms-end', name: 'Storm’s End', region: 'The Stormlands', icon: '⛈', defense: 5, originalHouseId: 'baratheon' },
-  { id: 'dragonstone', name: 'Dragonstone', region: 'The Crownlands', icon: '🐉', defense: 4, originalHouseId: 'targaryen' },
-  { id: 'highgarden', name: 'Highgarden', region: 'The Reach', icon: '🌹', defense: 4, originalHouseId: 'tyrell' },
-  { id: 'pyke', name: 'Pyke', region: 'The Iron Islands', icon: '⚓', defense: 4, originalHouseId: 'greyjoy' },
-  { id: 'sunspear', name: 'Sunspear', region: 'Dorne', icon: '☀', defense: 4, originalHouseId: 'martell' },
-  { id: 'the-eyrie', name: 'The Eyrie', region: 'The Vale', icon: '🦅', defense: 4, originalHouseId: 'arryn' },
-  { id: 'kings-landing', name: 'King’s Landing', region: 'The Crownlands', icon: '👑', defense: 6, originalHouseId: null }
+  { id: 'winterfell', x: 422, y: 648, name: 'Winterfell', region: 'The North', icon: '❄', defense: 5, originalHouseId: 'stark' },
+  { id: 'casterly-rock', x: 159, y: 1371, name: 'Casterly Rock', region: 'The Westerlands', icon: '⛰', defense: 5, originalHouseId: 'lannister' },
+  { id: 'storms-end', x: 676, y: 1556, name: 'Storm’s End', region: 'The Stormlands', icon: '⛈', defense: 5, originalHouseId: 'baratheon' },
+  { id: 'dragonstone', x: 686, y: 1315, name: 'Dragonstone', region: 'The Crownlands', icon: '🐉', defense: 4, originalHouseId: 'targaryen' },
+  { id: 'highgarden', x: 249, y: 1664, name: 'Highgarden', region: 'The Reach', icon: '🌹', defense: 4, originalHouseId: 'tyrell' },
+  { id: 'pyke', x: 169, y: 1157, name: 'Pyke', region: 'The Iron Islands', icon: '⚓', defense: 4, originalHouseId: 'greyjoy' },
+  { id: 'sunspear', x: 731, y: 1832, name: 'Sunspear', region: 'Dorne', icon: '☀', defense: 4, originalHouseId: 'martell' },
+  { id: 'the-eyrie', x: 592, y: 1106, name: 'The Eyrie', region: 'The Vale', icon: '🦅', defense: 4, originalHouseId: 'arryn' },
+  { id: 'kings-landing', x: 585, y: 1421, name: 'King’s Landing', region: 'The Crownlands', icon: '👑', defense: 6, originalHouseId: null }
 ];
+
+// Travel: map distance (in map units) between capitals, covered at a different speed per unit type, rounded up to whole rounds.
+const TRAVEL_SPEED = { infantry: 300, navy: 450, dragons: 700 };
+function travelRounds(from, to, unit) {
+  if (!from || !to) return 1;
+  const dist = Math.hypot(from.x - to.x, from.y - to.y);
+  return Math.max(1, Math.ceil(dist / TRAVEL_SPEED[unit]));
+}
+// A force marches together, so it arrives with its slowest unit.
+function attackTravel(from, to, units) {
+  const times = ['infantry', 'navy', 'dragons'].filter(k => units[k] > 0).map(k => travelRounds(from, to, k));
+  return Math.max(1, ...times);
+}
 
 let players = new Map();
 let tokenToPlayerId = new Map();
@@ -1158,10 +1171,10 @@ io.on('connection', socket => {
     h.navy -= units.navy;
     h.dragons -= units.dragons;
     for (const k of ['infantry', 'navy', 'dragons']) note(h, k, -units[k], `Sent to war on ${target.name}`);
-    h.pendingAttack = { targetCapitalId: target.id, targetName: target.name, orderedRound: round, resolveRound: round + 1, units, playerId: player.id };
+    h.pendingAttack = { targetCapitalId: target.id, targetName: target.name, orderedRound: round, resolveRound: round + attackTravel(findCapital(player.cityId) || homeCityOf(player), target, units), units, playerId: player.id };
     h.hasAttackedThisRound = true;
     addEvent('normal', `House ${h.name} secretly committed an attack against a capital.`);
-    return ok(`Attack order placed. It will resolve after Round ${round + 1} court.`);
+    return ok(`Attack order placed. Your forces arrive after Round ${h.pendingAttack.resolveRound} court.`);
   });
 
   action(socket, 'offer-alliance', (player, payload) => {

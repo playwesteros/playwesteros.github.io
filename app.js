@@ -326,8 +326,25 @@
     if (inf > h.infantry || nav > h.navy || dr > h.dragons) return `You only have ${h.infantry} infantry, ${h.navy} ships and ${h.dragons} dragons to send.`;
     return '';
   }
+  const TRAVEL_SPEED = { infantry: 300, navy: 450, dragons: 700 }; // map units per round (same as the server)
+  function travelFor(target) {
+    const from = state.capitals.find(c => c.id === state.myHouse?.cityId);
+    if (!from || !target) return { infantry: 1, navy: 1, dragons: 1 };
+    const d = Math.hypot(from.x - target.x, from.y - target.y);
+    return Object.fromEntries(Object.entries(TRAVEL_SPEED).map(([k, v]) => [k, Math.max(1, Math.ceil(d / v))]));
+  }
+  function travelNote() {
+    const t = state.capitals.find(c => c.id === warTargetId);
+    if (!t || state.myHouse.pendingAttack) return '';
+    const tr = travelFor(t), n = k => Number($(k).value) || 0;
+    const used = [['infantry', n('attackInfantry')], ['navy', n('attackNavy')], ['dragons', n('attackDragons')]].filter(([, c]) => c > 0).map(([k]) => tr[k]);
+    const rounds = Math.max(1, ...used);
+    const word = r => `${r} round${r === 1 ? '' : 's'}`;
+    return `Travel to ${t.name}: infantry ${word(tr.infantry)}, ships ${word(tr.navy)}, dragons ${word(tr.dragons)}. ${used.length ? `Your force arrives after Round ${state.round + rounds} court.` : ''}`;
+  }
   function updateAttackLock() {
     if (!state?.myHouse) return;
+    if (!state.myHouse.pendingAttack) $('attackOrderStatus').textContent = travelNote();
     lock($('attackForm').querySelector('button[type="submit"]'), attackLockReason());
   }
   function renderWarTarget() {
@@ -421,7 +438,8 @@
     const from = home, to = o && pos.get(o.targetCapitalId);
     if (o && from && to) {
       const step = (state.round - o.orderedRound) * 2 + ['ACTION', 'COURT', 'RESOLUTION'].indexOf(state.phase);
-      const t = Math.min(0.85, 0.15 + 0.14 * step);
+      const total = Math.max(2, (o.resolveRound - o.orderedRound) * 2);
+      const t = Math.min(0.85, 0.15 + 0.7 * Math.min(1, step / total));
       for (const [w, stroke] of [[18, '#1b1208'], [9, color]]) {
         const line = document.createElementNS(NS, 'line');
         line.setAttribute('x1', from.x); line.setAttribute('y1', from.y); line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
@@ -974,7 +992,7 @@
       const locked = Boolean(reason) && !reason.startsWith('Already claimed') && !reason.startsWith('Team full');
       const claimed = Boolean(reason) && !locked;
       return {
-        id: h.id, name: h.name, motto: h.motto, color: h.color,
+        id: h.id, name: h.name, motto: h.motto, color: h.color, buff: state.settings?.houseBuffs === false ? '' : (h.buff || ''),
         status: hiddenHouse ? 'hidden' : locked ? 'locked' : claimed ? 'claimed' : 'open',
         note: reason || (state.settings?.gameType === 'TEAMS' ? `Team · ${h.players.filter(p => !p.left).length} of ${state.settings.teamSize || 2} sworn` : 'One player per house')
       };
