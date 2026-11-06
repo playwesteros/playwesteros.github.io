@@ -1092,7 +1092,7 @@ io.on('connection', socket => {
     h.spyReports.unshift(report);
     if (h.spyReports.length > 15) h.spyReports.length = 15;
     addEvent('normal', caught ? `Spies were caught in House ${target.name}'s halls.` : `House ${h.name} sent spies toward House ${target.name}.`);
-    if (caught) notify('spy-caught', [target.id], [], 'Spies caught', `Agents of House ${capWord(h.name)} were caught spying on your house.`, [h.id, target.id]);
+    if (caught) { notify('spy-caught', [target.id], [], 'Spies caught', `Agents of House ${capWord(h.name)} were caught spying on your house.`, [h.id, target.id]); botOnSpyCaught(h.id, target.id); }
     return ok(caught ? `Your spies were captured. House ${target.name} knows it was you.` : success ? `Your spies returned with intelligence from House ${target.name}.` : `Your spy mission against House ${target.name} failed.`);
   });
 
@@ -1149,6 +1149,7 @@ io.on('connection', socket => {
     check.money -= gold; check.infantry -= infantry; check.navy -= navy;
     to.w.money += gold; to.w.infantry += infantry; to.w.navy += navy;
     for (const [res, n] of [['gold', gold], ['infantry', infantry], ['navy', navy]]) { note(check, res, -n, `Gift to ${to.username}`); note(to.w, res, n, `Gift from ${player.username}`); }
+    botOnGift(to, player, gold, infantry, navy);
     return ok(`Gift sent to ${to.username}.`);
   });
 
@@ -1243,6 +1244,7 @@ io.on('connection', socket => {
     const other = alliance.houseA === check.id ? alliance.houseB : alliance.houseA;
     alliances.splice(alliances.indexOf(alliance), 1);
     addEvent('important', `House ${check.name} broke its alliance with House ${houseName(other)}.`);
+    botOnBetrayed(check.id, other);
     notify('alliance-broken', [check.id, other], [], 'An alliance is broken', `House ${capWord(check.name)} has broken its alliance with House ${capWord(houseName(other))}.`, [check.id, other]);
     return ok('Alliance broken.');
   });
@@ -1350,7 +1352,7 @@ io.on('connection', socket => {
     const target = players.get(String(payload.playerId || ''));
     if (!target || target.left || target.id === player.id) return fail('Choose another player.');
     target.traitor = payload.traitor === true;
-    if (target.traitor) { const kh = findHouse(player.houseId); notify('traitor', [], [target.id], 'Branded a traitor', `King ${player.username} has named you a traitor to the crown.`, kh ? [kh.id] : []); }
+    if (target.traitor) { botOnTraitor(target, player); const kh = findHouse(player.houseId); notify('traitor', [], [target.id], 'Branded a traitor', `King ${player.username} has named you a traitor to the crown.`, kh ? [kh.id] : []); }
     return ok(target.traitor ? `${target.username} is now labelled a traitor.` : `${target.username} has been pardoned.`);
   });
 
@@ -1656,9 +1658,21 @@ function captureCity(target, entries, how) {
 // Bots play through the same action handlers as people (HANDLERS), on a slow timer so the table can follow them.
 const HOUSE_WORDS = { stark: 'Winter is coming.', lannister: 'A Lannister always pays his debts.', baratheon: 'Ours is the Fury.', targaryen: 'Fire and Blood.', tyrell: 'Growing Strong.', greyjoy: 'We Do Not Sow.', martell: 'Unbowed, Unbent, Unbroken.', arryn: 'As High as Honor.' };
 const pickOne = list => list[randomInt(0, list.length - 1)];
+const clampN = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const HN = id => `House ${capWord(houseName(id))}`;
 function botAi(bot) {
-  if (!bot.ai) bot.ai = { aggr: 0.3 + Math.random() * 0.6, diplo: 0.3 + Math.random() * 0.6, due: {}, turnFor: 0, turnAt: 0, turnDone: false, dipRound: 0 };
-  return bot.ai;
+  const fresh = () => ({
+    aggr: 0.3 + Math.random() * 0.6, diplo: 0.3 + Math.random() * 0.6, honesty: 0.3 + Math.random() * 0.65, greed: 0.2 + Math.random() * 0.6,
+    due: {}, turnFor: 0, turnAt: 0, turnDone: false, dipRound: 0,
+    trust: {}, grudge: {}, stance: {}, score: {}, buffer: {}, peace: {}, peaceLie: {}, pledges: [], relief: [], owe: [], todo: [],
+    intel: [], est: {}, threats: {}, seenReports: {}, seenSieges: {}, owned: null, plan: { goal: 'hold', focus: null, round: 0 },
+    asked: {}, stanceRound: 0, lastRound: 0, crownGrudge: 0, lies: 0
+  });
+  if (!bot.ai) bot.ai = fresh();
+  const ai = bot.ai;
+  if (ai.lastRound > round) { const keep = { aggr: ai.aggr, diplo: ai.diplo, honesty: ai.honesty, greed: ai.greed }; Object.assign(ai, fresh(), keep); }
+  ai.lastRound = round;
+  return ai;
 }
 function botDo(bot, name, payload) {
   try { const r = HANDLERS[name] ? HANDLERS[name](bot, payload, null) : null; return Boolean(r && r.ok !== false); }
@@ -1673,78 +1687,601 @@ function botReady(bot, key, min = 2500, max = 8000) {
   return true;
 }
 const botLeads = bot => houseMembers(bot.houseId).filter(p => p.isBot && !p.eliminated)[0]?.id === bot.id;
+const botLater = (bot, fn, min = 2500, max = 8000) => botAi(bot).todo.push({ at: Date.now() + randomInt(min, max), fn });
 function botSay(bot, text, toPlayer) {
-  if (toPlayer && !toPlayer.isBot) return botDo(bot, 'send-chat', { scope: 'secret', targetPlayerIds: [toPlayer.id], message: text });
+  if (toPlayer) return botDo(bot, 'send-chat', { scope: 'secret', targetPlayerIds: [toPlayer.id], message: text });
   return botDo(bot, 'send-chat', { scope: 'public', message: text });
 }
-function botReply(bot, text, sender) {
-  const t = text.toLowerCase(), h = bot.w, words = HOUSE_WORDS[bot.houseId] || '';
-  if (/alli|ally|pact|join|together/.test(t)) {
-    if (sender && areAllied(bot.houseId, sender.houseId)) return `We already stand together. ${words}`;
-    return pickOne([`An alliance? Perhaps. Let us see if your deeds match your words. ${words}`, 'I will hear your terms. Do not waste my time.', 'Friends are useful. Enemies are expensive. Let us talk.']);
-  }
-  if (/attack|war|fight|kill|destroy|invade|threat|crush/.test(t)) return pickOne([`Come, then. My banners are many and my patience is short. ${words}`, 'Threats are wind. My army is steel.', 'You would be wise to measure your army before you measure your words.']);
-  if (/gold|coin|money|pay|tax|tribute|loan|send|help/.test(t)) return pickOne(['Gold is not wheat to be scattered. Make your case.', `I keep ${h.money > 25 ? 'a healthy' : 'a thin'} purse, and I keep it close.`, 'Earn my trust and my coin may follow.']);
-  if (/king|crown|throne|hand|rule/.test(t)) return pickOne(['The Iron Throne finds the ambitious. Mind your head.', 'A crown is only heavy for those who wear it badly.', 'Many want the throne. Few survive it.']);
-  if (/peace|truce|friend|thank|sorry/.test(t)) return pickOne(['Peace is good for trade. For now.', 'Kind words cost nothing. I will remember them.', 'We shall see.']);
-  if (/spy|raven|secret|traitor/.test(t)) return pickOne(['Ravens fly both ways, my lord.', 'Every house has secrets. Mine are well guarded.', 'Careful whom you accuse.']);
-  return pickOne([words || 'We shall see.', 'I hear you. Speak plainly and I may answer in kind.', `House ${capWord(h.name)} marks your words.`]);
+// Say something to a whole house: privately to its people, or publicly when nobody is there.
+function botSayHouse(bot, houseId, text) {
+  const people = houseMembers(houseId).filter(p => !p.eliminated);
+  if (!people.length) return botSay(bot, text);
+  return botDo(bot, 'send-chat', { scope: 'secret', targetPlayerIds: people.map(p => p.id), message: text });
 }
+const botsOf = houseId => houseMembers(houseId).filter(p => p.isBot && !p.eliminated && p.w);
+function botTrust(bot, houseId, d) {
+  const ai = botAi(bot); if (!houseId || houseId === bot.houseId) return;
+  ai.trust[houseId] = clampN((ai.trust[houseId] || 0) + d, -100, 100);
+  if (d < 0) ai.grudge[houseId] = clampN((ai.grudge[houseId] || 0) - d * 0.6, 0, 100);
+}
+
+// ---- Live targets ---------------------------------------------------------
+// A city can only be attacked when somebody who is still playing holds it (or it is the empty throne).
+function capitalLive(c) {
+  if (!c || c.contested) return false;
+  if (c.vacant) return c.id === 'kings-landing';
+  if (!c.ownerHouseId || !c.ownerPlayerId) return false;
+  const op = players.get(c.ownerPlayerId);
+  if (!op || op.left || op.eliminated || !op.w) return false;
+  if ((gameSettings.disabledHouses || []).includes(c.ownerHouseId)) return false;
+  const oh = findHouse(c.ownerHouseId);
+  return Boolean(oh && !houseFallen(oh) && houseMembers(c.ownerHouseId).length);
+}
+
+// ---- Dice odds ------------------------------------------------------------
+// Monte-Carlo of the siege rules: sorted dice paired off, ties to the defender, dragons +3, fight until one side is out.
+function simSiege(att, defN, trials = 30) {
+  let wins = 0;
+  for (let t = 0; t < trials; t++) {
+    let a = [...Array(att.infantry + att.navy).fill(0), ...Array(att.dragons).fill(3)], d = defN;
+    for (let r = 0; r < 14 && a.length && d > 0; r++) {
+      const A = a.map(b => ({ v: randomInt(1, 6) + b, b })).sort((x, y) => y.v - x.v);
+      const D = Array.from({ length: d }, () => randomInt(1, 6)).sort((x, y) => y - x);
+      const pairs = Math.min(A.length, D.length), lost = new Set();
+      let lostD = 0;
+      for (let i = 0; i < pairs; i++) { if (D[i] >= A[i].v) lost.add(i); else lostD++; }
+      a = A.filter((_, i) => !lost.has(i)).map(x => x.b); d -= lostD;
+    }
+    if (d <= 0 && a.length) wins++;
+  }
+  return wins / trials;
+}
+function botPower(bot, hid) {
+  const ai = botAi(bot);
+  if (hid === bot.houseId) return armySize(bot.w) + 0.4 * playerIncome(bot);
+  const caps = capitals.filter(c => c.ownerHouseId === hid).length, e = ai.est[hid];
+  if (e && round - e.round <= 3) return e.infantry + e.navy + e.dragons * 4 + caps * 1.5;
+  return 3 + round * 0.9 + caps * 2;
+}
+function botDefenders(bot, c) {
+  const ai = botAi(bot), e = c.ownerHouseId ? ai.est[c.ownerHouseId] : null;
+  let home = c.vacant ? 0 : (e && round - e.round <= 3 ? e.infantry + e.navy + e.dragons * 2 : clampN(Math.round(3 + round * 0.9), 3, 25));
+  if (c.ownerHouseId && alliances.some(a => [a.houseA, a.houseB].includes(c.ownerHouseId))) home += 1;
+  const garrison = c.vacant ? 0 : garrisonFor(c, findHouse(c.ownerHouseId));
+  return Math.ceil((garrison + home) * 1.1);
+}
+
+// ---- Understanding what people ask ---------------------------------------
+const plainText = s => String(s || '').toLowerCase().replace(/[’']/g, '');
+function botParse(text, bot) {
+  const t0 = plainText(text), out = { raw: t0 };
+  const t = t0.replace(/\b(do not|dont|never|no need to|stop|please do not) (attack|invade|strike|assault)\b/g, 'hold off');
+  const nums = (t.match(/\d+/g) || []).map(Number).filter(n => n > 0 && n < 1000);
+  const houseIds = houses.filter(x => t.includes(x.name.toLowerCase()) || new RegExp(`\\b${x.id}\\b`).test(t)).map(x => x.id);
+  const capIds = capitals.filter(c => t.includes(plainText(c.name))).map(c => c.id);
+  out.houseIds = houseIds; out.capIds = capIds; out.amount = nums[0] || null;
+  const ask = /\b(give|send|lend|spare|need|want|loan|pay|can you|could you|will you|please|i require|lets have|hand over|donate)\b/.test(t);
+  if (/\b(gold|coins?|money|funds?|silver|tribute|loan|purse|dragons? of gold|pay me)\b/.test(t) && ask) out.money = true;
+  if (/\b(troops?|soldiers?|men|infantry|army|ships?|navy|fleet|reinforcements?|swords)\b/.test(t) && /\b(give|send|lend|spare|need|want|reinforce|loan|donate)\b/.test(t) && !/\b(send|march)\b.{0,25}\b(to|against|on) (the )?[a-z]/.test(t.replace(/ me\b/, ' ME'))) out.troops = true;
+  if (/\b(ships?|navy|fleet)\b/.test(t)) out.ships = true;
+  if (/\b(attack|strike|invade|march on|march against|conquer|crush|assault|besiege|siege|go after|move against|join me against|take)\b/.test(t) && (houseIds.length || capIds.length || /\b(attack|invade|conquer|assault|strike)\b/.test(t))) {
+    const selfTarget = houseIds.includes(bot.houseId) || capIds.some(id => findCapital(id)?.ownerHouseId === bot.houseId);
+    if (selfTarget && !/\b(together|join|with me|help)\b/.test(t)) out.threat = true; else out.attack = true;
+  }
+  if (/\b(help|aid|assist|defend|protect|save|rescue|relieve|reinforce|back me|stand with me|come to my)\b/.test(t)) out.help = true;
+  if (/\b(peace|truce|ceasefire|stand down|dont attack|do not attack|spare me|leave me alone|non-?aggression|hold off)\b/.test(t)) out.peace = true;
+  if (/\b(intel|intelligence|spy report|spies|scouts?|what did you (learn|see|find|hear)|any news|what do you know|rumou?rs?|did you spy|what have you heard)\b/.test(t)) out.intel = true;
+  if (/\b(alli(ance|ed|es)|ally|pact)\b/.test(t)) out.ally = true;
+  if (/\b(follow me|follow my lead|side with me|stand with me|obey|kneel|swear|support me|back me)\b/.test(t)) out.follow = true;
+  if (/\b(or else|you will pay|ill (destroy|crush|kill|burn)|beware|surrender|submit|yield|bend the knee|your head|you will die|burn you)\b/.test(t)) out.threat = true;
+  if (/\b(traitor|betray(ed|er)?|liar|snake|backstab|oathbreaker|cheat(ed|er)?)\b/.test(t)) out.accuse = true;
+  if (/\b(thanks|thank you|grateful|sorry|apolog|forgive|my thanks)\b/.test(t)) out.kind = true;
+  return out;
+}
+
+// ---- Deciding ------------------------------------------------------------
+// A score above zero means "yes". It mixes trust, alliance, stance and the king's crown with a randomised buffer.
+function botWillingness(bot, sender, kind) {
+  const ai = botAi(bot), h = bot.w, sh = sender.houseId;
+  const allied = Boolean(sh && areAllied(bot.houseId, sh));
+  const eff = (ai.trust[sh] || 0) + (allied ? 20 : 0);
+  const stance = ai.stance[sh] || 'neutral';
+  let s = eff / 70 + (allied ? 0.2 : 0) + (stance === 'follow' ? 0.3 : stance === 'betray' ? -0.6 : 0)
+    + (sender.id === kingPlayerId ? 0.2 : 0) - (ai.grudge[sh] || 0) / 90 - (sender.traitor ? 0.1 : 0);
+  if (kind === 'money') s -= ai.greed * 0.5 + (h.money < 12 ? 0.35 : 0);
+  if (kind === 'troops') s -= ai.greed * 0.3 + (armySize(h) < 6 ? 0.5 : 0);
+  if (kind === 'attack') s += ai.aggr * 0.25;
+  if (kind === 'peace') s += ai.diplo * 0.25;
+  if (kind === 'help') s += 0.1;
+  s += (Math.random() - 0.5) * 0.5;
+  return s;
+}
+function botGiveGold(bot, sender, wanted, why) {
+  const ai = botAi(bot), h = bot.w, allied = areAllied(bot.houseId, sender.houseId);
+  const cap = Math.floor(h.money * (allied ? 0.4 : 0.25));
+  if (cap < 1) return null;
+  const amt = clampN(wanted || Math.max(2, Math.round(h.money * 0.15)), 1, cap);
+  if (phase === 'ACTION') return botDo(bot, 'send-gift', { toPlayerId: sender.id, gold: amt, infantry: 0, navy: 0, message: why || '' }) ? { amt, now: true } : null;
+  ai.owe.push({ toPlayerId: sender.id, gold: amt, infantry: 0, navy: 0, message: why || '' });
+  return { amt, now: false };
+}
+function botGiveTroops(bot, sender, wanted, ships) {
+  const ai = botAi(bot), h = bot.w, allied = areAllied(bot.houseId, sender.houseId);
+  const spareInf = Math.max(0, h.infantry - 3), spareNavy = Math.max(0, h.navy - 1);
+  const inf = Math.floor(spareInf * (allied ? 0.5 : 0.3)), nav = ships ? Math.floor(spareNavy * 0.5) : 0;
+  const give = { infantry: wanted ? Math.min(wanted, inf) : Math.max(inf ? 1 : 0, Math.ceil(inf * 0.6)), navy: ships ? Math.min(wanted || nav, nav) : 0 };
+  if (give.infantry + give.navy < 1) return null;
+  if (phase === 'ACTION') return botDo(bot, 'send-gift', { toPlayerId: sender.id, gold: 0, infantry: give.infantry, navy: give.navy, message: 'Reinforcements.' }) ? { ...give, now: true } : null;
+  ai.owe.push({ toPlayerId: sender.id, gold: 0, infantry: give.infantry, navy: give.navy, message: 'Reinforcements.' });
+  return { ...give, now: false };
+}
+function botPickTargetCity(bot, houseId) {
+  return capitals.filter(c => c.ownerHouseId === houseId && capitalLive(c)).sort((a, b) => a.defense - b.defense)[0] || null;
+}
+// The meat of the conversation: understand the request, decide, act, and say something that fits. Returns the reply text.
+function botConverse(bot, sender, text) {
+  const ai = botAi(bot), h = bot.w, sh = sender.houseId, words = HOUSE_WORDS[bot.houseId] || '';
+  const it = botParse(text, bot), parts = [];
+  if (!sh || !sender.w) return botReply(bot, text, sender);
+  const allied = areAllied(bot.houseId, sh), stance = ai.stance[sh] || 'neutral';
+  const lying = () => Math.random() < (1 - ai.honesty) * 0.4 + (stance === 'betray' ? 0.35 : 0);
+  let acted = false;
+  if (it.threat) {
+    acted = true;
+    botTrust(bot, sh, -12);
+    const strong = botPower(bot, sh) > botPower(bot, bot.houseId) * 1.4;
+    parts.push(strong ? pickOne(['Your words are heard. There is no need for this to end in blood.', 'Let us not be hasty. I would rather deal than fight.']) : pickOne([`Threats are wind, ${HN(sh)}. My army is steel.`, `Come, then. My banners are many and my patience is short. ${words}`]));
+  }
+  if (it.accuse) {
+    acted = true;
+    const guilty = Object.values(ai.stance).includes('betray') && ai.stance[sh] === 'betray';
+    parts.push(guilty && Math.random() < 0.7 ? pickOne(['A traitor? I have only ever acted in my own house’s interest.', 'You have no proof of that, my lord.']) : pickOne(['Careful with such words. They travel faster than ravens.', 'I have kept every oath I have made.']));
+  }
+  if (it.money) {
+    acted = true;
+    const s = botWillingness(bot, sender, 'money');
+    if (s > 0.25) {
+      if (lying()) { ai.lies++; parts.push(pickOne([`Gold? It is on its way, ${HN(sh)}.`, 'You shall have it once my coffers are counted.'])); }
+      else {
+        const g = botGiveGold(bot, sender, it.amount, `Sent to House ${capWord(houseName(sh))}.`);
+        parts.push(g ? (g.now ? `I have sent you ${g.amt} gold. Spend it well.` : `You shall have ${g.amt} gold when the armies gather. Ask me then if it does not arrive.`) : 'My coffers are bare, I am afraid.');
+      }
+    } else parts.push(lying() ? 'My coffers are bare, I am afraid.' : pickOne([`Gold is not wheat to be scattered, ${HN(sh)}. Earn it.`, 'Not this time. Ask me when I am richer, or when we are closer.']));
+  }
+  if (it.troops) {
+    acted = true;
+    const s = botWillingness(bot, sender, 'troops');
+    if (s > 0.3 && !lying()) {
+      const g = botGiveTroops(bot, sender, it.amount, it.ships);
+      parts.push(g ? (g.now ? `I send you ${g.infantry} soldiers${g.navy ? ` and ${g.navy} ships` : ''}.` : `${g.infantry} soldiers will reach you when the armies gather.`) : 'I have none to spare. My own walls need them.');
+    } else parts.push(pickOne(['I cannot spare men. My own borders are thin.', 'My soldiers stay with me.', 'Ask me again when we have fought a common enemy.']));
+  }
+  if (it.attack) {
+    acted = true;
+    const targets = [...it.capIds.map(findCapital), ...it.houseIds.map(id => botPickTargetCity(bot, id))].filter(c => c && c.ownerHouseId !== bot.houseId && capitalLive(c));
+    const tc = targets[0];
+    if (!tc && (it.houseIds.length || it.capIds.length)) parts.push('That city cannot be attacked right now.');
+    else {
+      const friendly = tc && tc.ownerHouseId && areAllied(bot.houseId, tc.ownerHouseId);
+      const s = botWillingness(bot, sender, 'attack') - (friendly ? 0.8 : 0) - (tc && tc.ownerHouseId === sh ? 2 : 0);
+      if (s > 0.2) {
+        if (lying()) { ai.lies++; parts.push(`I will strike ${tc ? tc.name : 'them'} with you.`); }
+        else {
+          if (tc) ai.pledges.push({ capitalId: tc.id, forHouse: sh, round, expires: round + 3 });
+          parts.push(tc ? `Agreed. My banners will march on ${tc.name}.` : 'Agreed. I will pick a target and strike it.');
+        }
+      } else parts.push(friendly ? `${HN(tc.ownerHouseId)} is a friend of mine. Choose another target.` : pickOne(['Not now. I have my own plans.', 'The odds do not favour it.']));
+    }
+  }
+  if (it.help) {
+    acted = true;
+    const s = botWillingness(bot, sender, 'help');
+    const besieged = capitals.find(c => c.siege && c.ownerHouseId === sh);
+    if (s > 0.15) {
+      if (lying()) { ai.lies++; parts.push('Hold on. My army is on its way.'); }
+      else if (besieged) { ai.relief.push({ capitalId: besieged.id, forHouse: sh, round, expires: round + 3 }); parts.push(`I will relieve ${besieged.name}.`); }
+      else {
+        ai.peace[sh] = round + 4;
+        const g = botGiveGold(bot, sender, null, 'Help.');
+        parts.push(g ? `I will watch your borders. Here is ${g.amt} gold${g.now ? '' : ' soon'} to help.` : 'I will watch your borders and I will not move against you.');
+      }
+    } else parts.push(pickOne(['I wish I could. My hands are full.', 'Ask a closer friend.']));
+  }
+  if (it.peace && !it.ally) {
+    acted = true;
+    const s = botWillingness(bot, sender, 'peace');
+    if (s > 0) {
+      ai.peace[sh] = round + 2 + randomInt(0, 3);
+      if (lying() && !allied) { ai.peaceLie[sh] = true; ai.lies++; }
+      parts.push(pickOne([`Peace, then. I will not move against ${HN(sh)}.`, 'A truce suits me, for now.']));
+    } else parts.push(pickOne(['No promises.', 'Peace is earned.']));
+  }
+  if (it.intel) {
+    acted = true;
+    parts.push(botIntelFor(bot, sender));
+  }
+  if (it.follow) {
+    acted = true;
+    if (stance === 'follow' || (stance === 'neutral' && Math.random() < 0.4) || lying()) {
+      if (stance !== 'follow' && lying()) ai.lies++;
+      parts.push(pickOne([`I stand with ${HN(sh)}.`, 'You have my sword. For now.']));
+    } else parts.push(pickOne(['I follow no one.', `${HN(bot.houseId)} bows to no other house.`]));
+  }
+  if (it.kind) {
+    acted = true; botTrust(bot, sh, 4);
+    parts.push(pickOne(['Noted.', 'Kind words cost nothing. I will remember them.']));
+  }
+  if (!acted) return botReply(bot, text, sender);
+  return parts.join(' ');
+}
+// What a bot tells somebody who asks what it has learned. It tells friends the truth, and others what suits it.
+function botIntelFor(bot, sender) {
+  const ai = botAi(bot), sh = sender.houseId;
+  const items = ai.intel.filter(i => round - i.round <= 3 && i.aboutHouseId !== sh);
+  if (!items.length) return pickOne(['I have heard nothing worth repeating.', 'My ravens have been quiet.']);
+  const stance = ai.stance[sh] || 'neutral', allied = areAllied(bot.houseId, sh);
+  const item = items.sort((a, b) => b.value - a.value)[0];
+  const lie = Math.random() < (1 - ai.honesty) * 0.5 + (stance === 'betray' ? 0.4 : stance === 'neutral' && !allied ? 0.2 : 0);
+  if (!allied && stance !== 'follow' && Math.random() < 0.5) return 'My scouts’ words are not for sale.';
+  if (lie) { ai.lies++; return botFalseClaim(bot, item, sh); }
+  return item.text;
+}
+// A believable lie that favours the bot: mislead about its own plans, inflate a rival, or point the ally at somebody else.
+function botFalseClaim(bot, item, toHouseId) {
+  const rival = houses.filter(x => x.id !== bot.houseId && x.id !== toHouseId && houseMembers(x.id).length && !houseFallen(x));
+  if (item.kind === 'movement' || item.kind === 'count') {
+    const r = rival.length ? pickOne(rival) : null;
+    if (r && Math.random() < 0.5) return `My scouts say ${HN(r.id)} is gathering a large host and looks hungrily at your lands.`;
+    return `${HN(item.aboutHouseId)} has about ${randomInt(2, 4)} more soldiers than I could count last round. Be careful.`;
+  }
+  if (item.kind === 'alliance') return 'I found no secret pacts at all. The realm is quiet.';
+  return 'All is quiet. Nothing to report.';
+}
+
+// ---- What spies bring back ------------------------------------------------
+function botReadReports(bot) {
+  const ai = botAi(bot), h = bot.w, fresh = [];
+  for (const r of h.spyReports || []) {
+    if (ai.seenReports[r.id]) continue;
+    ai.seenReports[r.id] = true;
+    if (r.caught) { botTrust(bot, r.targetHouseId, 0); continue; }
+    if (!r.success || !r.findings) continue;
+    const f = r.findings, tid = r.targetHouseId, tn = HN(tid);
+    let item = null;
+    if (f.kind === 'count') {
+      ai.est[tid] = { infantry: f.infantry, navy: f.navy, dragons: f.dragons, round: r.round };
+      const total = f.infantry + f.navy + f.dragons * 3;
+      item = { kind: 'count', aboutHouseId: tid, round: r.round, value: total > botPower(bot, bot.houseId) * 1.2 ? 4 : 1, text: `${tn} keeps roughly ${f.infantry} soldiers, ${f.navy} ships and ${f.dragons} dragons${f.marching ? ', and part of it is on the march' : ''}.` };
+    } else if (f.kind === 'movement') {
+      const cap = capitals.find(c => c.name === f.movingOn);
+      ai.est[tid] = { infantry: f.infantry, navy: f.navy, dragons: f.dragons, round: r.round };
+      const mine = cap && cap.ownerHouseId === bot.houseId, friend = cap && cap.ownerHouseId && areAllied(bot.houseId, cap.ownerHouseId);
+      if (cap && mine) ai.threats[cap.id] = round;
+      item = { kind: 'movement', aboutHouseId: tid, capitalId: cap?.id, round: r.round, value: mine ? 9 : friend ? 7 : 3, ownerHouseId: cap?.ownerHouseId, text: `${tn} has an army of about ${f.infantry} soldiers, ${f.navy} ships and ${f.dragons} dragons marching on ${f.movingOn || 'a city'}.` };
+    } else if (f.kind === 'alliance') {
+      const names = (f.houses || []).map(HN).join(' and ');
+      const vsFriend = (f.houses || []).some(x => areAllied(bot.houseId, x));
+      item = { kind: 'alliance', aboutHouseId: tid, round: r.round, value: vsFriend ? 6 : 3, text: `${tn} has a secret pact with ${names}.` };
+    } else if (f.kind === 'raven' && f.letter) {
+      const mentions = plainText(f.letter.text).includes(houseName(bot.houseId).toLowerCase());
+      if (mentions) botTrust(bot, tid, -6);
+      item = { kind: 'raven', aboutHouseId: tid, round: r.round, value: mentions ? 6 : 2, text: `I intercepted a raven from ${f.letter.from}: “${String(f.letter.text).slice(0, 120)}”` };
+    } else if (f.kind === 'dragon') {
+      item = { kind: 'dragon', aboutHouseId: tid, round: r.round, value: f.hasDragon ? 6 : 1, text: f.hasDragon ? `${tn} shelters a dragon.` : `${tn} has no dragon.` };
+    } else if (f.kind === 'total' || f.kind === 'recent') {
+      item = { kind: 'wealth', aboutHouseId: tid, round: r.round, value: 1, text: f.kind === 'total' ? `${tn} holds about ${f.gold} gold.` : `${tn} earned ${f.earned} and spent ${f.spent} gold lately.` };
+    }
+    if (item) { ai.intel.push(item); fresh.push(item); }
+  }
+  if (ai.intel.length > 30) ai.intel.splice(0, ai.intel.length - 30);
+  return fresh;
+}
+// A bot that learns something valuable tells its friends, unless it has a reason to keep quiet or mislead.
+function botShareIntel(bot, items) {
+  const ai = botAi(bot);
+  for (const item of items.filter(i => i.value >= 4)) {
+    for (const a of alliances.filter(x => [x.houseA, x.houseB].includes(bot.houseId))) {
+      const friend = a.houseA === bot.houseId ? a.houseB : a.houseA;
+      if (friend === item.aboutHouseId) continue;
+      const stance = ai.stance[friend] || 'neutral';
+      const lieChance = (1 - ai.honesty) * 0.5 + (stance === 'betray' ? 0.45 : stance === 'neutral' ? 0.12 : 0) - (ai.trust[friend] || 0) / 400;
+      if (Math.random() < lieChance) {
+        ai.lies++;
+        if (Math.random() < 0.4) continue; // keep quiet
+        const false1 = botFalseClaim(bot, item, friend);
+        botLater(bot, () => botSayHouse(bot, friend, false1));
+        continue;
+      }
+      if (item.kind === 'movement' && item.ownerHouseId === friend) botLater(bot, () => botSayHouse(bot, friend, `Warning: ${item.text} Prepare your defences.`));
+      else botLater(bot, () => botSayHouse(bot, friend, `My spies learned something for you: ${item.text}`));
+      for (const other of botsOf(friend)) botReceiveIntel(other, bot.houseId, item);
+    }
+  }
+}
+function botReceiveIntel(bot, fromHouseId, item) {
+  const ai = botAi(bot), w = clampN(0.5 + ((ai.trust[fromHouseId] || 0) + (areAllied(bot.houseId, fromHouseId) ? 20 : 0)) / 100, 0.15, 0.95);
+  const mine = ai.est[item.aboutHouseId];
+  if (item.kind === 'count' && mine && round - mine.round <= 2) {
+    const sum = o => o.infantry + o.navy + o.dragons * 3;
+    const m = item.text.match(/(\d+) soldiers, (\d+) ships and (\d+) dragons/);
+    if (m && Math.abs(sum(mine) - (Number(m[1]) + Number(m[2]) + Number(m[3]) * 3)) > 6) { botTrust(bot, fromHouseId, -10); return; } // caught in a lie
+  }
+  if (Math.random() > w) return;
+  if (item.kind === 'movement' && item.capitalId) {
+    const cap = findCapital(item.capitalId);
+    if (cap && cap.ownerHouseId && (cap.ownerHouseId === bot.houseId || areAllied(bot.houseId, cap.ownerHouseId))) ai.threats[cap.id] = round;
+  }
+  if (item.kind === 'count') { const m = item.text.match(/(\d+) soldiers, (\d+) ships and (\d+) dragons/); if (m) ai.est[item.aboutHouseId] = { infantry: +m[1], navy: +m[2], dragons: +m[3], round }; }
+  ai.intel.push({ ...item, round, value: Math.max(1, item.value - 2) });
+}
+
+// ---- Stance and plan ------------------------------------------------------
+// Every round each bot weighs, for every other house, whether following them or turning on them pays better.
+// A random buffer per house keeps it from flipping on a hair, and it only changes once the score clears that buffer.
+function botEvalStances(bot) {
+  const ai = botAi(bot); ai.stanceRound = round;
+  const me = botPower(bot, bot.houseId), kingHouse = players.get(kingPlayerId)?.houseId;
+  for (const x of houses) {
+    if (x.id === bot.houseId || !houseMembers(x.id).length || houseFallen(x)) continue;
+    const allied = areAllied(bot.houseId, x.id);
+    if (ai.buffer[x.id] === undefined) ai.buffer[x.id] = 0.15 + Math.random() * 0.25;
+    const w = ai.buffer[x.id], pw = botPower(bot, x.id);
+    let s = ((ai.trust[x.id] || 0) + (allied ? 20 : 0)) / 70 - (ai.grudge[x.id] || 0) / 80 - ai.aggr * 0.35 + ai.diplo * 0.25
+      + (pw > me * 1.3 ? 0.3 : pw < me * 0.6 ? -0.35 : 0) + (kingHouse === x.id ? 0.15 - (ai.crownGrudge ? 0.4 : 0) : 0) + (Math.random() - 0.5) * 0.5;
+    if (!allied) s -= 0.1;
+    const prev = ai.stance[x.id] || 'neutral', lowBar = allied ? w : w + 0.15;
+    let st = s > w ? 'follow' : s < -lowBar ? 'betray' : 'neutral';
+    if (prev === 'follow' && s > -w * 0.3) st = 'follow';
+    if (prev === 'betray' && s < w * 0.3) st = 'betray';
+    ai.stance[x.id] = st; ai.score[x.id] = s;
+  }
+  // time heals a little
+  for (const k of Object.keys(ai.grudge)) ai.grudge[k] = Math.max(0, ai.grudge[k] - 3);
+  for (const a of alliances.filter(x => [x.houseA, x.houseB].includes(bot.houseId))) { const f = a.houseA === bot.houseId ? a.houseB : a.houseA; ai.trust[f] = clampN((ai.trust[f] || 0) + 1, -100, 100); }
+}
+function botMakePlan(bot) {
+  const ai = botAi(bot), h = bot.w, income = playerIncome(bot);
+  let goal = 'hold', focus = null;
+  const mineBesieged = capitals.some(c => c.ownerHouseId === bot.houseId && (c.siege || (ai.threats[c.id] || 0) >= round - 1));
+  const friendCity = capitals.find(c => c.siege && c.ownerHouseId && c.ownerHouseId !== bot.houseId && areAllied(bot.houseId, c.ownerHouseId) && ai.stance[c.ownerHouseId] === 'follow');
+  const betrayTarget = houses.find(x => areAllied(bot.houseId, x.id) && ai.stance[x.id] === 'betray' && !houseFallen(x));
+  if (mineBesieged) goal = 'defend';
+  else if (friendCity) { goal = 'support'; focus = friendCity.id; }
+  else if (betrayTarget && round >= 3) { goal = 'betray'; focus = betrayTarget.id; }
+  else if (armySize(h) < Math.max(4, income * 0.7)) goal = 'build';
+  else if (round >= 3 && Math.random() < 0.35 + ai.aggr * 0.55) goal = 'conquer';
+  ai.plan = { goal, focus, round };
+  return ai.plan;
+}
+const PLAN_BIAS = {
+  build: { spend: 0.95, spy: 0.3, attack: 0.5, reserve: 0.3 },
+  conquer: { spend: 0.85, spy: 0.7, attack: 1.4, reserve: 0.25 },
+  defend: { spend: 0.8, spy: 0.6, attack: 0.3, reserve: 0.6 },
+  betray: { spend: 0.85, spy: 0.9, attack: 1.3, reserve: 0.25 },
+  support: { spend: 0.7, spy: 0.4, attack: 0.6, reserve: 0.3 },
+  hold: { spend: 0.5, spy: 0.35, attack: 0.8, reserve: 0.4 }
+};
+
+// ---- Reactions to what other people do to a bot -------------------------
+function botOnSpyCaught(spyHouseId, targetHouseId) {
+  for (const b of botsOf(targetHouseId)) {
+    const ai = botAi(b);
+    botTrust(b, spyHouseId, -22);
+    botLater(b, () => {
+      const lines = ai.aggr > 0.6
+        ? [`Your spies were caught in my halls, ${HN(spyHouseId)}. The next one will hang, and so will you.`, 'I know it was you. Remember that.']
+        : [`Your agents were caught in my halls, ${HN(spyHouseId)}. A gift of gold might soften my temper.`, 'I will not forget this insult. Explain yourself.'];
+      botSayHouse(b, spyHouseId, pickOne(lines));
+    }, 3000, 9000);
+  }
+}
+function botOnTraitor(target, king) {
+  if (target.isBot && target.w) {
+    const ai = botAi(target);
+    botTrust(target, king.houseId, -30); ai.crownGrudge = round;
+    botLater(target, () => botSayHouse(target, king.houseId, ai.aggr > 0.5 ? 'A traitor? The crown has forgotten who holds its borders. Remember this.' : 'I have served the crown faithfully. Withdraw this label, my king, and we shall speak.'), 3000, 8000);
+  }
+  for (const b of botsOf(target.houseId)) if (b.id !== target.id) botTrust(b, king.houseId, -12);
+}
+function botOnBetrayed(breakerHouseId, otherHouseId) {
+  for (const b of botsOf(otherHouseId)) {
+    botTrust(b, breakerHouseId, -35);
+    botLater(b, () => botSayHouse(b, breakerHouseId, pickOne([`You broke our alliance, ${HN(breakerHouseId)}. Oathbreakers do not prosper.`, 'So that is how it is. Remember who offered you friendship.'])), 3000, 8000);
+  }
+}
+function botOnGift(to, from, gold, infantry, navy) {
+  if (!to.isBot || !to.w || !from.houseId) return;
+  const worth = gold * 2 + (infantry + navy) * 3;
+  if (worth > 0) { botTrust(to, from.houseId, Math.min(25, worth)); const ai = botAi(to); ai.grudge[from.houseId] = Math.max(0, (ai.grudge[from.houseId] || 0) - worth); }
+}
+// Run each tick: noticing sieges and lost cities, and doing queued speech and promises.
+function botWatch(bot) {
+  const ai = botAi(bot);
+  const now = Date.now();
+  ai.todo = ai.todo.filter(t => { if (now < t.at) return true; try { t.fn(); } catch (e) { console.error('Bot task failed:', e); } return false; });
+  for (const c of capitals) {
+    if (!c.siege) continue;
+    const key = `${c.id}:${c.siege.id || c.siege.startRound}`;
+    if (ai.seenSieges[key]) continue;
+    ai.seenSieges[key] = true;
+    const attackers = [...new Set(c.siege.attackers.map(e => e.houseId))];
+    if (c.ownerHouseId === bot.houseId) {
+      ai.threats[c.id] = round;
+      for (const a of attackers) botTrust(bot, a, -40);
+      for (const f of alliances.filter(x => [x.houseA, x.houseB].includes(bot.houseId))) {
+        const ally = f.houseA === bot.houseId ? f.houseB : f.houseA;
+        if (attackers.includes(ally)) continue;
+        const bots = botsOf(ally);
+        botLater(bot, () => {
+          botSayHouse(bot, ally, `${attackers.map(HN).join(' and ')} is besieging ${c.name}. Help me, ${HN(bot.houseId)} will remember who answered.`);
+          for (const b of bots) botAi(b).relief.push({ capitalId: c.id, forHouse: bot.houseId, round, expires: round + 3, ifWilling: true });
+        }, 2000, 6000);
+      }
+    } else if (c.ownerHouseId && areAllied(bot.houseId, c.ownerHouseId)) {
+      for (const a of attackers) botTrust(bot, a, -10);
+    }
+  }
+  // Cities lost since the last look
+  const owned = capitals.filter(c => c.ownerHouseId === bot.houseId).map(c => c.id);
+  if (ai.owned) for (const id of ai.owned) if (!owned.includes(id)) { const c = findCapital(id); if (c && c.ownerHouseId) { botTrust(bot, c.ownerHouseId, -45); if (c.id === 'kings-landing') ai.crownGrudge = round; } }
+  ai.owned = owned;
+  ai.pledges = ai.pledges.filter(p => p.expires >= round);
+  ai.relief = ai.relief.filter(p => p.expires >= round);
+}
+
+// ---- Choosing an attack ---------------------------------------------------
 function botAttackPlan(bot) {
-  const h = bot.w, ai = botAi(bot);
+  const h = bot.w, ai = botAi(bot), bias = PLAN_BIAS[ai.plan.goal] || PLAN_BIAS.hold;
+  const reserve = { inf: Math.ceil(h.infantry * bias.reserve), navy: Math.ceil(h.navy * bias.reserve) };
+  const thr = 0.6 + (1 - ai.aggr) * 0.2;
+  const from = findCapital(bot.cityId) || homeCityOf(bot);
   let best = null;
   for (const c of capitals) {
-    if (c.contested || (!c.vacant && !c.ownerHouseId) || c.ownerPlayerId === bot.id || c.ownerHouseId === bot.houseId) continue;
-    if (c.ownerHouseId && areAllied(bot.houseId, c.ownerHouseId)) continue;
-    const home = buffsOn() && (c.ownerHouseId === 'stark' && c.id === 'winterfell') || (c.ownerHouseId === 'martell' && c.id === 'sunspear') || (c.ownerHouseId === 'arryn' && c.id === 'the-eyrie');
-    const need = c.vacant ? 1 : c.defense + 3 + (home ? 2 : 0) - (ai.aggr > 0.7 ? 1 : 0);
-    const units = { infantry: 0, navy: 0, dragons: 0 };
-    let left = need;
-    const takeInf = Math.min(h.infantry, left); units.infantry = takeInf; left -= takeInf;
-    if (left > 0 && !(c.id === 'winterfell' && buffsOn())) { const n = Math.min(h.navy, left); units.navy = n; left -= n; }
-    if (left > 0 && h.dragons) { const d = Math.min(h.dragons, Math.ceil(left / 6)); units.dragons = d; left -= d * 6; }
-    if (left > 0 || forceStrength(units) < 1) continue;
-    if (units.infantry < h.infantry && !c.vacant) units.infantry += 1;
-    const score = (c.id === 'kings-landing' ? 8 : 0) + (c.vacant ? 6 : 0) + (c.ownerHouseId ? 2 : 0) - need * 0.4 + Math.random();
-    if (!best || score > best.score) best = { c, units, score };
+    if (!capitalLive(c) || c.ownerPlayerId === bot.id || c.ownerHouseId === bot.houseId) continue;
+    const hid = c.ownerHouseId, pledge = ai.pledges.find(p => p.capitalId === c.id);
+    const allied = hid && areAllied(bot.houseId, hid);
+    const betraying = allied && ai.stance[hid] === 'betray' && (ai.plan.goal === 'betray' || ai.plan.focus === hid || Math.random() < 0.3);
+    if (allied && !betraying) continue;
+    if (hid && !allied && (ai.stance[hid] === 'follow') && !pledge) continue;
+    if (hid && (ai.peace[hid] || 0) >= round && !ai.peaceLie[hid] && !pledge) continue;
+    if (c.siege && c.siege.attackers.some(e => e.houseId === bot.houseId)) continue;
+    const defN = botDefenders(bot, c);
+    const noNavy = c.id === 'winterfell' && buffsOn();
+    const cap = { infantry: Math.max(0, h.infantry - reserve.inf), navy: noNavy ? 0 : Math.max(0, h.navy - reserve.navy), dragons: ai.plan.goal === 'defend' && c.id !== 'kings-landing' ? 0 : h.dragons };
+    const total = cap.infantry + cap.navy + cap.dragons;
+    if (total < 1) continue;
+    const u = { infantry: 0, navy: 0, dragons: 0 }; let prob = 0, n = 0, found = false;
+    const start = Math.max(1, Math.floor(defN * 0.7));
+    for (const k of ['dragons', 'infantry', 'navy']) while (u[k] < cap[k] && n < total) {
+      u[k]++; n++;
+      if (n < start) continue;
+      prob = simSiege(u, defN, 24);
+      if (prob >= thr) { found = true; break; }
+    }
+    if (!found) continue;
+    const travel = attackTravel(from, c, u);
+    const score = (c.id === 'kings-landing' ? 10 : 0) + (c.vacant ? 9 : 0) + (hid ? 3 : 0) + (pledge ? 5 : 0) + (betraying ? 4 : 0)
+      + (hid ? (ai.grudge[hid] || 0) / 15 : 0) + (hid && ai.stance[hid] === 'betray' ? 2 : 0) + (ai.threats[c.id] ? 0 : 0) + prob * 3
+      - travel * 1.3 - n * 0.2 + Math.random();
+    if (!best || score > best.score) best = { c, units: { ...u }, score, prob, betrayHouse: betraying ? hid : null, pledge };
   }
   if (!best) return null;
-  if (!best.c.vacant && Math.random() > 0.08 + ai.aggr * 0.27) return null;
+  if (!best.c.vacant && !best.pledge && Math.random() > Math.min(0.9, (0.08 + ai.aggr * 0.27) * bias.attack * 1.4)) return null;
   return best;
+}
+
+// ---- A bot's turn --------------------------------------------------------
+function botAskAllies(bot, plan, target) {
+  const ai = botAi(bot), h = bot.w;
+  for (const a of alliances.filter(x => [x.houseA, x.houseB].includes(bot.houseId))) {
+    const friend = a.houseA === bot.houseId ? a.houseB : a.houseA;
+    if (ai.asked[friend] === round || (ai.stance[friend] || 'neutral') === 'betray' || Math.random() > 0.55) continue;
+    ai.asked[friend] = round;
+    const besieged = capitals.find(c => c.siege && c.ownerHouseId === bot.houseId);
+    let ask = null, line = '';
+    if (besieged) { ask = { help: true }; line = `${besieged.name} is under siege. Help me, friend.`; }
+    else if (h.money < 6 && ['build', 'conquer', 'betray'].includes(plan.goal)) { ask = { money: true, amount: randomInt(3, 8) }; line = `Friend, I am short of coin. Can you send me ${ask.amount} gold?`; }
+    else if (target && plan.goal === 'conquer') { ask = { attack: true, capIds: [target.id], houseIds: [] }; line = `Join me against ${target.ownerHouseId ? HN(target.ownerHouseId) : 'the throne'}: attack ${target.name} with me.`; }
+    else if (plan.goal === 'build' && Math.random() < 0.3) { ask = { troops: true, amount: randomInt(2, 4) }; line = 'Friend, send me some troops. I will not forget it.'; }
+    if (!ask) continue;
+    const people = houseMembers(friend).filter(p => !p.eliminated);
+    const humans = people.filter(p => !p.isBot);
+    if (humans.length) botSay(bot, line, humans[0]);
+    for (const other of botsOf(friend)) {
+      botLater(other, () => {
+        const reply = botConverseStructured(other, bot, ask, line);
+        if (reply) botSay(other, reply, bot);
+      }, 3000, 9000);
+    }
+  }
+}
+// Bots talk to each other with the same logic, using the structured form of the request.
+function botConverseStructured(responder, asker, ask, line) {
+  return botConverse(responder, asker, line);
 }
 function botTurn(bot) {
   const h = bot.w, ai = botAi(bot);
+  if (ai.stanceRound !== round) { botEvalStances(bot); botMakePlan(bot); }
+  const plan = ai.plan, bias = PLAN_BIAS[plan.goal] || PLAN_BIAS.hold;
+  // Promises made earlier
+  const owe = ai.owe.splice(0);
+  for (const o of owe) { const to = players.get(o.toPlayerId); if (to && !to.left && !to.eliminated) { const gold = Math.min(o.gold, h.money), inf = Math.min(o.infantry, h.infantry), nav = Math.min(o.navy, h.navy); if (gold + inf + nav > 0) botDo(bot, 'send-gift', { toPlayerId: o.toPlayerId, gold, infantry: inf, navy: nav, message: o.message || '' }); } }
+  // Spies: scout, then read and share what came back.
+  if (bot.lastSpyRound !== round && h.money >= 8 && Math.random() < bias.spy) {
+    const pool = houses.filter(x => x.id !== bot.houseId && houseMembers(x.id).length && !houseFallen(x));
+    const weight = x => 1 + (ai.stance[x.id] === 'betray' ? 3 : 0) + (ai.grudge[x.id] || 0) / 20 + (ai.est[x.id] && round - ai.est[x.id].round <= 2 ? 0 : 1.5) + (areAllied(bot.houseId, x.id) ? -0.5 : 0) + (plan.focus === x.id ? 3 : 0);
+    let pick = null, total = pool.reduce((n, x) => n + Math.max(0.2, weight(x)), 0), roll = Math.random() * total;
+    for (const x of pool) { roll -= Math.max(0.2, weight(x)); if (roll <= 0) { pick = x; break; } }
+    if (pick) {
+      const r = Math.random();
+      const mission = (ai.grudge[pick.id] || 0) > 25 && r < 0.3 ? 'messages' : r < 0.12 ? 'wealth' : 'war';
+      botDo(bot, 'spy', { targetHouseId: pick.id, mission, spend: clampN(Math.round(h.money * (0.15 + ai.greed * 0.1)), 2, 20) });
+    }
+  }
+  const fresh = botReadReports(bot);
+  if (fresh.length) botShareIntel(bot, fresh);
   // Recruit with what the treasury can spare, keeping the army no larger than income can feed.
   const income = playerIncome(bot);
   const roomForTroops = Math.floor(income * 1.1) + 3 - armySize(h);
   const spendable = h.money - Math.max(0, armySize(h) - 8);
   if (roomForTroops > 0 && spendable >= h.infantryCost) {
-    const n = Math.min(10, roomForTroops, Math.floor(spendable * (0.6 + ai.aggr * 0.4) / h.infantryCost));
+    const n = Math.min(roomForTroops, Math.floor(spendable * bias.spend / h.infantryCost));
     if (n >= 1) botDo(bot, 'purchase', { unit: 'infantry', amount: n });
   }
   if (h.navy < 4 && Math.random() < 0.25 && h.money >= h.navyCost * 2 && armySize(h) + 2 <= Math.floor(income * 1.1) + 3) botDo(bot, 'purchase', { unit: 'navy', amount: randomInt(1, 2) });
-  // Attack, and take the throne when it can be taken.
+  // Relief first: a besieged city of its own, or of a friend it promised to help.
   let target = null;
-  if (round >= 3 && !h.pendingAttack && !h.hasAttackedThisRound) {
-    const plan = botAttackPlan(bot);
-    if (plan && botDo(bot, 'plan-attack', { targetCapitalId: plan.c.id, ...plan.units })) target = plan.c;
+  if (round >= 2 && !h.pendingAttack && !h.hasAttackedThisRound) {
+    const wanted = [...ai.relief.map(r => ({ ...r })), ...capitals.filter(c => c.siege && c.ownerHouseId === bot.houseId).map(c => ({ capitalId: c.id, forHouse: bot.houseId }))];
+    for (const r of wanted) {
+      const c = findCapital(r.capitalId);
+      if (!c || !c.siege || !capitalLive(c) || (c.ownerHouseId !== bot.houseId && !areAllied(bot.houseId, c.ownerHouseId))) continue;
+      if (r.ifWilling && (botWillingness(bot, { houseId: c.ownerHouseId, id: '' }, 'help') < 0.1)) continue;
+      const own = c.ownerHouseId === bot.houseId, share = own ? 0.6 : 0.4;
+      const inf = Math.floor(h.infantry * share), nav = c.id === 'winterfell' ? 0 : Math.floor(h.navy * share * 0.5);
+      if (inf + nav < 1) continue;
+      if (botDo(bot, 'plan-attack', { targetCapitalId: c.id, infantry: inf, navy: nav, dragons: own ? h.dragons : 0 })) { target = c; break; }
+    }
+  }
+  // Attack, and take the throne when it can be taken. Betraying a friend means breaking the alliance first.
+  if (!target && round >= 3 && !h.pendingAttack && !h.hasAttackedThisRound) {
+    const attack = botAttackPlan(bot);
+    if (attack) {
+      if (attack.betrayHouse) {
+        const al = alliances.find(a => [a.houseA, a.houseB].includes(bot.houseId) && [a.houseA, a.houseB].includes(attack.betrayHouse));
+        if (al) botDo(bot, 'break-alliance', { allianceId: al.id });
+      }
+      if (botDo(bot, 'plan-attack', { targetCapitalId: attack.c.id, ...attack.units })) { target = attack.c; ai.pledges = ai.pledges.filter(p => p.capitalId !== attack.c.id); }
+    }
+  }
+  // The king brands the houses it holds a grudge against, and pardons the repentant.
+  if (bot.id === kingPlayerId && Math.random() < 0.5) {
+    for (const p of players.values()) {
+      if (p.id === bot.id || p.left || p.eliminated || !p.houseId || p.isBot && areAllied(bot.houseId, p.houseId)) continue;
+      const g = ai.grudge[p.houseId] || 0;
+      if (!p.traitor && g >= 45) { botDo(bot, 'mark-traitor', { playerId: p.id, traitor: true }); break; }
+      if (p.traitor && g < 15 && (ai.trust[p.houseId] || 0) > 10) { botDo(bot, 'mark-traitor', { playerId: p.id, traitor: false }); break; }
+    }
   }
   // Seek friends: offer an alliance and a word to its leader.
   const mine = alliances.filter(a => [a.houseA, a.houseB].includes(bot.houseId)).length;
   if (ai.dipRound !== round && mine < 3 && Math.random() < ai.diplo * 0.75) {
     ai.dipRound = round;
     const options = houses.filter(x => x.id !== bot.houseId && houseMembers(x.id).length && !houseFallen(x) && !areAllied(bot.houseId, x.id) && x.id !== target?.ownerHouseId
+      && (ai.stance[x.id] || 'neutral') !== 'betray' && (ai.grudge[x.id] || 0) < 40
       && !allianceOffers.some(o => (o.fromHouseId === bot.houseId && o.toHouseId === x.id) || (o.fromHouseId === x.id && o.toHouseId === bot.houseId)));
     if (options.length) {
       const pick = pickOne(options);
       if (botDo(bot, 'offer-alliance', { targetHouseId: pick.id, scope: Math.random() < 0.3 ? 'secret' : 'public' })) {
         const to = houseMembers(pick.id).find(p => !p.isBot);
-        if (to) botSay(bot, pickOne([`House ${capWord(h.name)} offers you an alliance. Together we would be hard to break. ${HOUSE_WORDS[bot.houseId] || ''}`, `Let us not waste strength on each other, House ${capWord(pick.name)}. Accept my alliance.`]), to);
+        if (to) botSay(bot, pickOne([`House ${capWord(bot.w.name)} offers you an alliance. Together we would be hard to break. ${HOUSE_WORDS[bot.houseId] || ''}`, `Let us not waste strength on each other, House ${capWord(pick.name)}. Accept my alliance.`]), to);
       }
     }
   } else if (Math.random() < 0.2) {
     botSay(bot, pickOne([HOUSE_WORDS[bot.houseId] || 'The realm is watching.', `House ${capWord(h.name)} is watching the realm.`, 'Trust is a luxury in this game.', 'Some will rise this round. Some will not.']));
   }
+  // Ask friends for what the plan needs.
+  botAskAllies(bot, plan, target || null);
 }
 function botTick() {
   if (gameOver || !canDiplomacy()) return false;
@@ -1754,6 +2291,7 @@ function botTick() {
   for (const bot of bots) {
     const ai = botAi(bot), h = bot.w, lead = botLeads(bot);
     const done = v => { if (v) acted = true; };
+    botWatch(bot);
     // The crown is offered to this bot.
     const throne = capitals.find(c => c.id === 'kings-landing');
     if (throne?.vacant && throne.offerTo === bot.id && botReady(bot, `crown${round}`)) done(botDo(bot, 'crown-choice', { accept: Math.random() < 0.55 + ai.aggr * 0.4 }));
@@ -1775,7 +2313,8 @@ function botTick() {
         if (!botReady(bot, `ao${o.id}`)) continue;
         const marching = h.pendingAttack && findCapital(h.pendingAttack.targetCapitalId)?.ownerHouseId === o.fromHouseId;
         const crowded = alliances.filter(a => [a.houseA, a.houseB].includes(bot.houseId)).length >= 3;
-        done(botDo(bot, 'respond-alliance', { offerId: o.id, accept: !marching && Math.random() < (crowded ? 0.2 : 0.4 + ai.diplo * 0.45) }));
+        const fromHouse = o.fromHouseId, bias = ((ai.trust[fromHouse] || 0) / 200) - ((ai.grudge[fromHouse] || 0) / 150) - (ai.stance[fromHouse] === 'betray' ? 0.3 : 0);
+        done(botDo(bot, 'respond-alliance', { offerId: o.id, accept: !marching && Math.random() < (crowded ? 0.2 : 0.4 + ai.diplo * 0.45) + bias }));
       }
       for (const t of treaties.filter(x => x.status === 'pending' && x.toHouseId === bot.houseId)) {
         if (botReady(bot, `tr${t.id}`)) done(botDo(bot, 'respond-treaty', { treatyId: t.id, accept: Math.random() < 0.9 }));
@@ -1787,7 +2326,7 @@ function botTick() {
       if (!r || d.kingPlayerId === bot.id || !botReady(bot, `dec${d.id}`, 3000, 10000)) continue;
       const afford = h.money >= d.gold && h.infantry >= d.infantry && h.navy >= d.navy;
       const friend = areAllied(bot.houseId, d.kingHouseId);
-      const willing = Math.random() < 0.3 + ai.diplo * 0.3 + (friend ? 0.25 : 0) - (d.gold > h.money * 0.5 ? 0.25 : 0);
+      const willing = Math.random() < 0.3 + ai.diplo * 0.3 + (friend ? 0.25 : 0) - (d.gold > h.money * 0.5 ? 0.25 : 0) - (ai.crownGrudge ? 0.3 : 0);
       if (afford && willing) done(botDo(bot, 'respond-decree', { decreeId: d.id }));
     }
     // Settle disputed spoils in its own favour.
@@ -1802,10 +2341,11 @@ function botTick() {
     for (const m of [...sees, ...pub]) {
       const sender = players.get(m.senderId);
       if (!sender || sender.isBot || !botReady(bot, `msg${m.id}`, 3000, 9000)) continue;
-      const text = botReply(bot, m.message, sender);
+      const text = botConverse(bot, sender, m.message);
       const sent = botSay(bot, text, m.scope === 'secret' ? sender : null);
       if (sent && /alli|ally|pact|join|together/.test(m.message.toLowerCase()) && sender.houseId && sender.houseId !== bot.houseId && !areAllied(bot.houseId, sender.houseId)
-        && !allianceOffers.some(o => (o.fromHouseId === bot.houseId && o.toHouseId === sender.houseId) || (o.fromHouseId === sender.houseId && o.toHouseId === bot.houseId)) && Math.random() < 0.3 + ai.diplo * 0.5) {
+        && !allianceOffers.some(o => (o.fromHouseId === bot.houseId && o.toHouseId === sender.houseId) || (o.fromHouseId === sender.houseId && o.toHouseId === bot.houseId))
+        && Math.random() < 0.3 + ai.diplo * 0.5 + (ai.trust[sender.houseId] || 0) / 200 - (ai.grudge[sender.houseId] || 0) / 150) {
         botDo(bot, 'offer-alliance', { targetHouseId: sender.houseId, scope: m.scope === 'secret' ? 'secret' : 'public' });
       }
       done(sent);
@@ -1819,6 +2359,21 @@ function botTick() {
   }
   return acted;
 }
+
+function botReply(bot, text, sender) {
+  const t = text.toLowerCase(), h = bot.w, words = HOUSE_WORDS[bot.houseId] || '';
+  if (/alli|ally|pact|join|together/.test(t)) {
+    if (sender && areAllied(bot.houseId, sender.houseId)) return `We already stand together. ${words}`;
+    return pickOne([`An alliance? Perhaps. Let us see if your deeds match your words. ${words}`, 'I will hear your terms. Do not waste my time.', 'Friends are useful. Enemies are expensive. Let us talk.']);
+  }
+  if (/attack|war|fight|kill|destroy|invade|threat|crush/.test(t)) return pickOne([`Come, then. My banners are many and my patience is short. ${words}`, 'Threats are wind. My army is steel.', 'You would be wise to measure your army before you measure your words.']);
+  if (/gold|coin|money|pay|tax|tribute|loan|send|help/.test(t)) return pickOne(['Gold is not wheat to be scattered. Make your case.', `I keep ${h.money > 25 ? 'a healthy' : 'a thin'} purse, and I keep it close.`, 'Earn my trust and my coin may follow.']);
+  if (/king|crown|throne|hand|rule/.test(t)) return pickOne(['The Iron Throne finds the ambitious. Mind your head.', 'A crown is only heavy for those who wear it badly.', 'Many want the throne. Few survive it.']);
+  if (/peace|truce|friend|thank|sorry/.test(t)) return pickOne(['Peace is good for trade. For now.', 'Kind words cost nothing. I will remember them.', 'We shall see.']);
+  if (/spy|raven|secret|traitor/.test(t)) return pickOne(['Ravens fly both ways, my lord.', 'Every house has secrets. Mine are well guarded.', 'Careful whom you accuse.']);
+  return pickOne([words || 'We shall see.', 'I hear you. Speak plainly and I may answer in kind.', `House ${capWord(h.name)} marks your words.`]);
+}
+
 setInterval(() => {
   for (const code of [...gameRooms.keys()]) {
     const room = gameRooms.get(code);

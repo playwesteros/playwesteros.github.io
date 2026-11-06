@@ -2,6 +2,13 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.1.1 (Nov 6, 2026)
+- **Smarter bots.** Bots now understand plain-language requests in chat: ask for gold, troops, an attack on a house or city, help, peace, their spy intel, or to follow you. They decide using trust, alliances, their stance toward you, the king's crown and a random buffer, and they can say yes, say no, or lie.
+- **Spying and intel.** Bots send spies every round, read the reports (army counts, marches, secret pacts, intercepted ravens) and share valuable finds with allies. They can also hold back or lie to help themselves, and catch lies that contradict their own spies.
+- **Reactions.** Bots respond when their spies are caught, when branded a traitor, when an ally breaks a pact, when attacked or besieged (they call allies for help), and warm to gifts. A bot king brands traitors by grudge.
+- **Plans and loyalty.** Each round a bot picks a goal (build, conquer, defend, support, betray, hold) and, for every house, decides whether following or betraying pays better, with a randomized buffer. A bot betraying an ally breaks the alliance before attacking. Bots also ask allies for gold, troops, help and joint attacks.
+- **Attack fixes.** Bots only attack cities that are live this round (held by a player still in the game, or the empty throne), they estimate their odds with the siege dice rules, keep a home guard, and no longer cap recruiting at 10. Fixed the home-city check bug.
+
 ## v1.1.0 (Nov 6, 2026)
 - **Siege mechanics.** Attacks now lay siege to a city instead of resolving in one roll. Every court, each unit on both sides rolls a die (dragons add +3). Each side's dice are lined up from highest to lowest and compared in pairs: the higher roll wins and the loser's unit is lost, ties go to the defenders, and dice with no opponent are discarded. The siege goes on, round after round, until one side has no units left.
 - Defenders are the city's garrison (its defense value, plus the +2 house buffs), the owner's home army, and any relief armies. Surviving attackers and relief armies march home when the siege ends.
