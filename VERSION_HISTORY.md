@@ -2,6 +2,14 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.1.0 (Nov 6, 2026)
+- **Siege mechanics.** Attacks now lay siege to a city instead of resolving in one roll. Every court, each unit on both sides rolls a die (dragons add +3). Each side's dice are lined up from highest to lowest and compared in pairs: the higher roll wins and the loser's unit is lost, ties go to the defenders, and dice with no opponent are discarded. The siege goes on, round after round, until one side has no units left.
+- Defenders are the city's garrison (its defense value, plus the +2 house buffs), the owner's home army, and any relief armies. Surviving attackers and relief armies march home when the siege ends.
+- **No income while besieged.** A city pays nothing to anyone until the siege ends or is lifted.
+- **Relief armies.** Allies (or teammates) can send an army to a besieged city and add their dice to the defenders. Attackers can withdraw at any time during the action phase.
+- **Dice animation.** Each battle plays out as a popup: the dice tumble, sort from highest to lowest, then clash pair by pair, with a casualty summary at the end.
+- The map marks besieged cities, and the war panel shows your armies at sieges.
+
 ## v1.0.9 (Nov 6, 2026)
 - **Travel takes time based on distance.** An attack's travel time now comes from the straight-line map distance between the attacker's city and the target. Infantry cover 300 map units per round, ships 450, dragons 700, rounded up to whole rounds. A mixed force arrives with its slowest unit. The attack form shows the travel time before you commit.
 - **House buffs on the house-choice screen.** The buff appears under the house's motto when you hover or preview a house (hidden when the host turns buffs off).

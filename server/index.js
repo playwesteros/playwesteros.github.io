@@ -256,7 +256,7 @@ function loseInfantry(houseId, count, why) {
 // Cities: only the players living in a city earn its income (each gets the full amount); holding a city elsewhere earns nothing.
 function residentsOf(c) { return [...players.values()].filter(p => !p.left && !p.eliminated && p.cityId === c.id && p.houseId === c.ownerHouseId); }
 function yieldFor(p, c) {
-  if (p.left || p.eliminated || !c.ownerHouseId || c.contested) return 0;
+  if (p.left || p.eliminated || !c.ownerHouseId || c.contested || c.siege) return 0;
   const income = capitalIncome(c);
   if (p.cityId === c.id && p.houseId === c.ownerHouseId) return income;
   return 0;
@@ -350,6 +350,7 @@ function makePrivateHouseView(h) {
     infantryCost: h.infantryCost, navyCost: h.navyCost,
     capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length, incomePerCapital: incomePerCapital(h), incomePerRound: me ? playerIncome(me) : 0, upkeepPerRound: armySize({ infantry: h.infantry || 0, navy: h.navy || 0, dragons: h.dragons || 0 }),
     cityId: me?.cityId || null,
+    sieges: siegesFor(h),
     pendingAttack: h.pendingAttack ? {
       ...h.pendingAttack,
       targetName: target?.name || h.pendingAttack.targetName,
@@ -387,12 +388,12 @@ function viewFor(playerId) {
     myHouse: makePrivateHouseView(me?.w || myHouse),
     houses: houses.map(currentHouseView),
     players: [...players.values()].map(p => (me && me.id === kingPlayerId ? { ...playerPublic(p), traitor: Boolean(p.traitor) } : playerPublic(p))),
-    notices: myHouse ? notices.filter(n => !(n.exceptPlayerIds || []).includes(me.id) && (n.playerIds.includes(me.id) || n.houseIds.includes(myHouse.id))).slice(0, 30).map(n => ({ id: n.id, round: n.round, kind: n.kind, title: n.title, text: n.text, banners: [...n.banners] })) : [],
+    notices: myHouse ? notices.filter(n => !(n.exceptPlayerIds || []).includes(me.id) && (n.playerIds.includes(me.id) || n.houseIds.includes(myHouse.id))).slice(0, 30).map(n => ({ id: n.id, round: n.round, kind: n.kind, title: n.title, text: n.text, banners: [...n.banners], battle: n.battle || null })) : [],
     decrees: myHouse ? taxLedger.filter(d => d.kingPlayerId === me.id || me.id === handPlayerId || d.recipients.some(r => r.houseId === myHouse.id)).slice(0, 20).map(d => {
       const issuer = d.kingPlayerId === me.id;
       return { id: d.id, round: d.round, kingName: d.kingName, kingHouseId: d.kingHouseId, message: d.message, gold: d.gold, infantry: d.infantry, navy: d.navy, isIssuer: issuer, myState: d.recipients.find(r => r.houseId === myHouse.id)?.state || null, recipients: me.id === handPlayerId ? d.recipients.map(r => ({ ...r })) : undefined };
     }) : [],
-    capitals: capitals.map(c => ({ ...c, income: capitalIncome(c), residents: residentsOf(c).length })),
+    capitals: capitals.map(({ siege, ...c }) => ({ ...c, siege: siegePublic({ siege }), income: capitalIncome(c), residents: residentsOf(c).length })),
     allianceOffers: visibleOffers,
     alliances: visibleAlliances,
     treaties: myHouse ? treaties.filter(t => t.fromHouseId === myHouse.id || t.toHouseId === myHouse.id).map(t => ({ ...t, isOutgoing: t.fromHouseId === myHouse.id })) : [],
@@ -602,8 +603,10 @@ function capWord(t) { return String(t || '').replace(/^\w/, c => c.toUpperCase()
 // Public popups (everyone) vs personal popups (named houses/players). `exceptIds` skips players who get a personal popup for the same event.
 function notifyAll(kind, title, text, banners, exceptIds = []) { notify(kind, [], [...players.values()].filter(p => !p.left).map(p => p.id), title, text, banners, exceptIds); }
 function notify(kind, houseIds, playerIds, title, text, banners, exceptIds = []) {
-  notices.unshift({ id: randomUUID(), round, kind, houseIds: [...new Set(houseIds)], playerIds, exceptPlayerIds: exceptIds, title, text: String(text).slice(0, kind.startsWith('round-') ? 500 : 260), banners });
+  const entry = { id: randomUUID(), round, kind, houseIds: [...new Set(houseIds)], playerIds, exceptPlayerIds: exceptIds, title, text: String(text).slice(0, kind.startsWith('round-') ? 500 : 260), banners };
+  notices.unshift(entry);
   if (notices.length > 60) notices.length = 60;
+  return entry;
 }
 function forceStrength(u) { return u.infantry + u.navy + u.dragons * 5 + (u.dragons ? 2 : 0); }
 function giveSpoil(s, winnerId, how) {
@@ -1160,21 +1163,43 @@ io.on('connection', socket => {
     if (!target || target.contested || (!target.ownerHouseId && !target.vacant)) return fail('Choose a city held by someone else.');
     if (target.ownerPlayerId === player.id) return fail('That city is already yours.');
     const sameHouse = target.ownerHouseId === h.id, allyTarget = !sameHouse && areAllied(h.id, target.ownerHouseId);
-    if (sameHouse && !gameSettings.friendlyFire) return fail('Friendly fire is off: you cannot attack a city held by your own house.');
-    if (allyTarget && !gameSettings.friendlyFire) return fail(`Friendly fire is off: House ${houseName(target.ownerHouseId)} is your ally.`);
+    const isRelief = Boolean(target.siege) && (sameHouse || allyTarget);
+    if (!isRelief && sameHouse && !gameSettings.friendlyFire) return fail('Friendly fire is off: you cannot attack a city held by your own house.');
+    if (!isRelief && allyTarget && !gameSettings.friendlyFire) return fail(`Friendly fire is off: House ${houseName(target.ownerHouseId)} is your ally.`);
     const units = { infantry: Number(payload.infantry), navy: Number(payload.navy), dragons: Number(payload.dragons) };
-    if (target.id === 'winterfell' && units.navy > 0 && buffsOn()) return fail('Winterfell cannot be attacked by ships. Send land forces only.');
+    if (!isRelief && target.id === 'winterfell' && units.navy > 0 && buffsOn()) return fail('Winterfell cannot be attacked by ships. Send land forces only.');
     if (Object.values(units).some(n => !Number.isInteger(n) || n < 0)) return fail('Committed forces must be whole numbers of zero or greater.');
     if (units.infantry + units.navy + units.dragons < 1) return fail('Commit at least one unit to the attack.');
     if (units.infantry > h.infantry || units.navy > h.navy || units.dragons > h.dragons) return fail('You do not have enough uncommitted forces.');
     h.infantry -= units.infantry;
     h.navy -= units.navy;
     h.dragons -= units.dragons;
-    for (const k of ['infantry', 'navy', 'dragons']) note(h, k, -units[k], `Sent to war on ${target.name}`);
-    h.pendingAttack = { targetCapitalId: target.id, targetName: target.name, orderedRound: round, resolveRound: round + attackTravel(findCapital(player.cityId) || homeCityOf(player), target, units), units, playerId: player.id };
+    for (const k of ['infantry', 'navy', 'dragons']) note(h, k, -units[k], isRelief ? `Sent to relieve ${target.name}` : `Sent to war on ${target.name}`);
+    h.pendingAttack = { targetCapitalId: target.id, targetName: target.name, orderedRound: round, resolveRound: round + attackTravel(findCapital(player.cityId) || homeCityOf(player), target, units), units, playerId: player.id, relief: isRelief };
     h.hasAttackedThisRound = true;
-    addEvent('normal', `House ${h.name} secretly committed an attack against a capital.`);
+    addEvent('normal', isRelief ? `House ${h.name} sent an army to relieve a besieged city.` : `House ${h.name} secretly committed an attack against a capital.`);
+    if (isRelief) return ok(`Relief army sent. It reaches ${target.name} after Round ${h.pendingAttack.resolveRound} court.`);
     return ok(`Attack order placed. Your forces arrive after Round ${h.pendingAttack.resolveRound} court.`);
+  });
+
+  action(socket, 'withdraw-army', (player, payload) => {
+    const check = requireHouse(player); if (check.ok === false) return check;
+    if (phase !== 'ACTION') return fail('Armies can only be withdrawn during the action phase.');
+    const c = findCapital(String(payload.capitalId || ''));
+    if (!c || !c.siege) return fail('There is no siege there.');
+    let found = false;
+    for (const key of ['attackers', 'relief']) {
+      const list = c.siege[key], e = list.find(x => x.playerId === player.id);
+      if (!e) continue;
+      found = true; returnArmy(e, `Army withdrawn from ${c.name}`); list.splice(list.indexOf(e), 1);
+    }
+    if (!found) return fail('Your house has no army at that siege.');
+    if (!c.siege.attackers.length) {
+      for (const e of c.siege.relief) returnArmy(e, `Relief army returned from ${c.name}`);
+      c.siege = null;
+      addEvent('battle', `The siege of ${c.name} was lifted.`);
+    }
+    return ok('Your army has marched home.');
   });
 
   action(socket, 'offer-alliance', (player, payload) => {
@@ -1411,7 +1436,7 @@ function startNextRound() {
     const income = playerIncome(p);
     h.money += income;
     note(h, 'gold', income, 'City income');
-    lines.unshift(`+${income} gold from your cities`);
+    lines.unshift(findCapital(p.cityId)?.siege ? `Your city is under siege and pays no income` : `+${income} gold from your cities`);
     // Army upkeep: 1 gold per unit, taken automatically. Unpaid troops desert.
     const due = armySize(h);
     const paid = Math.min(due, h.money);
@@ -1439,89 +1464,192 @@ function startNextRound() {
   addEvent('important', `Round ${round} begins. Houses received capital income and paid army upkeep.`);
   return ok(`Round ${round} has begun. Capital income and army upkeep have been settled.`);
 }
-// Allies who march on the same capital in the same round fight together automatically.
+// ---- Sieges ---------------------------------------------------------------
+// An attack arrives and lays siege. Every court, each unit on both sides rolls a die (dragons add +3). Each side's dice are lined up
+// from highest to lowest and compared in pairs: the higher roll wins and the loser's unit is lost; ties go to the defenders. Dice with
+// no opponent are discarded. The defenders are the city's garrison, the owner's home army and any relief armies. The siege goes on
+// until one side has no units left; while it lasts the city pays no income.
+const UNIT_KEYS = ['infantry', 'navy', 'dragons'];
+const emptyUnits = () => ({ infantry: 0, navy: 0, dragons: 0 });
+const unitTotal = u => (u.infantry || 0) + (u.navy || 0) + (u.dragons || 0);
+const rollDie = unit => randomInt(1, 6) + (unit === 'dragons' ? 3 : 0);
+function garrisonFor(target, defender) {
+  let g = target.defense;
+  if (buffsOn() && ((defender?.id === 'stark' && target.id === 'winterfell') || (defender?.id === 'martell' && target.id === 'sunspear') || (defender?.id === 'arryn' && target.id === 'the-eyrie'))) g += 2;
+  return g;
+}
+function armyEntry(playerId, houseId, units) { return { playerId, houseId, units: { ...emptyUnits(), ...units } }; }
+function addArmy(list, entry) {
+  const found = list.find(e => e.playerId === entry.playerId);
+  if (!found) { list.push(armyEntry(entry.playerId, entry.houseId, entry.units)); return; }
+  for (const k of UNIT_KEYS) found.units[k] += entry.units[k] || 0;
+}
+function returnArmy(entry, why = 'Army returned home') {
+  const p = players.get(entry.playerId), w = p && p.w;
+  if (!w || p.eliminated) return;
+  for (const k of UNIT_KEYS) { const n = entry.units[k] || 0; if (n > 0) { w[k] += n; note(w, k, n, why); } entry.units[k] = 0; }
+}
+function siegePublic(c) {
+  const s = c.siege; if (!s) return null;
+  return { attackerHouseIds: [...new Set(s.attackers.map(e => e.houseId))], reliefHouseIds: [...new Set(s.relief.map(e => e.houseId))], battles: s.battles, garrison: s.garrison, startRound: s.startRound };
+}
+function siegesFor(h) {
+  const out = [];
+  for (const c of capitals) {
+    if (!c.siege) continue;
+    for (const [role, list] of [['attacker', c.siege.attackers], ['relief', c.siege.relief]]) {
+      const e = list.find(x => x.playerId === h.playerId);
+      if (e) out.push({ capitalId: c.id, capitalName: c.name, role, units: { ...e.units } });
+    }
+  }
+  return out;
+}
 function resolveDueAttacks() {
   const due = [...players.values()].map(p => p.w).filter(w => w && w.pendingAttack && w.pendingAttack.resolveRound <= round);
-  const done = new Set();
-  for (const attacker of due) {
-    if (done.has(attacker.playerId)) continue;
-    const partner = due.find(o => o !== attacker && o.id !== attacker.id && !done.has(o.playerId) && o.pendingAttack && o.pendingAttack.targetCapitalId === attacker.pendingAttack.targetCapitalId && areAllied(attacker.id, o.id)) || null;
-    done.add(attacker.playerId);
-    if (partner) done.add(partner.playerId);
-    fightBattle(attacker, partner);
-  }
+  for (const w of due) arriveArmy(w);
+  for (const c of capitals) if (c.siege) fightSiegeRound(c);
 }
-function fightBattle(attacker, allyHouse) {
-  {
-    const order = attacker.pendingAttack;
-    const noticesBefore = new Set(notices.map(n => n.id)), wasOver = Boolean(gameOver);
-    const target = findCapital(order.targetCapitalId);
-    const ffOff = !gameSettings.friendlyFire && target && target.ownerHouseId && (target.ownerHouseId === attacker.id || areAllied(attacker.id, target.ownerHouseId));
-    if (!target || (!target.ownerHouseId && !target.vacant) || target.ownerPlayerId === attacker.playerId || ffOff) {
-      addEvent('battle', `House ${attacker.name} found no enemy holding at ${order.targetName}; the attack was spent.`);
-      attacker.pendingAttack = null;
-      if (allyHouse) allyHouse.pendingAttack = null;
-      return;
-    }
-    const defender = findHouse(target.ownerHouseId);
-    const defWallet = target.ownerPlayerId ? players.get(target.ownerPlayerId)?.w : null;
-    if (defender && defender.id !== attacker.id && areAllied(attacker.id, defender.id) && !(allyHouse && allyHouse.id === defender.id)) {
-      const pact = alliances.find(x => [x.houseA, x.houseB].includes(attacker.id) && [x.houseA, x.houseB].includes(defender.id));
-      if (pact) { alliances.splice(alliances.indexOf(pact), 1); notify('alliance-broken', [attacker.id, defender.id], [], 'Allies at war', `House ${capWord(attacker.name)} marched on its ally House ${capWord(defender.name)}. The alliance is broken.`, [attacker.id, defender.id]); }
-    }
-    const isThrone = target.id === 'kings-landing';
-    const wasVacantThrone = Boolean(target.vacant);
-    if (isThrone && !target.vacant) notifyAll('siege', 'King’s Landing is under siege', `${allyHouse ? `Houses ${capWord(attacker.name)} and ${capWord(allyHouse.name)} have` : `House ${capWord(attacker.name)} has`} laid siege to King’s Landing.`, [attacker.id, allyHouse?.id].filter(Boolean));
-    let defense = target.vacant ? -1 : target.defense + randomInt(0, 3);
-    if (buffsOn() && ((defender?.id === 'stark' && target.id === 'winterfell') || (defender?.id === 'martell' && target.id === 'sunspear') || (defender?.id === 'arryn' && target.id === 'the-eyrie'))) defense += 2;
-    // Each troop contributes one strength; ships can support an attack, and dragons add five each plus a siege bonus.
-    const allyOrder = allyHouse ? allyHouse.pendingAttack : null;
-    const attackStrength = forceStrength(order.units) + (allyOrder ? forceStrength(allyOrder.units) : 0) + randomInt(0, 3);
-    if (attackStrength >= defense && allyHouse) {
-      const plunder = Math.min(defWallet?.money || 0, 6);
-      if (defWallet) defWallet.money -= plunder;
-      const share = Math.floor(plunder / 2);
-      attacker.money += plunder - share; allyHouse.money += share;
-      note(attacker, 'gold', plunder - share, `Plunder from ${target.name}`); note(allyHouse, 'gold', share, `Plunder from ${target.name}`);
-      if (defWallet) note(defWallet, 'gold', -plunder, `Plundered at ${target.name}`);
-      const fallenIds = sackCity(target, [order.playerId, allyOrder?.playerId].filter(Boolean)).map(p => p.id);
-      target.ownerHouseId = null; target.ownerPlayerId = null; evictResidents(target);
-      target.contested = { houseA: attacker.id, houseB: allyHouse.id };
-      const claims = { [attacker.id]: null, [allyHouse.id]: null };
-      const spoil = { id: randomUUID(), capitalId: target.id, houseA: attacker.id, houseB: allyHouse.id, claims, round, deadlineRound: round + 1, plunder, status: 'open', orderers: { [attacker.id]: order.playerId, [allyHouse.id]: allyOrder?.playerId } };
-      if (houseIsBotOnly(allyHouse.id)) claims[allyHouse.id] = attacker.id;
-      spoils.unshift(spoil);
-      addEvent('battle', `Houses ${attacker.name} and ${allyHouse.name} stormed ${target.name} together (attack ${attackStrength} vs. defense ${defense}) and split ${plunder} gold of plunder. They must agree who will rule it, or fight for it.`);
-      if (isThrone) notifyAll('sacked', 'King’s Landing has been sacked', `Houses ${capWord(attacker.name)} and ${capWord(allyHouse.name)} stormed King’s Landing. They must agree who will rule it, or fight for it.`, [attacker.id, allyHouse.id], fallenIds);
-      else {
-        notify('battle-won', [attacker.id, allyHouse.id], [], `Victory at ${target.name}`, `Houses ${capWord(attacker.name)} and ${capWord(allyHouse.name)} took ${target.name}. Agree who will rule it, or fight for it.`, [attacker.id, allyHouse.id]);
-        if (defender) notify('attacked', [defender.id], [], `${target.name} was attacked`, `Houses ${capWord(attacker.name)} and ${capWord(allyHouse.name)} attacked and took ${target.name}.`, [attacker.id, defender.id], fallenIds);
-      }
-      settleSpoils(false);
-    } else if (attackStrength >= defense) {
-      const fallenIds = sackCity(target, [order.playerId]).map(p => p.id);
-      target.ownerHouseId = attacker.id; target.ownerPlayerId = order.playerId; evictResidents(target);
-      if (isThrone) {
-        // Siege popup (above) -> sacked popup -> the new king popup, and nothing else.
-        if (!wasVacantThrone) notifyAll('sacked', 'King’s Landing has been sacked', `House ${capWord(attacker.name)} stormed King’s Landing and took the Iron Throne.`, [attacker.id], fallenIds);
-        throneTaken(attacker.id, order.playerId);
-      } else {
-        notify('battle-won', [attacker.id], [], `Victory at ${target.name}`, `House ${capWord(attacker.name)} captured ${target.name}.`, [attacker.id, defender?.id].filter(Boolean));
-        if (defender) notify('attacked', [defender.id], [], `${target.name} was attacked`, `House ${capWord(attacker.name)} attacked and took ${target.name}.`, [attacker.id, defender.id], fallenIds);
-      }
-      addEvent('battle', target.vacant || defense < 0 ? `House ${attacker.name} marched into the empty ${target.name} unopposed.` : `House ${attacker.name} captured ${target.name} from House ${defender?.name || 'an unknown house'} (attack ${attackStrength} vs. defense ${defense}).`);
-      checkVictory();
-      // The move that ends the game: only the siege popup (if any) and then the victory/defeat screen. Drop the sacked / city-fell / battle popups it created.
-      if (gameOver && !wasOver) notices = notices.filter(n => noticesBefore.has(n.id) || n.kind === 'siege');
-    } else {
-      addEvent('battle', `House ${attacker.name} failed to capture ${target.name} (attack ${attackStrength} vs. defense ${defense}).`);
-      const lost = [attacker.id, allyHouse?.id].filter(Boolean);
-      notify('battle-lost', lost, [], `Defeat at ${target.name}`, `${lost.length > 1 ? 'Your armies' : 'Your army'} failed to take ${target.name}.`, [attacker.id, defender?.id].filter(Boolean));
-      if (defender) notify('attacked', [defender.id], [], `${target.name} held`, `House ${capWord(attacker.name)} attacked ${target.name}, but your defenders held.`, [attacker.id, defender.id]);
-    }
-    attacker.pendingAttack = null;
-    if (allyHouse) allyHouse.pendingAttack = null;
+function arriveArmy(w) {
+  const order = w.pendingAttack; w.pendingAttack = null;
+  const target = findCapital(order.targetCapitalId);
+  const entry = armyEntry(order.playerId, w.id, order.units);
+  if (order.relief) {
+    const ok2 = target?.siege && target.ownerHouseId && target.ownerPlayerId !== order.playerId && (target.ownerHouseId === w.id || areAllied(w.id, target.ownerHouseId));
+    if (!ok2) { returnArmy(entry); addEvent('normal', `House ${w.name}'s relief army found no siege to lift at ${order.targetName} and marched home.`); return; }
+    addArmy(target.siege.relief, entry);
+    addEvent('battle', `House ${w.name} sent an army to relieve ${target.name}.`);
+    notify('notice', [target.ownerHouseId, w.id], [], 'Relief has arrived', `House ${capWord(w.name)}'s army joined the defence of ${target.name}.`, [w.id, target.ownerHouseId]);
+    return;
   }
+  const ffOff = !gameSettings.friendlyFire && target && target.ownerHouseId && (target.ownerHouseId === w.id || areAllied(w.id, target.ownerHouseId));
+  if (!target || (!target.ownerHouseId && !target.vacant) || target.ownerPlayerId === order.playerId || ffOff) {
+    addEvent('battle', `House ${w.name} found no enemy holding at ${order.targetName}; the army marched home.`);
+    returnArmy(entry);
+    return;
+  }
+  if (target.vacant) { captureCity(target, [entry], 'unopposed'); return; }
+  const defender = findHouse(target.ownerHouseId);
+  if (defender && defender.id !== w.id && areAllied(w.id, defender.id)) {
+    const pact = alliances.find(x => [x.houseA, x.houseB].includes(w.id) && [x.houseA, x.houseB].includes(defender.id));
+    if (pact) { alliances.splice(alliances.indexOf(pact), 1); notify('alliance-broken', [w.id, defender.id], [], 'Allies at war', `House ${capWord(w.name)} marched on its ally House ${capWord(defender.name)}. The alliance is broken.`, [w.id, defender.id]); }
+  }
+  if (!target.siege) {
+    target.siege = { id: randomUUID(), startRound: round, battles: 0, attackers: [], relief: [], garrison: garrisonFor(target, defender) };
+    addEvent('important', `${target.name} is under siege by House ${w.name}.`);
+    if (target.id === 'kings-landing') notifyAll('siege', 'King’s Landing is under siege', `House ${capWord(w.name)} has laid siege to King’s Landing.`, [w.id]);
+    else if (defender) notify('attacked', [defender.id], [], `${target.name} is under siege`, `House ${capWord(w.name)} has laid siege to ${target.name}. It pays no income until the siege ends.`, [w.id, defender.id]);
+  }
+  addArmy(target.siege.attackers, entry);
+}
+function buildDice(c) {
+  const s = c.siege, defender = findHouse(c.ownerHouseId);
+  const defWallet = c.ownerPlayerId ? players.get(c.ownerPlayerId)?.w : null;
+  const att = [], def = [];
+  for (const e of s.attackers) for (const k of UNIT_KEYS) for (let i = 0; i < e.units[k]; i++) att.push({ v: rollDie(k), unit: k, houseId: e.houseId, ref: e });
+  for (let i = 0; i < s.garrison; i++) def.push({ v: rollDie('infantry'), unit: 'garrison', houseId: c.ownerHouseId, order: 0 });
+  for (const e of s.relief) for (const k of UNIT_KEYS) for (let i = 0; i < e.units[k]; i++) def.push({ v: rollDie(k), unit: k, houseId: e.houseId, ref: e, order: 1 });
+  if (defWallet) for (const k of UNIT_KEYS) for (let i = 0; i < (defWallet[k] || 0); i++) def.push({ v: rollDie(k), unit: k, houseId: c.ownerHouseId, wallet: defWallet, order: 2 });
+  att.sort((a, b) => b.v - a.v);
+  // Among equal rolls the garrison faces the strongest attackers first, then relief, then the owner's own army.
+  def.sort((a, b) => b.v - a.v || a.order - b.order);
+  return { att, def, defender, defWallet };
+}
+function fightSiegeRound(c) {
+  const s = c.siege; s.battles += 1;
+  const { att, def, defender, defWallet } = buildDice(c);
+  const pairs = Math.min(att.length, def.length);
+  let attLost = 0, defLost = 0, garrisonLost = 0;
+  const defKilled = {};
+  for (let i = 0; i < pairs; i++) {
+    if (def[i].v >= att[i].v) { att[i].lost = true; attLost++; att[i].ref.units[att[i].unit] -= 1; }
+    else {
+      def[i].lost = true; defLost++;
+      const d = def[i];
+      if (d.unit === 'garrison') { s.garrison -= 1; garrisonLost++; }
+      else if (d.ref) d.ref.units[d.unit] -= 1;
+      else if (d.wallet) { d.wallet[d.unit] -= 1; defKilled[d.unit] = (defKilled[d.unit] || 0) + 1; }
+    }
+  }
+  if (defWallet) for (const [k, n] of Object.entries(defKilled)) note(defWallet, k, -n, `Lost defending ${c.name}`);
+  s.attackers = s.attackers.filter(e => unitTotal(e.units) > 0);
+  s.relief = s.relief.filter(e => unitTotal(e.units) > 0);
+  const attLeft = s.attackers.reduce((n, e) => n + unitTotal(e.units), 0);
+  const defLeft = s.garrison + s.relief.reduce((n, e) => n + unitTotal(e.units), 0) + (defWallet ? unitTotal(defWallet) : 0);
+  const result = attLeft === 0 ? 'broken' : defLeft === 0 ? 'fell' : 'continues';
+  const ids = [...new Set([...att.map(d => d.houseId), ...def.map(d => d.houseId)])];
+  const mapDie = d => ({ v: d.v, unit: d.unit, houseId: d.houseId, lost: Boolean(d.lost) });
+  const battle = { id: randomUUID(), capitalId: c.id, capitalName: c.name, battleNo: s.battles, round, attackers: att.map(mapDie), defenders: def.map(mapDie), pairs, attLost, defLost, result };
+  const involved = [...new Set([...ids, ...s.attackers.map(e => e.houseId)])];
+  const note2 = notify('battle-report', involved, [], `Battle at ${c.name}`, `Attackers lost ${attLost}, defenders lost ${defLost}.`, [...new Set(att.map(d => d.houseId))].slice(0, 1).concat(c.ownerHouseId ? [c.ownerHouseId] : []));
+  note2.battle = battle;
+  addEvent('battle', `Siege of ${c.name}, battle ${s.battles}: attackers lost ${attLost}, defenders lost ${defLost}.`);
+  if (result === 'continues') return;
+  const entries = s.attackers;
+  const reliefEntries = s.relief;
+  if (result === 'broken') {
+    addEvent('battle', `The siege of ${c.name} was broken. House ${defender?.name || 'its defenders'} held.`);
+    const houseIds = [...new Set(att.map(d => d.houseId))];
+    notify('battle-lost', houseIds, [], `Defeat at ${c.name}`, `${houseIds.length > 1 ? 'Your armies' : 'Your army'} failed to take ${c.name}.`, [...houseIds, defender?.id].filter(Boolean));
+    if (defender) notify('attacked', [defender.id], [], `${c.name} held`, `The siege of ${c.name} was broken. Your defenders held.`, [...houseIds, defender.id]);
+    for (const e of reliefEntries) returnArmy(e, `Relief army returned from ${c.name}`);
+    c.siege = null;
+    return;
+  }
+  captureCity(c, entries, `after ${s.battles} ${s.battles === 1 ? 'battle' : 'battles'}`);
+  for (const e of reliefEntries) returnArmy(e, `Relief army returned from ${c.name}`);
+}
+// The attackers have broken the defence. One winner takes the city, or two allied winners split the plunder and settle who rules it.
+function captureCity(target, entries, how) {
+  const noticesBefore = new Set(notices.map(n => n.id)), wasOver = Boolean(gameOver);
+  const defender = findHouse(target.ownerHouseId);
+  const defWallet = target.ownerPlayerId ? players.get(target.ownerPlayerId)?.w : null;
+  const isThrone = target.id === 'kings-landing', wasVacantThrone = Boolean(target.vacant);
+  const sorted = [...entries].sort((x, y) => unitTotal(y.units) - unitTotal(x.units));
+  const a = sorted[0];
+  const b = sorted.slice(1).find(e => e.houseId !== a.houseId && areAllied(a.houseId, e.houseId)) || null;
+  const attacker = players.get(a.playerId).w;
+  const allyHouse = b ? players.get(b.playerId).w : null;
+  if (allyHouse) {
+    const plunder = Math.min(defWallet?.money || 0, 6);
+    if (defWallet) defWallet.money -= plunder;
+    const share = Math.floor(plunder / 2);
+    attacker.money += plunder - share; allyHouse.money += share;
+    note(attacker, 'gold', plunder - share, `Plunder from ${target.name}`); note(allyHouse, 'gold', share, `Plunder from ${target.name}`);
+    if (defWallet) note(defWallet, 'gold', -plunder, `Plundered at ${target.name}`);
+    const fallenIds = sackCity(target, [a.playerId, b.playerId]).map(p => p.id);
+    target.ownerHouseId = null; target.ownerPlayerId = null; evictResidents(target);
+    target.contested = { houseA: attacker.id, houseB: allyHouse.id };
+    const claims = { [attacker.id]: null, [allyHouse.id]: null };
+    const spoil = { id: randomUUID(), capitalId: target.id, houseA: attacker.id, houseB: allyHouse.id, claims, round, deadlineRound: round + 1, plunder, status: 'open', orderers: { [attacker.id]: a.playerId, [allyHouse.id]: b.playerId } };
+    if (houseIsBotOnly(allyHouse.id)) claims[allyHouse.id] = attacker.id;
+    spoils.unshift(spoil);
+    addEvent('battle', `Houses ${attacker.name} and ${allyHouse.name} stormed ${target.name} together (${how}) and split ${plunder} gold of plunder. They must agree who will rule it, or fight for it.`);
+    if (isThrone) notifyAll('sacked', 'King’s Landing has been sacked', `Houses ${capWord(attacker.name)} and ${capWord(allyHouse.name)} stormed King’s Landing. They must agree who will rule it, or fight for it.`, [attacker.id, allyHouse.id], fallenIds);
+    else {
+      notify('battle-won', [attacker.id, allyHouse.id], [], `Victory at ${target.name}`, `Houses ${capWord(attacker.name)} and ${capWord(allyHouse.name)} took ${target.name}. Agree who will rule it, or fight for it.`, [attacker.id, allyHouse.id]);
+      if (defender) notify('attacked', [defender.id], [], `${target.name} was attacked`, `Houses ${capWord(attacker.name)} and ${capWord(allyHouse.name)} attacked and took ${target.name}.`, [attacker.id, defender.id], fallenIds);
+    }
+    target.siege = null;
+    for (const e of entries) returnArmy(e, `Army returned from ${target.name}`);
+    settleSpoils(false);
+    return;
+  }
+  const fallenIds = sackCity(target, [a.playerId]).map(p => p.id);
+  target.ownerHouseId = attacker.id; target.ownerPlayerId = a.playerId; evictResidents(target);
+  target.siege = null;
+  if (isThrone) {
+    // Siege popup -> sacked popup -> the new king popup, and nothing else.
+    if (!wasVacantThrone) notifyAll('sacked', 'King’s Landing has been sacked', `House ${capWord(attacker.name)} stormed King’s Landing and took the Iron Throne.`, [attacker.id], fallenIds);
+    throneTaken(attacker.id, a.playerId);
+  } else {
+    notify('battle-won', [attacker.id], [], `Victory at ${target.name}`, `House ${capWord(attacker.name)} captured ${target.name}.`, [attacker.id, defender?.id].filter(Boolean));
+    if (defender) notify('attacked', [defender.id], [], `${target.name} was attacked`, `House ${capWord(attacker.name)} attacked and took ${target.name}.`, [attacker.id, defender.id], fallenIds);
+  }
+  addEvent('battle', how === 'unopposed' ? `House ${attacker.name} marched into the empty ${target.name} unopposed.` : `House ${attacker.name} captured ${target.name} from House ${defender?.name || 'an unknown house'} (${how}).`);
+  for (const e of entries) returnArmy(e, `Army returned from ${target.name}`);
+  checkVictory();
+  // The move that ends the game: only the siege popup, the last battle and then the victory/defeat screen.
+  if (gameOver && !wasOver) notices = notices.filter(n => noticesBefore.has(n.id) || n.kind === 'siege' || n.kind === 'battle-report');
 }
 
 // ---- Bot players ----------------------------------------------------------

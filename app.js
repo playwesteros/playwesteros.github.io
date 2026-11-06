@@ -298,6 +298,7 @@
     const mine = state.myHouse;
     if (capital.contested) return `${capital.name} is contested between two victorious allies. Wait until they settle who rules it.`;
     if (capital.vacant) return '';
+    if (capital.siege && capital.ownerHouseId && capital.ownerPlayerId !== state.me?.id && (capital.ownerHouseId === mine.id || alliesOf(mine.id).includes(capital.ownerHouseId))) return '';
     if (!capital.ownerHouseId || capital.ownerPlayerId === state.me?.id) return `${capital.name} is already yours.`;
     const ff = state.settings?.friendlyFire !== false;
     if (capital.ownerHouseId === mine.id && !ff) return `Friendly fire is off: ${capital.name} is held by your own house.`;
@@ -345,13 +346,22 @@
   function updateAttackLock() {
     if (!state?.myHouse) return;
     if (!state.myHouse.pendingAttack) $('attackOrderStatus').textContent = travelNote();
+    const at = (state.myHouse.sieges || []).map(x => `Your army at ${x.capitalName} (${x.role === 'relief' ? 'relief' : 'siege'}): ${[['infantry', x.units.infantry], ['ships', x.units.navy], ['dragons', x.units.dragons]].filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ') || 'none left'}.`);
+    if (at.length) $('attackOrderStatus').textContent = [$('attackOrderStatus').textContent, ...at].filter(Boolean).join(' ');
     lock($('attackForm').querySelector('button[type="submit"]'), attackLockReason());
   }
+  const isReliefTarget = c => Boolean(c?.siege && c.ownerHouseId && c.ownerPlayerId !== state.me?.id && (c.ownerHouseId === state.myHouse?.id || alliesOf(state.myHouse?.id).includes(c.ownerHouseId)));
   function renderWarTarget() {
     const c = state.capitals.find(x => x.id === warTargetId);
     const box = $('warTargetBox');
     box.classList.toggle('is-empty', !c);
-    box.innerHTML = c ? `${escapeHtml(c.name)}<small>${escapeHtml(c.region)} · ${c.vacant ? 'Empty throne' : `House ${escapeHtml(capName(prettyHouse(c.ownerHouseId)))}`}</small>` : 'No target chosen yet';
+    const relief = isReliefTarget(c);
+    const sg = c?.siege ? ` · Besieged by ${c.siege.attackerHouseIds.map(id => `House ${escapeHtml(capName(prettyHouse(id)))}`).join(' and ')} (battle ${c.siege.battles})` : '';
+    box.innerHTML = c ? `${escapeHtml(c.name)}<small>${escapeHtml(c.region)} · ${c.vacant ? 'Empty throne' : `House ${escapeHtml(capName(prettyHouse(c.ownerHouseId)))}`}${sg}</small>` : 'No target chosen yet';
+    const submit = $('attackForm').querySelector('button[type="submit"]');
+    if (submit) { submit.textContent = relief ? 'Send relief army' : 'Declare war'; submit.classList.toggle('button-danger', !relief); submit.classList.toggle('button-primary', relief); }
+    const mine = c && state.myHouse?.sieges?.find(x => x.capitalId === c.id);
+    $('withdrawButton').hidden = !mine;
     $('warPanel').hidden = !c;
   }
 
@@ -411,6 +421,7 @@
     });
     const img = (href, x, y, w) => { const i = document.createElementNS(NS, 'image'); i.setAttribute('href', href); i.setAttribute('x', x); i.setAttribute('y', y); i.setAttribute('width', w); i.setAttribute('height', w); return i; };
     const tag = (x, y, text, color) => { const t = document.createElementNS(NS, 'text'); t.setAttribute('x', x); t.setAttribute('y', y); t.setAttribute('font-size', '32'); t.setAttribute('font-weight', '700'); t.setAttribute('fill', color || '#f3e6c2'); t.setAttribute('stroke', '#1b1208'); t.setAttribute('stroke-width', '6'); t.setAttribute('paint-order', 'stroke'); t.setAttribute('font-family', 'Georgia, serif'); t.textContent = text; return t; };
+    for (const c of state.capitals) { const p = pos.get(c.id); if (!c.siege || !p) continue; layer.appendChild(img('./assets/game-swords.png?v=3', p.x + 26, p.y - 74, 52)); layer.appendChild(tag(p.x + 52, p.y - 78, 'SIEGE', '#e8a79c')); }
     const home = pos.get(h.cityId);
     const color = (state.houses.find(x => x.id === h.id) || {}).color || '#c8a45c';
     // An army badge: a dark disc with the gold army icon and the unit count in a pill, readable on parchment.
@@ -1216,9 +1227,9 @@
     if (!announceShowing) showNextAnnouncement();
   }
   // ---- Event notices: alliances, traitor labels, attacks, battle results ----
-  const NOTICE_LABEL = { decree: 'ROYAL DECREE', crown: 'THE CROWN', desertion: 'DESERTION', 'round-start': 'NEW ROUND', 'round-bad': 'NEW ROUND', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT', siege: 'UNDER SIEGE', sacked: 'SACKED', 'city-fell': 'YOUR CITY FELL' };
+  const NOTICE_LABEL = { decree: 'ROYAL DECREE', crown: 'THE CROWN', desertion: 'DESERTION', 'round-start': 'NEW ROUND', 'round-bad': 'NEW ROUND', 'battle-report': 'THE SIEGE', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT', siege: 'UNDER SIEGE', sacked: 'SACKED', 'city-fell': 'YOUR CITY FELL' };
   const NOTICE_MID = { 'spy-caught': 'game-spy', alliance: 'game-handshake', 'alliance-broken': 'game-chain', attacked: 'game-swords', 'battle-won': 'game-swords', 'battle-lost': 'game-swords', siege: 'game-swords', sacked: 'game-swords' };
-  const NOTICE_NOT_NEGATIVE = new Set(['round-start', 'alliance', 'battle-won', 'spy-caught', 'decree', 'crown', 'notice']); // default outline; everything else is red
+  const NOTICE_NOT_NEGATIVE = new Set(['round-start', 'battle-report', 'alliance', 'battle-won', 'spy-caught', 'decree', 'crown', 'notice']); // default outline; everything else is red
   // After being away, only these still matter: a broken alliance, a siege, or your own city falling.
   const BACKLOG_KINDS = new Set(['alliance-broken', 'siege', 'city-fell']);
   let wasAway = true; // true on page load and whenever the tab was hidden
@@ -1256,10 +1267,12 @@
       maybePromptHand();
       return;
     }
+    if (battleAnim) { battleAnim.cancel(); battleAnim = null; }
     announceShowing = true;
     // Back-to-back popups: the overlay stays up and only the card changes, fading in as the new content lands.
     const swapCard = $('announceOverlay').querySelector('.announce-card');
-    swapCard.classList.remove('swap-out', 'swap-in');
+    swapCard.classList.remove('swap-out', 'swap-in', 'battle-card');
+    $('announceStage').classList.remove('is-battle');
     if (!$('announceOverlay').hidden) { void swapCard.offsetWidth; swapCard.classList.add('swap-in'); }
     if (item.reveal) {
       const r = item.reveal;
@@ -1295,6 +1308,7 @@
     }
     if (item.notice) {
       const n = item.notice;
+      if (n.battle) { renderBattle(n); return; }
       const mid = NOTICE_MID[n.kind];
       const banners = (n.banners || []).map(id => announceBanner({ houseId: id }, 'ann-new ann-first notice-banner'));
       $('announceEyebrow').textContent = NOTICE_LABEL[n.kind] || 'NEWS OF THE REALM';
@@ -1323,8 +1337,65 @@
     announceTimer = setTimeout(closeAnnouncement, item.prev ? 7000 : 5500);
   }
   let announceClosing = false;
+
+  // ---- Siege battle: every unit rolls a die, the two sides are lined up from highest to lowest and compared in pairs ----
+  let battleAnim = null;
+  const DIE_ICON = { infantry: 'ui-spear', navy: 'ui-ship', dragons: 'ui-dragon', garrison: 'game-castle' };
+  function renderBattle(n) {
+    const b = n.battle, card = $('announceOverlay').querySelector('.announce-card'), stage = $('announceStage');
+    const ROW = 38, rows = Math.max(b.attackers.length, b.defenders.length, 1);
+    const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    card.classList.add('battle-card'); card.dataset.tone = '';
+    $('announceEyebrow').textContent = b.battleNo === 1 ? 'THE SIEGE BEGINS' : `THE SIEGE · BATTLE ${b.battleNo}`;
+    $('announceTitle').textContent = n.title;
+    stage.classList.remove('has-old'); stage.classList.add('is-notice', 'is-battle');
+    const names = list => [...new Set(list.map(d => d.houseId))].map(id => `House ${escapeHtml(capName(prettyHouse(id)))}`).join(' · ') || '—';
+    const dieHtml = (d, side, i) => `<div class="die ${side} u-${d.unit}" data-side="${side}" data-i="${i}"><img src="./assets/${DIE_ICON[d.unit] || 'ui-spear'}.png?v=3" alt=""><b>?</b></div>`;
+    stage.innerHTML = `<div class="dice-arena"><div class="dice-head"><span>Attackers<small>${names(b.attackers)}</small></span><span>Defenders<small>${names(b.defenders)}</small></span></div>
+      <div class="dice-scroll"><div class="dice-board" style="height:${rows * ROW}px">${b.attackers.map((d, i) => dieHtml(d, 'att', i)).join('')}${b.defenders.map((d, i) => dieHtml(d, 'def', i)).join('')}</div></div>
+      <div class="dice-legend"><span>Highest rolls face each other · ties go to the defenders · spare dice are discarded</span></div></div>`;
+    $('announceName').innerHTML = '<span class="notice-text battle-summary"></span>';
+    $('announceOverlay').hidden = false;
+    clearTimeout(announceTimer);
+    const dice = { att: [...stage.querySelectorAll('.die.att')], def: [...stage.querySelectorAll('.die.def')] };
+    const data = { att: b.attackers, def: b.defenders };
+    const timers = [], rand = () => Math.floor(Math.random() * 6) + 1;
+    const shuffled = n2 => { const a = [...Array(n2).keys()]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const slotOf = { att: shuffled(b.attackers.length), def: shuffled(b.defenders.length) };
+    const place = (side, el, slot) => { el.style.top = `${slot * ROW}px`; };
+    ['att', 'def'].forEach(side => dice[side].forEach((el, i) => place(side, el, slotOf[side][i])));
+    const resultText = b.result === 'fell' ? `The defence collapses. ${escapeHtml(b.capitalName)} falls.` : b.result === 'broken' ? 'The attackers are spent. The siege is broken.' : 'Both sides are bloodied. The siege goes on.';
+    const summary = `<b>Attackers lost ${b.attLost}</b> · <b>Defenders lost ${b.defLost}</b><br>${resultText}`;
+    const anim = { done: false, cancel() { timers.forEach(clearTimeout); timers.length = 0; clearInterval(anim.spin); }, finish() {
+      anim.cancel(); anim.done = true;
+      ['att', 'def'].forEach(side => dice[side].forEach((el, i) => { el.classList.remove('rolling'); el.querySelector('b').textContent = data[side][i].v; place(side, el, i); el.classList.toggle('lost', Boolean(data[side][i].lost)); el.classList.toggle('won', i < b.pairs && !data[side][i].lost); el.classList.toggle('discard', i >= b.pairs); }));
+      const sum = stage.parentElement.querySelector('.battle-summary'); if (sum) { sum.innerHTML = summary; sum.classList.add('show'); }
+      clearTimeout(announceTimer); announceTimer = setTimeout(closeAnnouncement, 12000);
+    } };
+    battleAnim = anim;
+    if (calm) { anim.finish(); return; }
+    // 1) tumble: the faces flicker while the dice shake  2) settle on the real rolls  3) sort high to low  4) compare pair by pair
+    dice.att.concat(dice.def).forEach(el => el.classList.add('rolling'));
+    anim.spin = setInterval(() => dice.att.concat(dice.def).forEach(el => { el.querySelector('b').textContent = rand(); }), 70);
+    timers.push(setTimeout(() => {
+      clearInterval(anim.spin);
+      ['att', 'def'].forEach(side => dice[side].forEach((el, i) => { el.classList.remove('rolling'); el.querySelector('b').textContent = data[side][i].v; }));
+    }, 1100));
+    timers.push(setTimeout(() => ['att', 'def'].forEach(side => dice[side].forEach((el, i) => { el.classList.add('sorting'); place(side, el, i); })), 1800));
+    const step = Math.max(90, Math.min(420, 3200 / Math.max(1, b.pairs)));
+    for (let i = 0; i < b.pairs; i++) timers.push(setTimeout(() => {
+      const a = dice.att[i], d = dice.def[i];
+      a.classList.add(data.att[i].lost ? 'lost' : 'won'); d.classList.add(data.def[i].lost ? 'lost' : 'won');
+      a.classList.add('clash'); d.classList.add('clash');
+      const board = a.parentElement; board.scrollTop = 0;
+      a.scrollIntoView?.({ block: 'nearest' });
+    }, 2700 + i * step));
+    timers.push(setTimeout(() => { dice.att.concat(dice.def).forEach((el, i2) => { const side = el.dataset.side, i = Number(el.dataset.i); if (i >= b.pairs) el.classList.add('discard'); }); }, 2700 + b.pairs * step));
+    timers.push(setTimeout(() => anim.finish(), 3000 + b.pairs * step));
+  }
   function closeAnnouncement() {
     clearTimeout(announceTimer);
+    if (battleAnim && !battleAnim.done) { battleAnim.finish(); return; } // first tap skips to the result
     if (announceClosing) return; // ignore extra taps while the card is mid-transition
     const overlay = $('announceOverlay');
     if (overlay.hidden) { showNextAnnouncement(); return; }
@@ -1826,6 +1897,7 @@
     if (action === 'gold-info') return;
     if (action === 'toggle-ledger') { ledgerAll = !ledgerAll; renderHub(); return; }
     if (action === 'close-decree-popup') { $('decreeOverlay').hidden = true; return; }
+    if (action === 'withdraw-army') { emitAction('withdraw-army', { capitalId: warTargetId }); return; }
     if (action === 'war-cancel') { warTargetId = null; renderWarTarget(); updateAttackLock(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
     if (action === 'forfeit-crown') { if (window.confirm('Forfeit the crown? You return to your home city. The Hand may take the throne, or the first army to reach King’s Landing will take it unopposed.')) emitAction('forfeit-crown'); return; }
@@ -1939,7 +2011,7 @@
   const POPUP_TYPES = [
     { id: 'alliance', label: 'Alliance formed', kinds: ['alliance'] },
     { id: 'alliance-broken', label: 'Alliance broken', kinds: ['alliance-broken'] },
-    { id: 'battle', label: 'Battle won or lost', kinds: ['battle-won', 'battle-lost'] },
+    { id: 'battle', label: 'Battle won or lost', kinds: ['battle-won', 'battle-lost', 'battle-report'] },
     { id: 'attacked', label: 'Your city attacked', kinds: ['attacked'] },
     { id: 'city-fell', label: 'Your city fell', kinds: ['city-fell'] },
     { id: 'siege', label: 'King’s Landing under siege', kinds: ['siege'] },

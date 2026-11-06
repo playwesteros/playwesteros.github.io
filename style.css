@@ -942,3 +942,33 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
 #gameScreen .dashboard-grid { flex: none; }
 #gameScreen:not(.hub-mode) .dashboard-grid:not(:has(.center-column > :not([hidden]))) { display: none; }
 #gameScreen .right-column, #mapToggleButton { display: none !important; }
+
+/* Siege battle: dice animation */
+.announce-card.battle-card { width: min(600px, 100%); }
+.announce-stage.is-battle { display: block; height: auto; margin: 8px 0 4px; }
+.dice-arena { display: grid; gap: 8px; text-align: left; }
+.dice-head { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font: 700 11px Cinzel, Georgia, serif; letter-spacing: .12em; text-transform: uppercase; color: var(--gold-bright); }
+.dice-head span:last-child { text-align: right; }
+.dice-head small { display: block; margin-top: 3px; font: 500 10px Inter, system-ui, sans-serif; letter-spacing: .02em; text-transform: none; color: var(--muted, #a8aeb8); }
+.dice-scroll { max-height: min(44vh, 360px); overflow-y: auto; overflow-x: hidden; border-radius: 10px; background: radial-gradient(120% 100% at 50% 0%, rgba(200,168,108,.09), rgba(8,10,12,.55)); border: 1px solid color-mix(in srgb, var(--gold) 22%, transparent); padding: 6px; }
+.dice-board { position: relative; width: 100%; }
+.die { position: absolute; width: min(46%, 150px); height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(240,213,151,.55); background: linear-gradient(160deg, #f4ead2, #cdbd96); color: #1c1408; box-shadow: 0 2px 0 #8d7a4f, 0 5px 10px rgba(0,0,0,.4); transition: top .7s cubic-bezier(.3,.8,.3,1), opacity .4s, filter .4s, transform .3s, box-shadow .3s; }
+.die.att { left: 0; }
+.die.def { right: 0; flex-direction: row-reverse; background: linear-gradient(160deg, #cfd8e3, #9eabbb); border-color: rgba(190,210,235,.6); box-shadow: 0 2px 0 #66788f, 0 5px 10px rgba(0,0,0,.4); }
+.die img { width: 20px; height: 20px; object-fit: contain; filter: drop-shadow(0 1px 0 rgba(255,255,255,.4)); }
+.die b { flex: 1; text-align: center; font: 800 18px Cinzel, Georgia, serif; }
+.die.u-dragons { box-shadow: 0 2px 0 #8a3a1e, 0 0 12px rgba(255,120,60,.6); border-color: #ff8a52; }
+.die.u-garrison { opacity: .93; }
+.die.rolling { animation: die-shake .16s linear infinite; }
+@keyframes die-shake { 0% { transform: rotate(-5deg) translateY(-2px); } 50% { transform: rotate(5deg) translateY(2px); } 100% { transform: rotate(-5deg) translateY(-2px); } }
+.die.clash { transform: scale(1.06); }
+.die.won { box-shadow: 0 0 0 2px #7fd18f, 0 0 14px rgba(127,209,143,.7); }
+.die.lost { opacity: .42; filter: grayscale(.8) saturate(.6); box-shadow: 0 0 0 2px #c0584a; transform: scale(.96); }
+.die.lost::after { content: '✕'; position: absolute; right: 6px; top: 50%; translate: 0 -50%; color: #b33b2e; font-weight: 800; }
+.die.def.lost::after { right: auto; left: 6px; }
+.die.discard { opacity: .22; filter: grayscale(1); }
+.dice-legend { text-align: center; font-size: 10px; color: var(--muted, #a8aeb8); letter-spacing: .03em; }
+.battle-summary { opacity: 0; transition: opacity .5s; }
+.battle-summary.show { opacity: 1; }
+@media (max-width: 520px) { .die { width: 47%; } .announce-card.battle-card { padding: 20px 12px 14px; } }
+@media (prefers-reduced-motion: reduce) { .die, .battle-summary { transition: none; } .die.rolling { animation: none; } }
