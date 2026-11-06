@@ -77,7 +77,7 @@ let gameOver;
 let startHouseCount;
 
 // ---- Advanced host settings ----------------------------------------------
-const POPUP_KINDS = ['alliance', 'alliance-broken', 'spy-caught', 'decree', 'crown', 'siege', 'sacked', 'city-fell', 'attacked', 'battle', 'desertion', 'traitor', 'king-hand'];
+const POPUP_KINDS = ['alliance', 'alliance-broken', 'spy-caught', 'decree', 'crown', 'siege', 'sacked', 'city-fell', 'attacked', 'battle', 'desertion', 'round-start', 'traitor', 'king-hand'];
 const ADVANCED_DEFAULTS = { alliancesEnabled: true, handEnabled: true, houseBuffs: true, disabledHouses: [], disabledPopups: [], roundSeconds: 0, readyMode: 'bypass' };
 const buffsOn = () => gameSettings.houseBuffs !== false;
 const handOn = () => gameSettings.handEnabled !== false;
@@ -589,7 +589,7 @@ function capWord(t) { return String(t || '').replace(/^\w/, c => c.toUpperCase()
 // Public popups (everyone) vs personal popups (named houses/players). `exceptIds` skips players who get a personal popup for the same event.
 function notifyAll(kind, title, text, banners, exceptIds = []) { notify(kind, [], [...players.values()].filter(p => !p.left).map(p => p.id), title, text, banners, exceptIds); }
 function notify(kind, houseIds, playerIds, title, text, banners, exceptIds = []) {
-  notices.unshift({ id: randomUUID(), round, kind, houseIds: [...new Set(houseIds)], playerIds, exceptPlayerIds: exceptIds, title, text: String(text).slice(0, 260), banners });
+  notices.unshift({ id: randomUUID(), round, kind, houseIds: [...new Set(houseIds)], playerIds, exceptPlayerIds: exceptIds, title, text: String(text).slice(0, kind.startsWith('round-') ? 500 : 260), banners });
   if (notices.length > 60) notices.length = 60;
 }
 function forceStrength(u) { return u.infantry + u.navy + u.dragons * 5 + (u.dragons ? 2 : 0); }
@@ -1370,49 +1370,61 @@ function advancePhaseStep() {
     addEvent('important', `Round ${round} action phase ended. Court is now in session.`);
     return ok('Court is now in session.');
   }
-  if (phase === 'COURT') {
-    phase = 'RESOLUTION';
-    resolveDueAttacks();
-    settleSpoils(true);
-    addEvent('important', `Round ${round} court has concluded. The realm has entered resolution.`);
-    checkVictory(true);
-    return ok('Round resolution has begun.');
-  }
-  if (phase === 'RESOLUTION') {
-    round += 1;
-    phase = 'ACTION';
-    for (const p of players.values()) {
-      const h = p.w;
-      if (!h || p.left) continue;
-      h.hasAttackedThisRound = false;
-      if (h.navyBuilding) { h.navy += h.navyBuilding; note(h, 'navy', h.navyBuilding, 'Ships finished building'); h.navyBuilding = 0; }
-      if (p.eliminated) continue;
-      const income = playerIncome(p);
-      h.money += income;
-      note(h, 'gold', income, 'City income');
-      // Army upkeep: 1 gold per unit, taken automatically. Unpaid troops desert.
-      const due = armySize(h);
-      const paid = Math.min(due, h.money);
-      h.money -= paid;
-      note(h, 'gold', -paid, `Army upkeep (${due} units)`);
-      let short = due - paid;
-      if (short > 0) {
-        const deserted = [];
-        for (const k of ['infantry', 'navy', 'dragons']) {
-          const take = Math.min(h[k], short);
-          if (!take) continue;
-          h[k] -= take; short -= take;
-          note(h, k, -take, 'Deserted: upkeep unpaid');
-          deserted.push(`${take} ${k}`);
-        }
-        notify('desertion', [], [p.id], 'Troops deserted', `You could not pay your army. ${deserted.join(', ')} left the banners.`, [h.id]);
-        addEvent('normal', `Unpaid troops deserted ${p.username} of House ${h.name}.`);
-      }
+  if (phase === 'COURT' || phase === 'RESOLUTION') {
+    if (phase === 'COURT') {
+      resolveDueAttacks();
+      settleSpoils(true);
+      addEvent('important', `Round ${round} court has concluded.`);
+      checkVictory(true);
+      if (gameOver) { phase = 'RESOLUTION'; return ok('The realm has been decided.'); }
     }
-    addEvent('important', `Round ${round} begins. Houses received capital income and paid army upkeep.`);
-    return ok(`Round ${round} has begun. Capital income and army upkeep have been settled.`);
+    return startNextRound();
   }
   return fail('Use the election controls to leave the lobby or close the ballot.');
+}
+// Court ends and the next round begins in one step: income, upkeep, finished ships. Each player gets one start-of-round report.
+function startNextRound() {
+  round += 1;
+  phase = 'ACTION';
+  for (const p of players.values()) {
+    const h = p.w;
+    if (!h || p.left) continue;
+    h.hasAttackedThisRound = false;
+    const lines = [];
+    let bad = false;
+    const startGold = h.money;
+    if (h.navyBuilding) { const n = h.navyBuilding; h.navy += n; note(h, 'navy', n, 'Ships finished building'); h.navyBuilding = 0; lines.push(`${n} ${n === 1 ? 'ship' : 'ships'} finished building`); }
+    if (p.eliminated) continue;
+    const income = playerIncome(p);
+    h.money += income;
+    note(h, 'gold', income, 'City income');
+    lines.unshift(`+${income} gold from your cities`);
+    // Army upkeep: 1 gold per unit, taken automatically. Unpaid troops desert.
+    const due = armySize(h);
+    const paid = Math.min(due, h.money);
+    h.money -= paid;
+    note(h, 'gold', -paid, `Army upkeep (${due} units)`);
+    if (due) lines.splice(1, 0, `\u2212${paid} gold for army upkeep (${due} units)`);
+    let short = due - paid;
+    if (short > 0) {
+      const deserted = [];
+      for (const k of ['infantry', 'navy', 'dragons']) {
+        const take = Math.min(h[k], short);
+        if (!take) continue;
+        h[k] -= take; short -= take;
+        note(h, k, -take, 'Deserted: upkeep unpaid');
+        deserted.push(`${take} ${k === 'navy' ? 'ships' : k}`);
+      }
+      lines.push(`Deserted, upkeep unpaid: ${deserted.join(', ')}`);
+      bad = true;
+      addEvent('normal', `Unpaid troops deserted ${p.username} of House ${h.name}.`);
+    }
+    const net = h.money - startGold;
+    lines.push(`Treasury: ${h.money} gold (${net >= 0 ? '+' : '\u2212'}${Math.abs(net)} this round)`);
+    notify(bad ? 'round-bad' : 'round-start', [], [p.id], `Round ${round} begins`, lines.join('\n'), [h.id]);
+  }
+  addEvent('important', `Round ${round} begins. Houses received capital income and paid army upkeep.`);
+  return ok(`Round ${round} has begun. Capital income and army upkeep have been settled.`);
 }
 // Allies who march on the same capital in the same round fight together automatically.
 function resolveDueAttacks() {
