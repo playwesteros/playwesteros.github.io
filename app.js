@@ -420,7 +420,7 @@
     const o = h.pendingAttack;
     const from = home, to = o && pos.get(o.targetCapitalId);
     if (o && from && to) {
-      const step = (state.round - o.orderedRound) * 3 + ['ACTION', 'COURT', 'RESOLUTION'].indexOf(state.phase);
+      const step = (state.round - o.orderedRound) * 2 + ['ACTION', 'COURT', 'RESOLUTION'].indexOf(state.phase);
       const t = Math.min(0.85, 0.15 + 0.14 * step);
       for (const [w, stroke] of [[18, '#1b1208'], [9, color]]) {
         const line = document.createElementNS(NS, 'line');
@@ -606,7 +606,7 @@
     $('roundHandBadge').hidden = !state.isHand;
   }
 
-  const HOST_STEPS = { ACTION: ['OPEN COURT', 'Open the court'], COURT: ['RESOLVE', 'Resolve this round'], RESOLUTION: ['NEXT ROUND', 'Begin the next round'] };
+  const HOST_STEPS = { ACTION: ['OPEN COURT', 'Open the court'], COURT: ['NEXT ROUND', 'End the court, collect income and begin the next round'] };
   // The header pill shows the round for everyone; for the host it doubles as the "advance" button.
   function updateRoundPill() {
     const pill = $('roundPill');
@@ -1198,9 +1198,9 @@
     if (!announceShowing) showNextAnnouncement();
   }
   // ---- Event notices: alliances, traitor labels, attacks, battle results ----
-  const NOTICE_LABEL = { decree: 'ROYAL DECREE', crown: 'THE CROWN', desertion: 'DESERTION', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT', siege: 'UNDER SIEGE', sacked: 'SACKED', 'city-fell': 'YOUR CITY FELL' };
+  const NOTICE_LABEL = { decree: 'ROYAL DECREE', crown: 'THE CROWN', desertion: 'DESERTION', 'round-start': 'NEW ROUND', 'round-bad': 'NEW ROUND', 'spy-caught': 'SPIES CAUGHT', alliance: 'ALLIANCE', 'alliance-broken': 'ALLIANCE BROKEN', traitor: 'TRAITOR', attacked: 'UNDER ATTACK', 'battle-won': 'VICTORY', 'battle-lost': 'DEFEAT', siege: 'UNDER SIEGE', sacked: 'SACKED', 'city-fell': 'YOUR CITY FELL' };
   const NOTICE_MID = { 'spy-caught': 'game-spy', alliance: 'game-handshake', 'alliance-broken': 'game-chain', attacked: 'game-swords', 'battle-won': 'game-swords', 'battle-lost': 'game-swords', siege: 'game-swords', sacked: 'game-swords' };
-  const NOTICE_NOT_NEGATIVE = new Set(['alliance', 'battle-won', 'spy-caught', 'decree', 'crown', 'notice']); // default outline; everything else is red
+  const NOTICE_NOT_NEGATIVE = new Set(['round-start', 'alliance', 'battle-won', 'spy-caught', 'decree', 'crown', 'notice']); // default outline; everything else is red
   // After being away, only these still matter: a broken alliance, a siege, or your own city falling.
   const BACKLOG_KINDS = new Set(['alliance-broken', 'siege', 'city-fell']);
   let wasAway = true; // true on page load and whenever the tab was hidden
@@ -1284,11 +1284,11 @@
       $('announceStage').classList.remove('has-old');
       $('announceStage').classList.add('is-notice');
       $('announceStage').innerHTML = banners.length === 2 && mid ? `${banners[0]}<img class="notice-mid" src="./assets/${mid}.png?v=3" alt="">${banners[1]}` : banners.join('');
-      $('announceName').innerHTML = `<span class="notice-text">${escapeHtml(n.text)}</span>`;
+      $('announceName').innerHTML = n.kind.startsWith('round-') ? `<span class="notice-text round-report">${String(n.text).split('\n').map(l => `<span>${escapeHtml(l)}</span>`).join('')}</span>` : `<span class="notice-text">${escapeHtml(n.text)}</span>`;
       $('announceOverlay').querySelector('.announce-card').dataset.tone = NOTICE_NOT_NEGATIVE.has(n.kind) ? '' : 'bad'; // default outline unless negative
       $('announceOverlay').hidden = false;
       clearTimeout(announceTimer);
-      announceTimer = setTimeout(closeAnnouncement, 7000);
+      announceTimer = setTimeout(closeAnnouncement, n.kind.startsWith('round-') ? 10000 : 7000);
       return;
     }
     $('announceStage').classList.remove('is-notice');
@@ -1931,6 +1931,7 @@
     { id: 'decree', label: 'Royal decree sent', kinds: ['decree'] },
     { id: 'spy-caught', label: 'Spies caught', kinds: ['spy-caught'] },
     { id: 'desertion', label: 'Troops deserted', kinds: ['desertion'] },
+    { id: 'round-start', label: 'Start-of-round report', kinds: ['round-start', 'round-bad'] },
     { id: 'traitor', label: 'Branded a traitor', kinds: ['traitor'] }
   ];
   const NOTICE_POPUP = Object.fromEntries(POPUP_TYPES.flatMap(t => t.kinds.map(k => [k, t.id])));

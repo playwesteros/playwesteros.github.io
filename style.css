@@ -927,3 +927,7 @@ body.mobile-device .hub-sheet-head { padding: 12px 12px 10px; }
 .adv-actions { position: sticky; bottom: -22px; margin: 0 -22px -22px; padding: 12px 22px 22px; background: linear-gradient(180deg, transparent, #151719 22%); }
 
 button.round-pill.is-ready { background: color-mix(in srgb, #5fae6b 28%, transparent); color: #bfe8c5; border-color: #5fae6b; }
+
+.round-report { display: grid; gap: 6px; text-align: left; }
+.round-report span { display: block; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--gold) 8%, transparent); }
+.round-report span:last-child { font-weight: 700; color: var(--gold-bright); }
