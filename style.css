@@ -980,3 +980,5 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
 .map-cap:has(.cap-banner) .cap-dot { display: none; }
 .map-cap:has(.cap-banner) .cap-ring { display: none; }
 .map-dialog.pick-mode .map-cap.is-target:has(.cap-banner) .cap-ring, .map-cap.is-contested:has(.cap-banner) .cap-ring { display: inline; }
+
+.march-list{display:grid;gap:6px;margin-top:8px}.march-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;padding:6px 8px;border:1px solid rgba(200,168,108,.35);border-radius:6px}.march-row span{flex:1}

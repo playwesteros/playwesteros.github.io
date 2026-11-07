@@ -310,8 +310,6 @@
     if (!h) return 'Choose a house first.';
     if (state.round < 2) return 'Wars cannot begin until Round 2. Round 1 is for building and scheming.';
     if (state.phase !== 'ACTION') return 'War is declared during the action phase. Wait for the next round to begin.';
-    if (h.pendingAttack) return 'Your house has already committed an army to a war that has not resolved yet.';
-    if (h.hasAttackedThisRound) return 'Your house is already committed to a war this round.';
     if (!state.capitals.some(c => !warTargetProblem(c))) return 'There is no capital you can attack right now.';
     return '';
   }
@@ -339,16 +337,22 @@
   }
   function travelNote() {
     const t = state.capitals.find(c => c.id === warTargetId);
-    if (!t || state.myHouse.pendingAttack) return '';
+    if (!t) return '';
     const tr = travelFor(t), n = k => Number($(k).value) || 0;
     const used = [['infantry', n('attackInfantry')], ['navy', n('attackNavy')], ['dragons', n('attackDragons')]].filter(([, c]) => c > 0).map(([k]) => tr[k]);
     const rounds = Math.max(1, ...used);
     const word = r => `${r} round${r === 1 ? '' : 's'}`;
     return `Travel to ${t.name}: infantry ${word(tr.infantry)}, ships ${word(tr.navy)}, dragons ${word(tr.dragons)}. ${used.length ? `Your force arrives after Round ${state.round + rounds} court.` : ''}`;
   }
+  function renderMarchList() {
+    const box = $('marchList'); if (!box) return;
+    const ms = state?.myHouse?.marches || [];
+    const word = u => [['infantry', u.infantry], ['ships', u.navy], ['dragons', u.dragons]].filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ');
+    box.innerHTML = ms.map(m => `<div class="march-row"><span>${m.returning ? 'Returning home' : m.relief ? `Relieving ${escapeHtml(m.targetName)}` : `Marching on ${escapeHtml(m.targetName)}`}: ${escapeHtml(word(m.units))}. ${m.returning ? 'Home' : 'Arrives'} after Round ${m.resolveRound}.</span>${m.returning ? '' : `<button class="button button-quiet button-small ${state.phase === 'ACTION' ? '' : 'is-locked'}" type="button" data-action="cancel-march" data-march-id="${escapeHtml(m.id)}"${state.phase === 'ACTION' ? '' : ' disabled'}>Call back</button>`}</div>`).join('');
+  }
   function updateAttackLock() {
     if (!state?.myHouse) return;
-    if (!state.myHouse.pendingAttack) $('attackOrderStatus').textContent = travelNote();
+    $('attackOrderStatus').textContent = travelNote();
     const at = (state.myHouse.sieges || []).map(x => `Your army at ${x.capitalName} (${x.role === 'relief' ? 'relief' : 'siege'}): ${[['infantry', x.units.infantry], ['ships', x.units.navy], ['dragons', x.units.dragons]].filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ') || 'none left'}.`);
     if (at.length) $('attackOrderStatus').textContent = [$('attackOrderStatus').textContent, ...at].filter(Boolean).join(' ');
     lock($('attackForm').querySelector('button[type="submit"]'), attackLockReason());
@@ -448,21 +452,21 @@
       const troops = h.infantry + h.navy + h.dragons;
       if (troops > 0) layer.appendChild(badge(home.x - 86, home.y - 40, 40, troops, `Your troops at home: ${troops}`));
     }
-    const o = h.pendingAttack;
-    const from = home, to = o && pos.get(o.targetCapitalId);
-    if (o && from && to) {
+    for (const o of (h.marches || [])) {
+      const from = { x: o.fromX, y: o.fromY }, to = { x: o.toX, y: o.toY };
+      if (!Number.isFinite(from.x) || !Number.isFinite(to.x)) continue;
       const step = (state.round - o.orderedRound) * 2 + ['ACTION', 'COURT', 'RESOLUTION'].indexOf(state.phase);
       const total = Math.max(2, (o.resolveRound - o.orderedRound) * 2);
       const t = Math.min(0.85, 0.15 + 0.7 * Math.min(1, step / total));
       for (const [w, stroke] of [[18, '#1b1208'], [9, color]]) {
         const line = document.createElementNS(NS, 'line');
         line.setAttribute('x1', from.x); line.setAttribute('y1', from.y); line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
-        line.setAttribute('stroke', stroke); line.setAttribute('stroke-width', w); line.setAttribute('stroke-dasharray', '26 16'); line.setAttribute('stroke-linecap', 'round');
+        line.setAttribute('stroke', stroke); line.setAttribute('stroke-width', w); line.setAttribute('stroke-dasharray', o.returning ? '8 18' : '26 16'); line.setAttribute('stroke-linecap', 'round');
         layer.appendChild(line);
       }
       const x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t;
       const n = o.units.infantry + o.units.navy + o.units.dragons;
-      layer.appendChild(badge(x, y, 50, n, `Your army marching on ${o.targetName}`));
+      layer.appendChild(badge(x, y, 50, n, o.returning ? 'Your army marching home' : `Your army marching on ${o.targetName}`));
     }
   }
   function showMapHint(text) {
@@ -508,7 +512,7 @@
     const target = state.capitals.find(c => c.id === warTargetId);
     if (!target || warTargetProblem(target)) warTargetId = null;
     renderWarTarget();
-    $('attackOrderStatus').textContent = house.pendingAttack ? `Committed against ${house.pendingAttack.targetName}. Resolves after Round ${house.pendingAttack.resolveRound}.` : '';
+    renderMarchList();
     updateAttackLock();
     if (pickingTarget && warBlockReason()) { endPick(); showMapHint(warBlockReason()); }
     updateRecruitButton();
@@ -763,9 +767,8 @@
 
     // War councils: invitations from allies, your own marching orders, and the spoils of won wars.
     let war = '';
-    if (mine?.pendingAttack) {
-      const pa = mine.pendingAttack;
-      war += `<article class="treaty-card war-card"><header><strong>Your war on ${escapeHtml(pa.targetName)}</strong><span class="treaty-status">Resolves after Round ${pa.resolveRound}</span></header></article>`;
+    for (const pa of (mine?.marches || [])) {
+      war += `<article class="treaty-card war-card"><header><strong>${pa.returning ? 'Your army returning home' : `Your war on ${escapeHtml(pa.targetName)}`}</strong><span class="treaty-status">${pa.returning ? 'Home' : 'Resolves'} after Round ${pa.resolveRound}</span></header></article>`;
     }
     war += (state.spoils || []).map(sp => {
       const other = sp.houseA === myId ? sp.houseB : sp.houseA;
@@ -1354,14 +1357,14 @@
     const ROW = 38, rows = Math.max(b.attackers.length, b.defenders.length, 1);
     const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     card.classList.add('battle-card'); card.dataset.tone = '';
-    $('announceEyebrow').textContent = b.battleNo === 1 ? 'THE SIEGE BEGINS' : `THE SIEGE · BATTLE ${b.battleNo}`;
+    $('announceEyebrow').textContent = b.field ? (b.battleNo === 1 ? 'ARMIES MEET ON THE ROAD' : `FIELD BATTLE · EXCHANGE ${b.battleNo}`) : b.battleNo === 1 ? 'THE SIEGE BEGINS' : `THE SIEGE · BATTLE ${b.battleNo}`;
     $('announceTitle').textContent = n.title;
     stage.classList.remove('has-old'); stage.classList.add('is-notice', 'is-battle');
     const names = list => [...new Set(list.map(d => d.houseId))].map(id => `House ${escapeHtml(capName(prettyHouse(id)))}`).join(' · ') || '—';
     const dieHtml = (d, side, i) => `<div class="die ${side} u-${d.unit}" data-side="${side}" data-i="${i}"><img src="./assets/${DIE_ICON[d.unit] || 'ui-spear'}.png?v=3" alt=""><b>?</b></div>`;
-    stage.innerHTML = `<div class="dice-arena"><div class="dice-head"><span>Attackers<small>${names(b.attackers)}</small></span><span>Defenders<small>${names(b.defenders)}</small></span></div>
+    stage.innerHTML = `<div class="dice-arena"><div class="dice-head"><span>${b.field ? 'First army' : 'Attackers'}<small>${names(b.attackers)}</small></span><span>${b.field ? 'Second army' : 'Defenders'}<small>${names(b.defenders)}</small></span></div>
       <div class="dice-scroll"><div class="dice-board" style="height:${rows * ROW}px">${b.attackers.map((d, i) => dieHtml(d, 'att', i)).join('')}${b.defenders.map((d, i) => dieHtml(d, 'def', i)).join('')}</div></div>
-      <div class="dice-legend"><span>Highest rolls face each other · ties go to the defenders · spare dice are discarded</span></div></div>`;
+      <div class="dice-legend"><span>${b.field ? 'Highest rolls face each other · tied dice are discarded · spare dice are discarded' : 'Highest rolls face each other · ties go to the defenders · spare dice are discarded'}</span></div></div>`;
     $('announceName').innerHTML = '<span class="notice-text battle-summary"></span>';
     $('announceOverlay').hidden = false;
     clearTimeout(announceTimer);
@@ -1372,11 +1375,11 @@
     const slotOf = { att: shuffled(b.attackers.length), def: shuffled(b.defenders.length) };
     const place = (side, el, slot) => { el.style.top = `${slot * ROW}px`; };
     ['att', 'def'].forEach(side => dice[side].forEach((el, i) => place(side, el, slotOf[side][i])));
-    const resultText = b.result === 'fell' ? `The defence collapses. ${escapeHtml(b.capitalName)} falls.` : b.result === 'broken' ? 'The attackers are spent. The siege is broken.' : 'Both sides are bloodied. The siege goes on.';
-    const summary = `<b>Attackers lost ${b.attLost}</b> · <b>Defenders lost ${b.defLost}</b><br>${resultText}`;
+    const resultText = b.field ? (b.result === 'ended' ? 'One army is destroyed. The other marches on.' : 'Both armies are bloodied. The fighting goes on.') : b.result === 'fell' ? `The defence collapses. ${escapeHtml(b.capitalName)} falls.` : b.result === 'broken' ? 'The attackers are spent. The siege is broken.' : 'Both sides are bloodied. The siege goes on.';
+    const summary = b.field ? `<b>First army lost ${b.attLost}</b> · <b>Second army lost ${b.defLost}</b>${b.ties ? ` · ${b.ties} tied` : ''}<br>${resultText}` : `<b>Attackers lost ${b.attLost}</b> · <b>Defenders lost ${b.defLost}</b><br>${resultText}`;
     const anim = { done: false, cancel() { timers.forEach(clearTimeout); timers.length = 0; clearInterval(anim.spin); }, finish() {
       anim.cancel(); anim.done = true;
-      ['att', 'def'].forEach(side => dice[side].forEach((el, i) => { el.classList.remove('rolling'); el.querySelector('b').textContent = data[side][i].v; place(side, el, i); el.classList.toggle('lost', Boolean(data[side][i].lost)); el.classList.toggle('won', i < b.pairs && !data[side][i].lost); el.classList.toggle('discard', i >= b.pairs); }));
+      ['att', 'def'].forEach(side => dice[side].forEach((el, i) => { el.classList.remove('rolling'); el.querySelector('b').textContent = data[side][i].v; place(side, el, i); el.classList.toggle('lost', Boolean(data[side][i].lost)); el.classList.toggle('won', i < b.pairs && !data[side][i].lost && !data[side][i].tied); el.classList.toggle('discard', i >= b.pairs || Boolean(data[side][i].tied)); }));
       const sum = stage.parentElement.querySelector('.battle-summary'); if (sum) { sum.innerHTML = summary; sum.classList.add('show'); }
       clearTimeout(announceTimer); announceTimer = setTimeout(closeAnnouncement, 12000);
     } };
@@ -1393,7 +1396,7 @@
     const step = Math.max(90, Math.min(420, 3200 / Math.max(1, b.pairs)));
     for (let i = 0; i < b.pairs; i++) timers.push(setTimeout(() => {
       const a = dice.att[i], d = dice.def[i];
-      a.classList.add(data.att[i].lost ? 'lost' : 'won'); d.classList.add(data.def[i].lost ? 'lost' : 'won');
+      if (data.att[i].tied) { a.classList.add('discard'); d.classList.add('discard'); } else { a.classList.add(data.att[i].lost ? 'lost' : 'won'); d.classList.add(data.def[i].lost ? 'lost' : 'won'); }
       a.classList.add('clash'); d.classList.add('clash');
       const board = a.parentElement; board.scrollTop = 0;
       a.scrollIntoView?.({ block: 'nearest' });
@@ -1905,6 +1908,7 @@
     if (action === 'gold-info') return;
     if (action === 'toggle-ledger') { ledgerAll = !ledgerAll; renderHub(); return; }
     if (action === 'close-decree-popup') { $('decreeOverlay').hidden = true; return; }
+    if (action === 'cancel-march') { emitAction('cancel-march', { marchId: button.dataset.marchId }); return; }
     if (action === 'withdraw-army') { emitAction('withdraw-army', { capitalId: warTargetId }); return; }
     if (action === 'war-cancel') { warTargetId = null; renderWarTarget(); updateAttackLock(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }

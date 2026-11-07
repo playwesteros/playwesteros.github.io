@@ -2,6 +2,11 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.1.7 (Nov 6, 2026)
+- **Send as many armies as you like.** You can now send reinforcements to the same city back to back, or several attacks in the same round. Each army marches on its own.
+- **Call an army back.** A "Call back" button lists every army on the road. If it has not left yet it comes home at once; otherwise it turns around and takes as long to return as it has already marched.
+- **Armies fight on the road.** When two enemy armies cross paths on the way to different cities, they battle where they meet. There is no defender, so tied dice are discarded. The fight repeats until one army is destroyed and the survivor marches on. Allies never fight each other on the road. The dice replay works for these battles too.
+
 ## v1.1.6 (Nov 6, 2026)
 - **Bots understand who is doing what.** "I will send you 5 gold" is now an offer (they thank you), not a request for money. Messages are read clause by clause, so several things in one message are all understood.
 - **Caught spies.** Tell a bot you caught its spies and it admits, denies or defies you, depending on whether its spies really were caught and on its personality.

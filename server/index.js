@@ -303,7 +303,7 @@ function playerPublic(p) {
 function makeWallet(p) {
   const house = findHouse(p.houseId);
   const w = Object.create(house);
-  Object.assign(w, { playerId: p.id, money: 15 + (house.id === 'lannister' && buffsOn() ? 5 : 0), infantry: 3, navy: 1, navyBuilding: 0, dragons: house.id === 'targaryen' && buffsOn() ? 1 : 0, pendingAttack: null, hasAttackedThisRound: false, commandUsedRound: 0, lockedUntilRound: 0, spyReports: [], ledger: [] });
+  Object.assign(w, { playerId: p.id, money: 15 + (house.id === 'lannister' && buffsOn() ? 5 : 0), infantry: 3, navy: 1, navyBuilding: 0, dragons: house.id === 'targaryen' && buffsOn() ? 1 : 0, marches: [], hasAttackedThisRound: false, commandUsedRound: 0, lockedUntilRound: 0, spyReports: [], ledger: [] });
   p.w = w;
   return w;
 }
@@ -339,7 +339,7 @@ function sackCity(c, victorIds) {
       victors.forEach((v, i) => { const g = each + (i === 0 ? gold - each * victors.length : 0); v.w.money += g; note(v.w, 'gold', g, `Gold of ${p.username}, fallen at ${c.name}`); });
       note(p.w, 'gold', -gold, `Taken when ${c.name} was sacked`);
     }
-    p.w.money = 0; p.w.infantry = 0; p.w.navy = 0; p.w.dragons = 0; p.w.pendingAttack = null;
+    p.w.money = 0; p.w.infantry = 0; p.w.navy = 0; p.w.dragons = 0; p.w.marches = [];
     p.eliminated = true; fallen.push(p);
     notify('city-fell', [], [p.id], `${c.name} was sacked`, `Your city fell. You are defeated${gold ? ` and your ${gold} gold goes to the victor` : ''}. You can still watch and speak at court.`, [p.houseId]);
   }
@@ -386,17 +386,17 @@ function spyFindings(mission, target) {
   }
   if (mission === 'dragon') return { kind: 'dragon', hasDragon: houseMembers(target.id).some(p => dragonIds.includes(p.id)) };
   // war: an approximate troop count, or the army on the march with its approximate size (off by 1 or 2)
-  const moving = houseWallets(target.id).find(w => w.pendingAttack);
+  const moving = houseWallets(target.id).find(w => (w.marches || []).some(m => !m.returning)), movingOrder = moving && moving.marches.find(m => !m.returning);
   if (moving && Math.random() < 0.5) {
-    const cap = findCapital(moving.pendingAttack.targetCapitalId);
-    return { kind: 'movement', movingOn: cap?.name || null, infantry: fuzz((moving.pendingAttack.units?.infantry) || 0), navy: fuzz((moving.pendingAttack.units?.navy) || 0), dragons: (moving.pendingAttack.units?.dragons) || 0 };
+    const cap = findCapital(movingOrder.targetCapitalId);
+    return { kind: 'movement', movingOn: cap?.name || null, infantry: fuzz((movingOrder.units?.infantry) || 0), navy: fuzz((movingOrder.units?.navy) || 0), dragons: (movingOrder.units?.dragons) || 0 };
   }
   return { kind: 'count', infantry: fuzz(houseSum(target.id, 'infantry')), navy: fuzz(houseSum(target.id, 'navy')), dragons: houseSum(target.id, 'dragons'), marching: Boolean(moving) };
 }
 function capitalIncome(c) { const h = findHouse(c.ownerHouseId); return h ? incomePerCapital(h) + (c.id === 'casterly-rock' && buffsOn() ? 3 : 0) : 0; }
 function currentHouseView(h) {
   if (!h) return null;
-  const { money, infantry, navy, navyBuilding, dragons, infantryCost, navyCost, pendingAttack, hasAttackedThisRound, commandUsedRound, lockedUntilRound, spyReports, ledger, ...definition } = h;
+  const { money, infantry, navy, navyBuilding, dragons, infantryCost, navyCost, marches, hasAttackedThisRound, commandUsedRound, lockedUntilRound, spyReports, ledger, ...definition } = h;
   const members = [...players.values()].filter(p => p.houseId === h.id).map(p => ({ id: p.id, username: p.username, connected: p.connected, left: Boolean(p.left) }));
   if (!buffsOn()) { definition.buff = null; definition.nerf = null; }
   return { ...definition, players: members, capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length, fallen: houseFallen(h) };
@@ -404,18 +404,15 @@ function currentHouseView(h) {
 function makePrivateHouseView(h) {
   if (!h) return null;
   const me = h.playerId ? players.get(h.playerId) : null;
-  const target = h.pendingAttack ? findCapital(h.pendingAttack.targetCapitalId) : null;
+  const marchViews = (h.marches || []).map(m => ({ ...m, targetName: findCapital(m.targetCapitalId)?.name || m.targetName, units: { ...m.units } }));
   return {
     id: h.id, name: h.name, fallen: houseFallen(h), money: h.money || 0, infantry: h.infantry || 0, navy: h.navy || 0, navyBuilding: h.navyBuilding || 0, dragons: h.dragons || 0,
     infantryCost: h.infantryCost, navyCost: h.navyCost,
     capitalCount: capitals.filter(c => c.ownerHouseId === h.id).length, incomePerCapital: incomePerCapital(h), incomePerRound: me ? playerIncome(me) : 0, upkeepPerRound: armySize({ infantry: h.infantry || 0, navy: h.navy || 0, dragons: h.dragons || 0 }),
     cityId: me?.cityId || null,
     sieges: siegesFor(h),
-    pendingAttack: h.pendingAttack ? {
-      ...h.pendingAttack,
-      targetName: target?.name || h.pendingAttack.targetName,
-      units: { ...h.pendingAttack.units }
-    } : null,
+    marches: marchViews,
+    pendingAttack: marchViews.find(m => !m.returning) || null,
     ledger: (h.ledger || []).map(e => ({ ...e })),
     hasAttackedThisRound: Boolean(h.hasAttackedThisRound),
     commandUsedRound: h.commandUsedRound || 0,
@@ -944,7 +941,7 @@ io.on('connection', socket => {
     if (phase !== 'LOBBY') {
       // Mid-game removal: the player is defeated and cannot come back. If they wore the crown, the throne falls vacant.
       target.left = true; target.kicked = true; target.eliminated = true; target.connected = false; target.socketId = null;
-      if (target.w) { target.w.pendingAttack = null; }
+      if (target.w) { target.w.marches = []; }
       if (target.id === kingPlayerId) {
         const throne = capitals.find(c => c.id === 'kings-landing');
         kingPlayerId = null; handPlayerId = null;
@@ -1219,8 +1216,6 @@ io.on('connection', socket => {
     const h = check;
     if (phase !== 'ACTION') return fail('Attacks can only be ordered during the action phase.');
     if (round < 2) return fail('Attacks unlock after Round 1.');
-    if (h.pendingAttack) return fail('You already have a pending attack order.');
-    if (h.hasAttackedThisRound) return fail('You have already planned an attack this round.');
     const target = findCapital(String(payload.targetCapitalId || ''));
     if (!target || target.contested || (!target.ownerHouseId && !target.vacant)) return fail('Choose a city held by someone else.');
     if (target.ownerPlayerId === player.id) return fail('That city is already yours.');
@@ -1237,11 +1232,33 @@ io.on('connection', socket => {
     h.navy -= units.navy;
     h.dragons -= units.dragons;
     for (const k of ['infantry', 'navy', 'dragons']) note(h, k, -units[k], isRelief ? `Sent to relieve ${target.name}` : `Sent to war on ${target.name}`);
-    h.pendingAttack = { targetCapitalId: target.id, targetName: target.name, orderedRound: round, resolveRound: round + attackTravel(findCapital(player.cityId) || homeCityOf(player), target, units), units, playerId: player.id, relief: isRelief };
+    const origin = findCapital(player.cityId) || homeCityOf(player) || target;
+    const march = { id: randomUUID(), targetCapitalId: target.id, targetName: target.name, orderedRound: round, resolveRound: round + attackTravel(origin, target, units), units, playerId: player.id, relief: isRelief, fromX: origin.x, fromY: origin.y, toX: target.x, toY: target.y, homeX: origin.x, homeY: origin.y, returning: false };
+    (h.marches ||= []).push(march);
     h.hasAttackedThisRound = true;
     addEvent('normal', isRelief ? `House ${h.name} sent an army to relieve a besieged city.` : `House ${h.name} secretly committed an attack against a capital.`);
-    if (isRelief) return ok(`Relief army sent. It reaches ${target.name} after Round ${h.pendingAttack.resolveRound} court.`);
-    return ok(`Attack order placed. Your forces arrive after Round ${h.pendingAttack.resolveRound} court.`);
+    if (isRelief) return ok(`Relief army sent. It reaches ${target.name} after Round ${march.resolveRound} court.`);
+    return ok(`Attack order placed. Your forces arrive after Round ${march.resolveRound} court.`);
+  });
+
+  action(socket, 'cancel-march', (player, payload) => {
+    const check = requireHouse(player); if (check.ok === false) return check;
+    const h = check;
+    if (phase !== 'ACTION') return fail('Armies can only be recalled during the action phase.');
+    const m = (h.marches || []).find(x => x.id === String(payload.marchId || ''));
+    if (!m) return fail('That army is no longer on the march.');
+    if (m.returning) return fail('That army is already marching home.');
+    const elapsed = Math.max(0, round - m.orderedRound);
+    if (elapsed <= 0) {
+      h.marches.splice(h.marches.indexOf(m), 1);
+      returnArmy(armyEntry(m.playerId, h.id, m.units), `Recalled from ${m.targetName}`);
+      addEvent('normal', `House ${h.name} recalled an army before it left.`);
+      return ok('The order was cancelled. Your soldiers never left.');
+    }
+    const at = marchPos(m, round);
+    Object.assign(m, { returning: true, fromX: at.x, fromY: at.y, toX: m.homeX, toY: m.homeY, orderedRound: round, resolveRound: round + elapsed });
+    addEvent('normal', `House ${h.name} recalled an army from the road to ${m.targetName}.`);
+    return ok(`Your army turned back. It reaches home after Round ${m.resolveRound} court.`);
   });
 
   action(socket, 'withdraw-army', (player, payload) => {
@@ -1567,13 +1584,74 @@ function siegesFor(h) {
   }
   return out;
 }
+// Where a marching army is at time t (in rounds), moving in a straight line between its start and end points.
+function marchPos(m, t) {
+  const f = clampN((t - m.orderedRound) / Math.max(1, m.resolveRound - m.orderedRound), 0, 1);
+  return { x: m.fromX + (m.toX - m.fromX) * f, y: m.fromY + (m.toY - m.fromY) * f };
+}
+// Enemy armies that cross paths on the road fight where they stand. Nobody defends, so tied dice are simply discarded.
+const MEET_RADIUS = 34;
+function resolveFieldBattles() {
+  const all = [];
+  for (const p of players.values()) if (p.w) for (const m of (p.w.marches || [])) if (!m.returning && !m.relief) all.push({ m, w: p.w });
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+    const A = all[i], B = all[j];
+    if (unitTotal(A.m.units) < 1 || unitTotal(B.m.units) < 1) continue;
+    if (A.w.id === B.w.id || areAllied(A.w.id, B.w.id) || A.m.targetCapitalId === B.m.targetCapitalId) continue;
+    let met = null;
+    const t0 = Math.max(round - 1, A.m.orderedRound, B.m.orderedRound);
+    if (t0 >= round) continue;
+    for (let k = 0; k <= 50; k++) {
+      const t = t0 + (round - t0) * k / 50, pa = marchPos(A.m, t), pb = marchPos(B.m, t);
+      if (Math.hypot(pa.x - pb.x, pa.y - pb.y) <= MEET_RADIUS) { met = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 }; break; }
+    }
+    if (met) fightOnTheRoad(A, B);
+  }
+  for (const p of players.values()) if (p.w) p.w.marches = (p.w.marches || []).filter(m => unitTotal(m.units) > 0);
+}
+function fightOnTheRoad(A, B) {
+  const ids = new Set([A.w.id, B.w.id]);
+  let exchange = 0;
+  addEvent('battle', `The armies of House ${A.w.name} and House ${B.w.name} met on the road.`);
+  while (unitTotal(A.m.units) > 0 && unitTotal(B.m.units) > 0 && exchange < 40) {
+    exchange += 1;
+    const dice = (m, w) => { const d = []; for (const k of UNIT_KEYS) for (let i = 0; i < m.units[k]; i++) d.push({ v: rollDie(k), unit: k, houseId: w.id }); return d.sort((x, y) => y.v - x.v); };
+    const da = dice(A.m, A.w), db = dice(B.m, B.w), pairs = Math.min(da.length, db.length);
+    let aLost = 0, bLost = 0, ties = 0;
+    for (let i = 0; i < pairs; i++) {
+      if (da[i].v > db[i].v) { db[i].lost = true; bLost++; B.m.units[db[i].unit] -= 1; }
+      else if (db[i].v > da[i].v) { da[i].lost = true; aLost++; A.m.units[da[i].unit] -= 1; }
+      else { da[i].tied = db[i].tied = true; ties++; }
+    }
+    const done = unitTotal(A.m.units) < 1 || unitTotal(B.m.units) < 1;
+    const mapDie = d => ({ v: d.v, unit: d.unit, houseId: d.houseId, lost: Boolean(d.lost), tied: Boolean(d.tied) });
+    const battle = { id: randomUUID(), field: true, capitalId: null, capitalName: 'the road', battleNo: exchange, round, attackers: da.map(mapDie), defenders: db.map(mapDie), pairs, attLost: aLost, defLost: bLost, ties, result: done ? 'ended' : 'continues' };
+    const n2 = notify('battle-report', [...ids], [], 'Armies clash on the road', `House ${capWord(A.w.name)} lost ${aLost}, House ${capWord(B.w.name)} lost ${bLost}.`, [A.w.id, B.w.id]);
+    n2.battle = battle;
+    addEvent('battle', `Field battle, exchange ${exchange}: House ${A.w.name} lost ${aLost}, House ${B.w.name} lost ${bLost}${ties ? `, ${ties} tied ${ties === 1 ? 'pair' : 'pairs'} discarded` : ''}.`);
+    if (events[0]) events[0].battle = battle;
+    events.filter(e => e.battle).slice(12).forEach(e => { delete e.battle; });
+  }
+  for (const [X, Y] of [[A, B], [B, A]]) {
+    if (unitTotal(X.m.units) < 1) notify('battle-lost', [X.w.id], [], 'Army destroyed on the road', `Your army marching on ${X.m.targetName} was destroyed by House ${capWord(Y.w.name)}.`, [X.w.id, Y.w.id]);
+    else notify('battle-won', [X.w.id], [], 'Victory on the road', `Your army defeated House ${capWord(Y.w.name)}'s on the way to ${X.m.targetName} and marches on.`, [X.w.id, Y.w.id]);
+  }
+  for (const h of [A.w, B.w]) for (const b of botsOf(h.id === A.w.id ? B.w.id : A.w.id)) botAi(b).attackedBy[h.id] = round;
+}
 function resolveDueAttacks() {
-  const due = [...players.values()].map(p => p.w).filter(w => w && w.pendingAttack && w.pendingAttack.resolveRound <= round);
-  for (const w of due) arriveArmy(w);
+  resolveFieldBattles();
+  const due = [];
+  for (const p of players.values()) {
+    const w = p.w; if (!w) continue;
+    for (const m of [...(w.marches || [])]) if (m.resolveRound <= round) { w.marches.splice(w.marches.indexOf(m), 1); due.push({ w, m }); }
+  }
+  for (const { w, m } of due) {
+    if (m.returning) { returnArmy(armyEntry(m.playerId, w.id, m.units), 'Army returned home'); continue; }
+    arriveArmy(w, m);
+  }
   for (const c of capitals) if (c.siege) fightSiegeRound(c);
 }
-function arriveArmy(w) {
-  const order = w.pendingAttack; w.pendingAttack = null;
+function arriveArmy(w, order) {
   const target = findCapital(order.targetCapitalId);
   const entry = armyEntry(order.playerId, w.id, order.units);
   if (order.relief) {
@@ -2518,7 +2596,7 @@ function botTurn(bot) {
   if (h.navy < 4 && Math.random() < 0.25 && h.money >= h.navyCost * 2 && armySize(h) + 2 <= Math.floor(income * 1.1) + 3) botDo(bot, 'purchase', { unit: 'navy', amount: randomInt(1, 2) });
   // Relief first: a besieged city of its own, or of a friend it promised to help.
   let target = null;
-  if (round >= 2 && !h.pendingAttack && !h.hasAttackedThisRound) {
+  if (round >= 2 && !(h.marches || []).some(m => !m.returning) && !h.hasAttackedThisRound) {
     const wanted = [...ai.relief.map(r => ({ ...r })), ...capitals.filter(c => c.siege && c.ownerHouseId === bot.houseId).map(c => ({ capitalId: c.id, forHouse: bot.houseId }))];
     for (const r of wanted) {
       const c = findCapital(r.capitalId);
@@ -2531,7 +2609,7 @@ function botTurn(bot) {
     }
   }
   // Attack, and take the throne when it can be taken. Betraying a friend means breaking the alliance first.
-  if (!target && round >= 3 && !h.pendingAttack && !h.hasAttackedThisRound) {
+  if (!target && round >= 3 && !(h.marches || []).some(m => !m.returning) && !h.hasAttackedThisRound) {
     const attack = botAttackPlan(bot);
     if (attack) {
       if (attack.betrayHouse) {
@@ -2620,7 +2698,7 @@ function botTick() {
     if (lead && houseIsBotOnly(bot.houseId)) {
       for (const o of allianceOffers.filter(x => x.toHouseId === bot.houseId)) {
         if (!botReady(bot, `ao${o.id}`)) continue;
-        const marching = h.pendingAttack && findCapital(h.pendingAttack.targetCapitalId)?.ownerHouseId === o.fromHouseId;
+        const marching = (h.marches || []).some(m => !m.returning && findCapital(m.targetCapitalId)?.ownerHouseId === o.fromHouseId);
         const crowded = alliances.filter(a => [a.houseA, a.houseB].includes(bot.houseId)).length >= 3;
         const fromHouse = o.fromHouseId, bias = ((ai.trust[fromHouse] || 0) / 200) - ((ai.grudge[fromHouse] || 0) / 150) - (ai.stance[fromHouse] === 'betray' ? 0.3 : 0);
         done(botDo(bot, 'respond-alliance', { offerId: o.id, accept: !marching && !botHostile(bot, fromHouse) && Math.random() < (crowded ? 0.2 : 0.4 + ai.diplo * 0.45) + bias }));
