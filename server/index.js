@@ -651,7 +651,7 @@ function closeTreaty(t, status, byPlayerId) {
   if (settled.length > 30) for (const old of settled.slice(30)) treaties.splice(treaties.indexOf(old), 1);
 }
 // The ledger: every coin and soldier, plus the events that matter (battles, spies, diplomacy, cities). `alert` marks things that arrive without a popup.
-const LEDGER_ALERT_TEXT = /^(Gift from|Treaty from|Decree answered|Plunder from|Gold of)/;
+const LEDGER_ALERT_TEXT = /^Gift from/; // only things that have no popup or menu badge of their own
 function note(h, res, delta, text) {
   if (!h || !delta) return;
   h.ledger = h.ledger || [];
@@ -1319,7 +1319,6 @@ io.on('connection', socket => {
     if (allianceOffers.some(o => o.fromHouseId === check.id && o.toHouseId === target.id)) return fail('Your house already has an outstanding offer to that house.');
     if (allianceOffers.some(o => o.fromHouseId === target.id && o.toHouseId === check.id)) return fail(`House ${target.name} already offered you an alliance. Accept it in the Relations menu.`);
     allianceOffers.unshift({ id: randomUUID(), fromHouseId: check.id, toHouseId: target.id, scope, round });
-    logHouse(target.id, 'diplomacy', 'info', scope === 'public' ? `House ${check.name} publicly offered you an alliance.` : `House ${check.name} secretly offered you an alliance.`, true);
     addEvent('normal', scope === 'public' ? `House ${check.name} publicly offered an alliance to House ${target.name}.` : `House ${check.name} sent a secret alliance offer.`);
     return ok('Alliance offer sent.');
   });
@@ -1373,7 +1372,6 @@ io.on('connection', socket => {
     note(h, 'gold', -gold, why); note(h, 'infantry', -infantry, why); note(h, 'navy', -navy, why);
     const treaty = { id: randomUUID(), fromPlayerId: player.id, fromHouseId: h.id, toHouseId: target.id, gold, infantry, navy, message, round, status: 'pending' };
     treaties.unshift(treaty);
-    logHouse(target.id, 'diplomacy', 'info', `House ${h.name} offered you a treaty${gold + infantry + navy ? `: ${[gold && `${gold} gold`, infantry && `${infantry} infantry`, navy && `${navy} ships`].filter(Boolean).join(', ')}` : ''}.`, true);
     addEvent('normal', `House ${h.name} sent a treaty to House ${target.name}.`);
     return ok('Treaty sent. Your offering is held until they reply.');
   });

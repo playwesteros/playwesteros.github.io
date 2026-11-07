@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.2.4 (Nov 7, 2026)
+- **No repeat notifications in the ledger.** Alliance offers and treaty offers no longer appear in the ledger, since they already have their own menus and badges. Red NEW marks in the ledger are now only for things that have no popup or menu of their own (gifts received). Decrees, treaties, alliances and sieges keep their popups and menus.
+
 ## v1.2.3 (Nov 7, 2026)
 - **No more stale files after an update.** The stylesheet and scripts are now loaded using the game version number, so every version bump makes browsers fetch fresh copies automatically. The version is set in one place in index.html.
 
