@@ -650,11 +650,34 @@ function closeTreaty(t, status, byPlayerId) {
   const settled = treaties.filter(x => x.status !== 'pending');
   if (settled.length > 30) for (const old of settled.slice(30)) treaties.splice(treaties.indexOf(old), 1);
 }
+// The ledger: every coin and soldier, plus the events that matter (battles, spies, diplomacy, cities). `alert` marks things that arrive without a popup.
+const LEDGER_ALERT_TEXT = /^(Gift from|Treaty from|Decree answered|Plunder from|Gold of)/;
 function note(h, res, delta, text) {
   if (!h || !delta) return;
   h.ledger = h.ledger || [];
-  h.ledger.unshift({ id: randomUUID(), round, res, delta, text: String(text).slice(0, 160) });
-  if (h.ledger.length > 120) h.ledger.length = 120;
+  const entry = { id: randomUUID(), round, kind: res === 'gold' ? 'money' : 'soldiers', res, delta, tone: delta > 0 ? 'good' : 'bad', text: String(text).slice(0, 160), alert: delta > 0 && LEDGER_ALERT_TEXT.test(String(text)) };
+  h.ledger.unshift(entry);
+  if (h.ledger.length > 300) h.ledger.length = 300;
+}
+function logEntry(w, kind, tone, text, alert = false) {
+  if (!w) return;
+  w.ledger = w.ledger || [];
+  w.ledger.unshift({ id: randomUUID(), round, kind, tone, text: String(text).slice(0, 200), alert: Boolean(alert) });
+  if (w.ledger.length > 300) w.ledger.length = 300;
+}
+const logHouse = (houseId, kind, tone, text, alert = false) => { for (const w of houseWallets(houseId)) logEntry(w, kind, tone, text, alert); };
+const LEDGER_NOTICE = { 'spy-caught': ['spies', 'bad'], attacked: ['battles', 'bad'], 'battle-lost': ['battles', 'bad'], 'battle-won': ['battles', 'good'], 'battle-report': ['battles', 'info'], siege: ['battles', 'bad'], 'city-fell': ['cities', 'bad'], sacked: ['cities', 'bad'], alliance: ['diplomacy', 'good'], 'alliance-broken': ['diplomacy', 'bad'], traitor: ['diplomacy', 'bad'], decree: ['diplomacy', 'info'], crown: ['diplomacy', 'info'], notice: ['diplomacy', 'info'] };
+function ledgerFromNotice(entry) {
+  const m = LEDGER_NOTICE[entry.kind]; if (!m) return;
+  const wallets = new Map();
+  for (const hid of entry.houseIds) for (const w of houseWallets(hid)) wallets.set(w.playerId, w);
+  for (const pid of entry.playerIds || []) { const w = players.get(pid)?.w; if (w) wallets.set(pid, w); }
+  for (const x of entry.exceptPlayerIds || []) wallets.delete(x);
+  const text = `${entry.title}. ${entry.text}`;
+  for (const w of wallets.values()) {
+    if (entry.kind === 'battle-report' && !(entry.banners || []).includes(w.id)) continue; // only the houses in the fight keep the dice report
+    logEntry(w, m[0], m[1], text, false);
+  }
 }
 // Pop-up notices (alliances, traitor labels, attacks, battle results) addressed to houses or individual players.
 function capWord(t) { return String(t || '').replace(/^\w/, c => c.toUpperCase()); }
@@ -664,6 +687,7 @@ function notify(kind, houseIds, playerIds, title, text, banners, exceptIds = [])
   const entry = { id: randomUUID(), round, kind, houseIds: [...new Set(houseIds)], playerIds, exceptPlayerIds: exceptIds, title, text: String(text).slice(0, kind.startsWith('round-') ? 500 : 260), banners };
   notices.unshift(entry);
   if (notices.length > 60) notices.length = 60;
+  ledgerFromNotice(entry);
   return entry;
 }
 function forceStrength(u) { return u.infantry + u.navy + u.dragons * 5 + (u.dragons ? 2 : 0); }
@@ -1149,6 +1173,7 @@ io.on('connection', socket => {
     const report = { id: randomUUID(), targetHouseId: target.id, targetName: target.name, round, mission, success, caught, spent: spend, ...(success ? { findings: spyFindings(mission, target) } : {}) };
     h.spyReports.unshift(report);
     if (h.spyReports.length > 15) h.spyReports.length = 15;
+    logEntry(h, 'spies', caught ? 'bad' : success ? 'good' : 'info', caught ? `Your spies were caught in House ${target.name}'s halls.` : success ? `Spies returned from House ${target.name} with intelligence (${mission}).` : `Spy mission against House ${target.name} failed (${mission}).`);
     addEvent('normal', caught ? `Spies were caught in House ${target.name}'s halls.` : `House ${h.name} sent spies toward House ${target.name}.`);
     if (caught) { notify('spy-caught', [target.id], [], 'Spies caught', `Agents of House ${capWord(h.name)} were caught spying on your house.`, [h.id, target.id]); botOnSpyCaught(h.id, target.id, player); }
     return ok(caught ? `Your spies were captured. House ${target.name} knows it was you.` : success ? `Your spies returned with intelligence from House ${target.name}.` : `Your spy mission against House ${target.name} failed.`);
@@ -1293,6 +1318,7 @@ io.on('connection', socket => {
     if (allianceOffers.some(o => o.fromHouseId === check.id && o.toHouseId === target.id)) return fail('Your house already has an outstanding offer to that house.');
     if (allianceOffers.some(o => o.fromHouseId === target.id && o.toHouseId === check.id)) return fail(`House ${target.name} already offered you an alliance. Accept it in the Relations menu.`);
     allianceOffers.unshift({ id: randomUUID(), fromHouseId: check.id, toHouseId: target.id, scope, round });
+    logHouse(target.id, 'diplomacy', 'info', scope === 'public' ? `House ${check.name} publicly offered you an alliance.` : `House ${check.name} secretly offered you an alliance.`, true);
     addEvent('normal', scope === 'public' ? `House ${check.name} publicly offered an alliance to House ${target.name}.` : `House ${check.name} sent a secret alliance offer.`);
     return ok('Alliance offer sent.');
   });
@@ -1346,6 +1372,7 @@ io.on('connection', socket => {
     note(h, 'gold', -gold, why); note(h, 'infantry', -infantry, why); note(h, 'navy', -navy, why);
     const treaty = { id: randomUUID(), fromPlayerId: player.id, fromHouseId: h.id, toHouseId: target.id, gold, infantry, navy, message, round, status: 'pending' };
     treaties.unshift(treaty);
+    logHouse(target.id, 'diplomacy', 'info', `House ${h.name} offered you a treaty${gold + infantry + navy ? `: ${[gold && `${gold} gold`, infantry && `${infantry} infantry`, navy && `${navy} ships`].filter(Boolean).join(', ')}` : ''}.`, true);
     addEvent('normal', `House ${h.name} sent a treaty to House ${target.name}.`);
     return ok('Treaty sent. Your offering is held until they reply.');
   });
@@ -1713,6 +1740,9 @@ function fightSiegeRound(c) {
     }
   }
   if (defWallet) for (const [k, n] of Object.entries(defKilled)) note(defWallet, k, -n, `Lost defending ${c.name}`);
+  const attKilled = new Map();
+  for (const d of att) if (d.lost && d.ref) { const o = attKilled.get(d.ref.playerId) || {}; o[d.unit] = (o[d.unit] || 0) + 1; attKilled.set(d.ref.playerId, o); }
+  for (const [pid, o] of attKilled) logEntry(players.get(pid)?.w, 'battles', 'bad', `Lost ${Object.entries(o).map(([k, n]) => `${n} ${k === 'navy' ? 'ships' : k}`).join(', ')} besieging ${c.name}.`);
   s.attackers = s.attackers.filter(e => unitTotal(e.units) > 0);
   s.relief = s.relief.filter(e => unitTotal(e.units) > 0);
   const attLeft = s.attackers.reduce((n, e) => n + unitTotal(e.units), 0);

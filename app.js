@@ -868,7 +868,7 @@
   }
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-  let ledgerAll = false;
+  let ledgerAll = false, ledgerFilter = 'all';
   function renderHub() {
     const visible = state.phase === 'ACTION' || state.phase === 'COURT';
     $('actionHub').hidden = !visible;
@@ -903,16 +903,28 @@
     $('moneyGold').textContent = `${h.money} gold`;
     $('moneyIncomeNote').textContent = `${h.incomePerRound >= h.upkeepPerRound ? '+' : '−'}${Math.abs(h.incomePerRound - h.upkeepPerRound)} a round · ${h.incomePerRound} income − ${h.upkeepPerRound} upkeep`;
     $('upkeepNote').textContent = `Upkeep: ${h.upkeepPerRound} gold per round (1 per unit).`;
-    const led = h.ledger || [];
+    const led = (h.ledger || []).map(e => ({ ...e, kind: e.kind || (e.res === 'gold' ? 'money' : 'soldiers'), tone: e.tone || (e.delta > 0 ? 'good' : e.delta < 0 ? 'bad' : 'info') }));
+    const KINDS = [['all', 'All', null], ['money', 'Money', 'game-coins'], ['soldiers', 'Soldiers', 'game-swords'], ['battles', 'Battles', 'game-swords'], ['spies', 'Spies', 'game-spy'], ['diplomacy', 'Diplomacy', 'game-handshake'], ['cities', 'Cities', 'game-castle']];
+    const unread = e => e.alert && !seenNotes.ledger.has(e.id);
+    $('ledgerFilters').innerHTML = KINDS.map(([k, label]) => { const n = led.filter(e => (k === 'all' || e.kind === k) && unread(e)).length; return `<button type="button" class="ledger-chip ${ledgerFilter === k ? 'is-on' : ''}" data-action="ledger-filter" data-filter="${k}" aria-pressed="${ledgerFilter === k}">${label}${n ? `<i class="ledger-chip-dot">${n}</i>` : ''}</button>`; }).join('');
     const sum = (res, sign) => led.filter(e => e.res === res && Math.sign(e.delta) === sign).reduce((n, e) => n + Math.abs(e.delta), 0);
+    $('ledgerTotals').hidden = !['all', 'money', 'soldiers'].includes(ledgerFilter);
     $('ledgerTotals').innerHTML = `<span>Gold in <b class="in">+${sum('gold', 1)}</b></span><span>Gold out <b class="out">−${sum('gold', -1)}</b></span><span>Troops in <b class="in">+${sum('infantry', 1) + sum('navy', 1) + sum('dragons', 1)}</b></span><span>Troops out <b class="out">−${sum('infantry', -1) + sum('navy', -1) + sum('dragons', -1)}</b></span>`;
-    const RES = { gold: ['game-coins', 'gold'], infantry: ['game-swords', 'infantry'], navy: ['game-swords', 'ships'], dragons: ['game-swords', 'dragons'] };
-    const older = led.filter(e => e.round < state.round).length;
-    const shown = ledgerAll ? led : led.filter(e => e.round >= state.round);
+    const ICON = { money: 'game-coins', soldiers: 'game-swords', battles: 'game-swords', spies: 'game-spy', diplomacy: 'game-handshake', cities: 'game-castle' };
+    const UNIT = { gold: 'gold', infantry: 'infantry', navy: 'ships', dragons: 'dragons' };
+    const filtered = led.filter(e => ledgerFilter === 'all' || e.kind === ledgerFilter);
+    const recent = e => e.round >= state.round - 1 || unread(e);
+    const older = filtered.filter(e => !recent(e)).length;
+    const shown = ledgerAll ? filtered : filtered.filter(recent);
     const tog = $('ledgerToggle');
     tog.hidden = !older;
     tog.textContent = ledgerAll ? 'Hide earlier rounds' : `Show earlier rounds (${older})`;
-    $('moneyLedger').innerHTML = shown.length ? shown.map(e => `<div class="ledger-row ${e.delta > 0 ? 'in' : 'out'}"><span class="ledger-round">R${e.round}</span><span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${RES[e.res]?.[1] || e.res}</span><p><img class="ledger-icon" src="./assets/${RES[e.res]?.[0] || 'game-coins'}.png?v=2" alt=""> ${escapeHtml(e.text)}</p></div>`).join('') : '<p class="muted small-text">Nothing has come in or gone out this round.</p>';
+    let lastRound = null, rows = '';
+    for (const e of shown) {
+      if (e.round !== lastRound) { rows += `<div class="ledger-round-head">Round ${e.round}</div>`; lastRound = e.round; }
+      rows += `<div class="ledger-row tone-${e.tone} ${unread(e) ? 'is-new' : ''}"><img class="ledger-icon" src="./assets/${ICON[e.kind] || 'game-coins'}.png?v=2" alt="${escapeHtml(e.kind)}"><p>${escapeHtml(e.text)}</p>${e.delta ? `<span class="ledger-delta">${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${UNIT[e.res] || escapeHtml(e.res)}</span>` : ''}${unread(e) ? '<i class="ledger-new">NEW</i>' : ''}</div>`;
+    }
+    $('moneyLedger').innerHTML = rows || `<p class="muted small-text">${ledgerFilter === 'all' ? 'Nothing has been recorded yet.' : 'Nothing of this kind has been recorded.'}</p>`;
     const fb = $('forfeitCrownButton'); $('kingForfeit').hidden = !state.isKing; $('subTreaties').hidden = state.isKing || state.isHand; if ((state.isKing || state.isHand) && currentSub === 'treaties') showSub(null); if (fb) { lock(fb, state.phase === 'ACTION' ? '' : 'You can forfeit the crown during the action phase.'); }
     // Army sheet
     $('armyInfantry').textContent = h.infantry;
@@ -1132,7 +1144,7 @@
   }
 
   // ---- Notification badges: on the three hub buttons, and on the exact box inside each menu ----
-  const seenNotes = { ready: false, pub: new Set(), sec: new Set(), offers: new Set(), treaties: new Set(), decrees: new Set(), war: new Set(), battles: new Set(), gold: 0 };
+  const seenNotes = { ready: false, pub: new Set(), sec: new Set(), offers: new Set(), treaties: new Set(), decrees: new Set(), war: new Set(), battles: new Set(), ledger: new Set(), gold: 0 };
   let currentHub = null;
   const markSeen = (set, list) => list.forEach(item => set.add(item.id));
   function noteLists() {
@@ -1144,7 +1156,8 @@
       treaties: (state.treaties || []).filter(t => t.status === 'pending' && !t.isOutgoing),
       decrees: (state.decrees || []).filter(d => !d.isIssuer && d.myState === 'pending'),
       war: [...(state.spoils || []).filter(x => x.status === 'open').map(x => ({ id: x.id }))],
-      battles: (state.events || []).filter(e => e.kind === 'battle')
+      battles: (state.events || []).filter(e => e.kind === 'battle'),
+      ledger: (state.myHouse?.ledger || []).filter(e => e.alert)
     };
   }
   function setBadge(id, text) {
@@ -1161,14 +1174,14 @@
     if (!h || !state.me || !kind) return;
     const n = noteLists();
     // Relations and army pages count as seen when you open them (see updateBadges), not when you close the menu.
-    if (kind === 'money') seenNotes.gold = h.money;
+    if (kind === 'money') { seenNotes.gold = h.money; markSeen(seenNotes.ledger, n.ledger); }
   }
   function updateBadges() {
     const h = state?.myHouse;
     if (!h || !state.me) return;
     const n = noteLists();
     if (!seenNotes.ready) {
-      markSeen(seenNotes.pub, n.pub); markSeen(seenNotes.sec, n.sec); markSeen(seenNotes.offers, n.offers); markSeen(seenNotes.treaties, n.treaties); markSeen(seenNotes.decrees, n.decrees); markSeen(seenNotes.war, n.war); markSeen(seenNotes.battles, n.battles);
+      markSeen(seenNotes.pub, n.pub); markSeen(seenNotes.sec, n.sec); markSeen(seenNotes.offers, n.offers); markSeen(seenNotes.treaties, n.treaties); markSeen(seenNotes.decrees, n.decrees); markSeen(seenNotes.war, n.war); markSeen(seenNotes.battles, n.battles); markSeen(seenNotes.ledger, n.ledger);
       seenNotes.gold = h.money;
       seenNotes.ready = true;
     }
@@ -1179,12 +1192,13 @@
     if (currentHub === 'money' && currentSub === 'reports') { markSeen(seenNotes.war, n.war); markSeen(seenNotes.battles, n.battles); }
     if (h.money < seenNotes.gold) seenNotes.gold = h.money;
     const count = (list, set) => list.filter(item => !set.has(item.id)).length;
-    const unPub = count(n.pub, seenNotes.pub), unSec = count(n.sec, seenNotes.sec), unOffers = count(n.offers, seenNotes.offers), unTreaties = count(n.treaties, seenNotes.treaties), unDecrees = count(n.decrees, seenNotes.decrees), unWar = count(n.war, seenNotes.war), unBattles = count(n.battles, seenNotes.battles);
+    const unPub = count(n.pub, seenNotes.pub), unSec = count(n.sec, seenNotes.sec), unOffers = count(n.offers, seenNotes.offers), unTreaties = count(n.treaties, seenNotes.treaties), unDecrees = count(n.decrees, seenNotes.decrees), unWar = count(n.war, seenNotes.war), unBattles = count(n.battles, seenNotes.battles), unLedger = count(n.ledger, seenNotes.ledger);
     const gain = Math.max(0, h.money - seenNotes.gold);
     const text = value => (value ? String(Math.min(value, 99)) : '');
     setBadge('badgeRelations', text(unPub + unSec + unOffers + unTreaties + unDecrees));
-    setBadge('badgeMoneyN', text(unBattles + unWar));
-    setBadge('badgeSubReports', text(unBattles + unWar));
+    setBadge('badgeMoneyN', text(unBattles + unWar + unLedger));
+    setBadge('badgeLedger', text(unLedger));
+    setBadge('badgeSubReports', text(unBattles + unWar + unLedger));
     setBadge('badgeSubAlliances', text(unOffers));
     setBadge('badgeSubTreaties', text(unTreaties + unDecrees));
     setBadge('badgeSubMessages', text(unPub + unSec));
@@ -1914,6 +1928,7 @@
     if (action === 'close-announce') { closeAnnouncement(); return; }
     if (action === 'toggle-traitor') { emitAction('mark-traitor', { playerId: button.dataset.playerId, traitor: button.dataset.traitor === 'true' }); return; }
     if (action === 'gold-info') return;
+    if (action === 'ledger-filter') { ledgerFilter = button.dataset.filter || 'all'; renderHub(); return; }
     if (action === 'toggle-ledger') { ledgerAll = !ledgerAll; renderHub(); return; }
     if (action === 'close-decree-popup') { $('decreeOverlay').hidden = true; return; }
     if (action === 'cancel-march') { emitAction('cancel-march', { marchId: button.dataset.marchId }); return; }

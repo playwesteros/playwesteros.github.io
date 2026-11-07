@@ -51,7 +51,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v1.1.9<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v1.2.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -252,7 +252,7 @@
             <div class="sub-page" data-sub="reports" data-cat="reports" hidden>
               <button class="button button-quiet button-small sub-back" type="button" data-action="sub-back">← Back</button>
               <section class="panel section-panel hub-block"><div class="section-head"><h3>War councils &amp; spoils</h3><span id="badgeWar" class="note-badge" hidden></span></div><div id="warList" class="alliance-list"></div></section>
-              <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">EVERY COIN AND SOLDIER</p><h2>Ledger</h2></div></div><div><div id="ledgerTotals" class="ledger-totals"></div><div id="moneyLedger" class="ledger-list"></div><button id="ledgerToggle" class="button button-quiet button-small" type="button" data-action="toggle-ledger" hidden></button></div></section>
+              <section class="panel section-panel hub-block"><div class="section-head"><div><p class="panel-kicker">EVERY COIN, SOLDIER AND EVENT</p><h2>Ledger</h2></div><span id="badgeLedger" class="note-badge" hidden></span></div><div><div id="ledgerFilters" class="ledger-filters" role="group" aria-label="Filter the ledger"></div><div id="ledgerTotals" class="ledger-totals"></div><div id="moneyLedger" class="ledger-list"></div><button id="ledgerToggle" class="button button-quiet button-small" type="button" data-action="toggle-ledger" hidden></button></div></section>
               <section class="panel section-panel hub-block">
                 <div class="section-head"><div><p class="panel-kicker">THE REALM’S RECORD</p><h2>Battles</h2></div></div>
                 <div id="battleReports" class="event-list"></div>

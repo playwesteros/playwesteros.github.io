@@ -2,6 +2,11 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.2.0 (Nov 7, 2026)
+- **Cleaner ledger.** Entries are grouped by round, with an icon, a coloured edge (green good, red bad) and the amount on the right. Filter buttons show only Money, Soldiers, Battles, Spies, Diplomacy or Cities.
+- **It now records events as well as coins and soldiers:** gold and troops in and out (income, upkeep, gifts, treaties, decrees, recruiting, disbanding, spy spending, plunder, deserters, armies sent and returned, losses defending); spies you sent (success, failure, caught) and spies of others you caught; battles (sieges, field battles, victories, defeats, attacks on you, sieges of your cities); cities that fell or were sacked; alliances made and broken, alliance offers and treaties offered to you, royal decrees, the crown changing hands, traitor labels, other notices.
+- **Red marks for things with no popup.** Gifts, treaties, alliance offers, decree answers and plunder you receive show as red NEW rows, with a red count on the filter, the Ledger heading, the Reports button and the Money menu until you close the menu.
+
 ## v1.1.9 (Nov 7, 2026)
 - **Bots understand what a message refers to.** If a bot king sent you a tax decree and you say "I will pay soon", it knows you mean the tax: it notes when to expect the payment and reminds you (and holds it against you) if the time passes. The same goes for "I cannot afford it", "give me more time" and "I will not pay". If the king asks you to "pay me" or "where is my tax", a bot recognises it as the decree it hasn't settled and pays, repeats its answer, or says it is coming.
 - **Bots say when they do not understand.** Instead of random filler, a bot now says it doesn't follow, and mentions any house name it picked up.

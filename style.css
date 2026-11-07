@@ -1004,3 +1004,19 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
 .die.u-dragons, .die.won, .die.lost { box-shadow: 0 2px 0 rgba(0,0,0,.55) !important; }
 .die.won { outline: 2px solid #7fd18f; outline-offset: -1px; }
 .die.lost { outline: 2px solid #c0584a; outline-offset: -1px; }
+
+/* v1.2.0: cleaner ledger with filters, round groups and red marks */
+.ledger-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.ledger-chip { position: relative; border: 1px solid var(--line); background: rgba(255,255,255,.03); color: var(--muted); border-radius: 99px; padding: 5px 12px; font: 600 11px Inter, system-ui, sans-serif; cursor: pointer; }
+.ledger-chip.is-on { background: rgba(200,168,108,.18); border-color: rgba(200,168,108,.7); color: #f0d597; }
+.ledger-chip-dot { font-style: normal; margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: #c0392b; color: #fff; font-size: 10px; }
+.ledger-list { gap: 4px; }
+.ledger-round-head { margin: 10px 2px 2px; font: 700 10px Inter, system-ui, sans-serif; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.ledger-round-head:first-child { margin-top: 0; }
+.ledger-row { grid-template-columns: 20px 1fr auto auto; border-left: 3px solid var(--line); background: rgba(255,255,255,.025); }
+.ledger-row.tone-good { border-left-color: #5fae6d; }
+.ledger-row.tone-bad { border-left-color: #c0584a; }
+.ledger-row.tone-good .ledger-delta { color: var(--green); }
+.ledger-row.tone-bad .ledger-delta { color: #d28c81; }
+.ledger-row.is-new { background: rgba(192,57,43,.16); border-color: rgba(192,57,43,.55); border-left-color: #e0503c; }
+.ledger-new { font-style: normal; padding: 2px 7px; border-radius: 99px; background: #c0392b; color: #fff; font: 700 9px Inter, system-ui, sans-serif; letter-spacing: .08em; }
