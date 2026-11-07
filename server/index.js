@@ -1252,6 +1252,7 @@ io.on('connection', socket => {
     if (!isRelief && target.id === 'winterfell' && units.navy > 0 && buffsOn()) return fail('Winterfell cannot be attacked by ships. Send land forces only.');
     if (Object.values(units).some(n => !Number.isInteger(n) || n < 0)) return fail('Committed forces must be whole numbers of zero or greater.');
     if (units.infantry + units.navy + units.dragons < 1) return fail('Commit at least one unit to the attack.');
+    if (['infantry', 'navy', 'dragons'].filter(k => units[k] > 0).length > 1) return fail('Send soldiers, ships or dragons in separate attacks.');
     if (units.infantry > h.infantry || units.navy > h.navy || units.dragons > h.dragons) return fail('You do not have enough uncommitted forces.');
     h.infantry -= units.infantry;
     h.navy -= units.navy;
@@ -2672,6 +2673,12 @@ function botAskAllies(bot, plan, target) {
 function botConverseStructured(responder, asker, ask, line) {
   return botConverse(responder, asker, line);
 }
+// Soldiers, ships and dragons march separately, so a mixed force goes out as one army per kind.
+function botSendArmy(bot, capitalId, units) {
+  let sent = false;
+  for (const k of ['infantry', 'navy', 'dragons']) if ((units[k] || 0) > 0) sent = botDo(bot, 'plan-attack', { targetCapitalId: capitalId, infantry: 0, navy: 0, dragons: 0, [k]: units[k] }) || sent;
+  return sent;
+}
 function botTurn(bot) {
   const h = bot.w, ai = botAi(bot);
   if (ai.stanceRound !== round) { botEvalStances(bot); botMakePlan(bot); }
@@ -2732,7 +2739,7 @@ function botTurn(bot) {
       const own = c.ownerHouseId === bot.houseId, share = own ? 0.6 : 0.4;
       const inf = Math.floor(h.infantry * share), nav = c.id === 'winterfell' ? 0 : Math.floor(h.navy * share * 0.5);
       if (inf + nav < 1) continue;
-      if (botDo(bot, 'plan-attack', { targetCapitalId: c.id, infantry: inf, navy: nav, dragons: own ? h.dragons : 0 })) { target = c; break; }
+      if (botSendArmy(bot, c.id, { infantry: inf, navy: nav, dragons: own ? h.dragons : 0 })) { target = c; break; }
     }
   }
   // Attack, and take the throne when it can be taken. Betraying a friend means breaking the alliance first.
@@ -2743,7 +2750,7 @@ function botTurn(bot) {
         const al = alliances.find(a => [a.houseA, a.houseB].includes(bot.houseId) && [a.houseA, a.houseB].includes(attack.betrayHouse));
         if (al) botDo(bot, 'break-alliance', { allianceId: al.id });
       }
-      if (botDo(bot, 'plan-attack', { targetCapitalId: attack.c.id, ...attack.units })) { target = attack.c; ai.pledges = ai.pledges.filter(p => p.capitalId !== attack.c.id); }
+      if (botSendArmy(bot, attack.c.id, attack.units)) { target = attack.c; ai.pledges = ai.pledges.filter(p => p.capitalId !== attack.c.id); }
     }
   }
   // The king brands the houses it holds a grudge against, and pardons the repentant.

@@ -2,6 +2,11 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.2.1 (Nov 7, 2026)
+- **Secret messages follow your selection.** Pick one or more players to whisper to and only the whispers shared with exactly those players are shown. Pick nobody to see them all.
+- **Map banners stay still** (the hovering pop-out on hover/tap is unchanged).
+- **Separate land and sea attacks.** The war form has a Soldiers / Ships / Dragons selector above the number wheel. Each attack sends one kind of force (the server enforces it, and bots send mixed forces as separate armies). Dragons only appear as an option for House Targaryen.
+
 ## v1.2.0 (Nov 7, 2026)
 - **Cleaner ledger.** Entries are grouped by round, with an icon, a coloured edge (green good, red bad) and the amount on the right. Filter buttons show only Money, Soldiers, Battles, Spies, Diplomacy or Cities.
 - **It now records events as well as coins and soldiers:** gold and troops in and out (income, upkeep, gifts, treaties, decrees, recruiting, disbanding, spy spending, plunder, deserters, armies sent and returned, losses defending); spies you sent (success, failure, caught) and spies of others you caught; battles (sieges, field battles, victories, defeats, attacks on you, sieges of your cities); cities that fell or were sacked; alliances made and broken, alliance offers and treaties offered to you, royal decrees, the crown changing hands, traitor labels, other notices.

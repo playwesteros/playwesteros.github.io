@@ -305,6 +305,17 @@
     if (alliesOf(mine.id).includes(capital.ownerHouseId) && !ff) return `${capital.name} belongs to your ally, House ${capName(prettyHouse(capital.ownerHouseId))}, and friendly fire is off.`;
     return '';
   }
+  let attackMode = 'infantry';
+  // One kind of force per march: soldiers by land, ships by sea, or dragons.
+  const attackUnits = () => ({ infantry: attackMode === 'infantry' ? Number($('attackInfantry').value) || 0 : 0, navy: attackMode === 'navy' ? Number($('attackNavy').value) || 0 : 0, dragons: attackMode === 'dragons' ? Number($('attackDragons').value) || 0 : 0 });
+  function applyAttackMode() {
+    const isTarg = state?.myHouse?.id === 'targaryen';
+    if (attackMode === 'dragons' && !isTarg) attackMode = 'infantry';
+    const box = $('attackMode'); if (!box) return;
+    box.querySelectorAll('button').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.v === attackMode)); if (b.dataset.v === 'dragons') b.hidden = !isTarg; });
+    box.hidden = false;
+    [['attackInfantry', 'infantry'], ['attackNavy', 'navy'], ['attackDragons', 'dragons']].forEach(([id, k]) => { const col = $(id).parentElement; if (col) col.hidden = k !== attackMode; });
+  }
   function warBlockReason() {
     const h = state?.myHouse;
     if (!h) return 'Choose a house first.';
@@ -318,7 +329,7 @@
     if (block) return block;
     if (!warTargetId) return 'Choose a target capital on the map first.';
     const h = state.myHouse;
-    const inf = Number($('attackInfantry').value), nav = Number($('attackNavy').value), dr = Number($('attackDragons').value);
+    const { infantry: inf, navy: nav, dragons: dr } = attackUnits();
     if ([inf, nav, dr].some(n => !Number.isInteger(n) || n < 0)) return 'Units to send must be whole numbers, zero or more.';
     if (inf + nav + dr < 1) return 'Commit at least one unit to the war.';
     { const t = state.capitals.find(c => c.id === warTargetId); if (nav > 0 && t?.id === 'winterfell') return 'Winterfell cannot be attacked by ships. Send land forces only.'; }
@@ -338,8 +349,8 @@
   function travelNote() {
     const t = state.capitals.find(c => c.id === warTargetId);
     if (!t) return '';
-    const tr = travelFor(t), n = k => Number($(k).value) || 0;
-    const used = [['infantry', n('attackInfantry')], ['navy', n('attackNavy')], ['dragons', n('attackDragons')]].filter(([, c]) => c > 0).map(([k]) => tr[k]);
+    const tr = travelFor(t), au = attackUnits();
+    const used = [['infantry', au.infantry], ['navy', au.navy], ['dragons', au.dragons]].filter(([, c]) => c > 0).map(([k]) => tr[k]);
     const rounds = Math.max(1, ...used);
     const word = r => `${r} round${r === 1 ? '' : 's'}`;
     return `Travel to ${t.name}: infantry ${word(tr.infantry)}, ships ${word(tr.navy)}, dragons ${word(tr.dragons)}. ${used.length ? `Your force arrives after Round ${state.round + rounds} court.` : ''}`;
@@ -515,6 +526,7 @@
     $('attackNavy').max = house.navy;
     $('attackDragons').max = house.dragons;
     $('attackDragons').disabled = house.dragons === 0;
+    applyAttackMode();
     $('attackForm').hidden = false;
     const target = state.capitals.find(c => c.id === warTargetId);
     if (!target || warTargetProblem(target)) warTargetId = null;
@@ -806,8 +818,6 @@
   function renderChat() {
     const logs = [$('publicChat'), $('secretChat')].map(el => [el, el.scrollHeight - el.scrollTop - el.clientHeight < 40]);
     $('publicChat').innerHTML = messageMarkup(state.publicMessages || []);
-    $('secretChat').innerHTML = messageMarkup(state.privateMessages || [], true);
-    logs.forEach(([el, atBottom]) => { if (atBottom) el.scrollTop = el.scrollHeight; });
     const isPrivate = activeChatTab === 'secret';
     $('publicChat').hidden = isPrivate;
     $('secretChat').hidden = !isPrivate;
@@ -815,6 +825,11 @@
     // Who a private message goes to: individual players, any number of them.
     const others = chatOthers();
     [...selectedRecipients].forEach(id => { if (!others.some(p => p.id === id)) selectedRecipients.delete(id); });
+    // With players picked, only the whispers shared with exactly those players are shown.
+    const myId = state.me?.id;
+    const thread = m => { const who = new Set([m.senderId, ...(m.targets || []).map(t => t.id)]); who.delete(myId); return who.size === selectedRecipients.size && [...who].every(id => selectedRecipients.has(id)); };
+    $('secretChat').innerHTML = messageMarkup(selectedRecipients.size ? (state.privateMessages || []).filter(thread) : (state.privateMessages || []), true);
+    logs.forEach(([el, atBottom]) => { if (atBottom) el.scrollTop = el.scrollHeight; });
     $('chatRecipients').hidden = !isPrivate;
     $('recipientChips').innerHTML = others.length
       ? `<button type="button" class="recipient-chip recipient-all ${selectedRecipients.size === others.length ? 'selected' : ''}" data-recipient="__all">Everyone</button>${others.map(p => {
@@ -1928,6 +1943,7 @@
     if (action === 'close-announce') { closeAnnouncement(); return; }
     if (action === 'toggle-traitor') { emitAction('mark-traitor', { playerId: button.dataset.playerId, traitor: button.dataset.traitor === 'true' }); return; }
     if (action === 'gold-info') return;
+    if (action === 'attack-mode') { attackMode = button.dataset.v || 'infantry'; applyAttackMode(); updateAttackLock(); return; }
     if (action === 'ledger-filter') { ledgerFilter = button.dataset.filter || 'all'; renderHub(); return; }
     if (action === 'toggle-ledger') { ledgerAll = !ledgerAll; renderHub(); return; }
     if (action === 'close-decree-popup') { $('decreeOverlay').hidden = true; return; }
@@ -1993,9 +2009,7 @@
     event.preventDefault();
     emitAction('plan-attack', {
       targetCapitalId: warTargetId,
-      infantry: Number($('attackInfantry').value),
-      navy: Number($('attackNavy').value),
-      dragons: Number($('attackDragons').value)
+      ...attackUnits()
     }, () => { warTargetId = null; ['attackInfantry', 'attackNavy', 'attackDragons'].forEach(id => { $(id).value = ''; }); });
   });
   ['attackInfantry', 'attackNavy', 'attackDragons'].forEach(id => $(id).addEventListener('input', updateAttackLock));

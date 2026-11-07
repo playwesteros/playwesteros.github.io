@@ -992,11 +992,6 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
 .map-cap:hover .cap-name, .map-cap:hover .cap-sub { opacity: 1 !important; }
 @media (hover: none) { .map-cap.is-active .cap-name, .map-cap.is-active .cap-sub { opacity: 1 !important; } }
 .map-cap.is-idle:hover .cap-sub { opacity: 0 !important; }
-.cap-banner > g { animation: capHop 2.2s ease-in-out infinite; }
-.map-caps .map-cap:nth-child(3n+1) .cap-banner > g { animation-delay: -.7s; }
-.map-caps .map-cap:nth-child(3n+2) .cap-banner > g { animation-delay: -1.4s; }
-@keyframes capHop { 0%, 55%, 100% { transform: translateY(0); } 15% { transform: translateY(-75px); } 30% { transform: translateY(0); } 40% { transform: translateY(-28px); } 48% { transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .cap-banner > g { animation: none; } }
 .die { background: linear-gradient(160deg, color-mix(in srgb, var(--hc, #8a6a3a) 55%, #1b130a), color-mix(in srgb, var(--hc, #8a6a3a) 30%, #120c06)) !important; color: #f6ead0; border-color: var(--hc, #c8a86c) !important; box-shadow: 0 2px 0 rgba(0,0,0,.55) !important; }
 .die.def { flex-direction: row; }
 .die img.die-unit { width: 24px; height: 24px; filter: none; }
@@ -1020,3 +1015,10 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
 .ledger-row.tone-bad .ledger-delta { color: #d28c81; }
 .ledger-row.is-new { background: rgba(192,57,43,.16); border-color: rgba(192,57,43,.55); border-left-color: #e0503c; }
 .ledger-new { font-style: normal; padding: 2px 7px; border-radius: 99px; background: #c0392b; color: #fff; font: 700 9px Inter, system-ui, sans-serif; letter-spacing: .08em; }
+
+.attack-mode { margin: 0 0 10px; display: flex; }
+.attack-mode button { flex: 1; padding: 8px 12px; }
+.attack-mode button[hidden] { display: none; }
+.attack-columns { grid-template-columns: 1fr; }
+.attack-columns > div[hidden] { display: none; }
+.attack-columns > div:first-child { grid-column: auto; }

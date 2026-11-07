@@ -51,7 +51,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v1.2.0<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden>v1.2.1<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -468,7 +468,8 @@
     <div id="warPanel" class="war-panel" hidden>
         <form id="attackForm" class="war-form">
           <div class="war-panel-head"><div id="warTargetBox" class="war-target-box is-empty">No target chosen yet</div><button class="button button-quiet button-small" type="button" data-action="war-cancel" aria-label="Clear target">✕</button></div>
-          <div class="form-columns">
+          <div id="attackMode" class="seg attack-mode" role="group" aria-label="What to send"><button type="button" data-action="attack-mode" data-v="infantry" aria-pressed="true">Soldiers</button><button type="button" data-action="attack-mode" data-v="navy" aria-pressed="false">Ships</button><button type="button" data-action="attack-mode" data-v="dragons" aria-pressed="false" hidden>Dragons</button></div>
+          <div class="form-columns attack-columns">
             <div><label for="attackInfantry">Infantry</label><input id="attackInfantry" type="number" min="0" placeholder="0" inputmode="numeric"></div>
             <div><label for="attackNavy">Navy</label><input id="attackNavy" type="number" min="0" placeholder="0" inputmode="numeric"></div>
             <div><label for="attackDragons">Dragons</label><input id="attackDragons" type="number" min="0" placeholder="0" inputmode="numeric"></div>
