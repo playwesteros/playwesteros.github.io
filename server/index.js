@@ -1925,7 +1925,14 @@ function botParse(text, bot) {
     const offerRe = new RegExp(`\\b(?:i|we)\\b[^]*?\\b(?:${GIVE}|sent|gave|paid|giving|sending|paying)\\b[^]*?\\byou\\b|\\bhere (?:is|are)\\b|\\btake this\\b|\\ba gift for you\\b|\\bon me\\b`);
     const youGive = new RegExp(`\\b(?:${GIVE}) (?:me|us)\\b|\\byou (?:should|must|need to|have to|will|can|could|would|better) ${GIVE}\\b|\\b(?:can|could|would|will) you\\b[^]*?\\b${GIVE}\\b|\\bneed you to\\b|\\bi (?:need|want|require)\\b`);
     const isOffer = offerRe.test(c) && !youGive.test(c) && !/\b(i|we)\b[^]*?\bme\b/.test(c);
-    if (isOffer) { out.offer = true; out.offerAmount = out.offerAmount || nums[0] || null; if (/\b(troops?|soldiers?|men|infantry|ships?|navy|fleet)\b/.test(c)) out.offerTroops = true; continue; }
+    if (isOffer) { out.offer = true; out.offerAmount = out.offerAmount || nums[0] || null; if (/\b(troops?|soldiers?|men|infantry|ships?|navy|fleet)\b/.test(c)) out.offerTroops = true; if (/\b(soon|shortly|later|next round|tomorrow|in a (?:round|bit|moment|while))\b/.test(c) && !nums.length) { out.promise = true; out.soon = true; } continue; }
+    // Money talk that is about a promise, a delay, an excuse or a refusal (usually the answer to a tax or a request)
+    if (/\b(tax|taxes|tribute|decree|levy|dues|due|owe|owed|debt)\b/.test(c)) out.taxWord = true;
+    if (negFirst && /\b(pay|give|send|tribute|tax|kneel|bow|obey|surrender)\b/.test(c)) out.refusePay = true;
+    else if (/\b(i|we) (?:refuse|will never|would never)\b/.test(c) && /\b(pay|give|send|tribute|tax)\b/.test(c)) out.refusePay = true;
+    if (!negFirst && !isOffer && /\b(i|we)\b/.test(c) && /\b(will|shall|am going to|am about to|can|could|should|promise to|plan to|intend to|am sending|am paying)\b/.test(c) && /\b(pay|send|give|deliver|bring|settle|repay|cover|transfer|gather|get it|have it)\b/.test(c) && !/\b(attack|march|invade|conquer|strike)\b/.test(c)) { out.promise = true; if (/\b(soon|shortly|later|next round|tomorrow|in a (?:round|bit|moment|while)|when i can|once i|after|by )/.test(c)) out.soon = true; }
+    if (/\b(more time|some time|need time|give me (?:a )?(?:time|round|day|moment|bit)|allow me|wait|patience|be patient|not yet|hold on|can not (?:pay )?(?:yet|right now|now))\b/.test(c)) out.delay = true;
+    if (/\b(can not|cannot|do not have|have no|have not got|am broke|no gold|out of gold|too poor|can not afford|too much)\b/.test(c) && /\b(afford|pay|gold|coins?|money|treasury|tax|tribute)\b/.test(c)) out.unable = true;
     // Caught spies
     if (/\b(caught|captured|seized|discovered|exposed|hanged|arrested|intercepted|killed|found)\b[^]*?\b(spy|spies|agent|agents|scout|scouts|informers?)\b|\b(spy|spies|agents?|scouts?)\b[^]*?\b(caught|captured|seized|hanged|arrested|found out|dead|killed)\b|\bcaught you (?:spying|snooping)\b|\byou (?:spied|have been spying)\b/.test(c)) { out.caught = true; if (nums[0] && /gold|coin/.test(c) === false) { /* number not about gold */ } }
     // Threats (aimed at the bot), unless the speaker is saying they will NOT do it
@@ -1958,6 +1965,7 @@ function botParse(text, bot) {
     if (/\b(you are|you re|youre|you have been|such a) (?:a |an |the )?(traitor|liar|snake|backstabber|oathbreaker|cheat)\b|\byou (?:betrayed|lied|cheated|backstabbed)\b/.test(c)) out.accuse = true;
     if (/\b(thanks|thank you|grateful|sorry|apolog|forgive|my thanks)\b/.test(c)) out.kind = true;
   }
+  out.payNag = /\b(pay up|pay me|pay now|pay the|pay your|settle up|settle it|where is (?:it|my|the)|still waiting|i am waiting|what about (?:it|my|the))\b/.test(t);
   if (out.caught) out.intel = false;
   // Two-part demands: "give me 5 gold or i will attack you" / "if you do not give me 5 gold i will attack you"
   const threatKinds = Object.keys(out.threats);
@@ -2093,6 +2101,67 @@ function botDeclareReply(bot, sender, it) {
   }
   return pickOne([`${HN(target)}, is it? I will be watching how that goes.`, 'A bold move. Do you want my help, or only my silence?', 'That is your business. Do not expect me to take sides yet.']);
 }
+
+// ---- Context: what the conversation is about -------------------------------
+const demandText = d => [d.gold && `${d.gold} gold`, d.infantry && `${d.infantry} soldiers`, d.navy && `${d.navy} ships`].filter(Boolean).join(' and ') || 'the tribute';
+// A decree this bot (as king) sent to the speaker's house that has not been paid yet.
+const botDecreeTo = (bot, sender) => taxLedger.find(x => x.kingPlayerId === bot.id && x.recipients.some(r => r.houseId === sender.houseId && r.state === 'pending')) || null;
+// A decree the speaker (as king) sent to this bot's house that is still unpaid.
+const botDecreeFrom = (bot, sender) => taxLedger.find(x => x.kingPlayerId === sender.id && x.recipients.some(r => r.houseId === bot.houseId && r.state === 'pending')) || null;
+const REMINDER_ROUNDS = 2;
+function botTaxTalk(bot, sender, it, kd) {
+  const ai = botAi(bot), sh = sender.houseId, demand = demandText(kd), nm = sender.username;
+  ai.expect = ai.expect || {};
+  if (it.refusePay) {
+    botTrust(bot, sh, -8); ai.grudge[sh] = (ai.grudge[sh] || 0) + 6; ai.crownGrudge = ai.crownGrudge || 0;
+    return ai.aggr > 0.5 ? pickOne([`Then you refuse the crown. Remember that I asked, ${nm}, when the lords hear of it.`, `Refuse, then. The crown has a long memory and a longer reach.`]) : pickOne([`Refuse the crown if you must, but I will not forget it.`, `That is a pity. I had hoped House ${capWord(houseName(sh))} was loyal.`]);
+  }
+  if (it.unable) {
+    ai.expect[sender.id] = { decreeId: kd.id, due: round + 2, nudged: false };
+    return pickOne([`Then pay what you can, ${nm}, and the rest within a round or two. The ${demand} is still owed.`, `A poor treasury is no excuse for long. Send what you have and settle the rest soon.`]);
+  }
+  if (it.delay && !it.promise) {
+    const ok = Math.random() < 0.35 + ai.diplo * 0.4 + (ai.trust[sh] || 0) / 200 - ai.aggr * 0.3;
+    if (ok) { ai.expect[sender.id] = { decreeId: kd.id, due: round + 2, nudged: false }; return pickOne([`Very well. I will wait until Round ${round + 2} for the ${demand}. No longer.`, `A round or two, then. The crown is patient, but not endlessly.`]); }
+    return pickOne([`The crown does not wait on excuses, ${nm}. Pay it this round.`, `No more time. The ${demand} is due now.`]);
+  }
+  ai.expect[sender.id] = { decreeId: kd.id, due: round + (it.soon ? 1 : 2), nudged: false };
+  botTrust(bot, sh, 1);
+  return pickOne([`Good. The ${demand} is the crown's due, ${nm}. I will expect it by Round ${ai.expect[sender.id].due}.`, `Then I will hold you to it. The ${demand}, by Round ${ai.expect[sender.id].due}.`, `Soon is acceptable, ${nm}, as long as it is not never.`]);
+}
+// The king says "pay me" or mentions the tax: it is about the decree this bot has not paid yet.
+function botDecreeNudge(bot, sender, d) {
+  const ai = botAi(bot), h = bot.w, demand = demandText(d);
+  ai.decreeStatus = ai.decreeStatus || {};
+  const st = ai.decreeStatus[d.id];
+  const afford = h.money >= d.gold && h.infantry >= d.infantry && h.navy >= d.navy;
+  if (afford && (st === 'later' || !st) && Math.random() < 0.55 + ai.diplo * 0.3 - (ai.crownGrudge ? 0.3 : 0)) {
+    if (botDo(bot, 'respond-decree', { decreeId: d.id })) { botTrust(bot, sender.houseId, 1); ai.decreeStatus[d.id] = 'paid'; return pickOne([`You are right to remind me. The ${demand} is sent.`, `Paid, your grace. ${demand}, as the crown asked.`]); }
+  }
+  if (!st) { botHandleDecree(bot, d); return ''; }
+  if (st === 'later') return pickOne([`I have not forgotten the tax, ${sender.username}. You will have your ${demand} soon.`, 'It is coming, my king. Patience.']);
+  if (st === 'poor') return pickOne([`I told you my treasury is thin. The ${demand} will come when it can.`, 'I have little to give. Ask less, and I will pay.']);
+  return pickOne([`My answer has not changed, ${sender.username}.`, 'I have said what I will say about the tax.']);
+}
+const ACK_WORDS = new Set(('ok okay alright all right very well fine sounds good great nice cool understood got it noted thanks thank you thx ty cheers youre your welcome are no problem np worries of course will do agreed deal indeed excellent perfect wonderful splendid as wish so be that is fair enough i see makes sense yes yeah yep sure then we farewell goodbye bye see later gg lol haha hmm hm my lord king lady friend works for me glad happy hear to a pleasure much appreciated appreciate kind generous done luck take care nope nah and the lot really truly sincerely many').split(' '));
+const ACK_STRONG = new Set('ok okay alright fine good great nice cool understood noted thanks thank thx ty cheers welcome problem np worries course agreed deal indeed excellent perfect wonderful splendid wish fair sense yes yeah yep sure farewell goodbye bye gg lol haha hmm hm glad happy appreciated appreciate well done nope nah'.split(' '));
+// Messages that are themselves a reply ("ok", "very well", "your welcome") need no answer, except a thank-you after the bot helped.
+function botNeedsReply(bot, sender, text) {
+  const t = plainText(text).replace(/[^a-z\s]/g, ' ').trim(), w = t.split(/\s+/).filter(Boolean);
+  if (!w.length || w.length > 9 || /\?/.test(text) || /\d/.test(text)) return true;
+  if (!w.every(x => ACK_WORDS.has(x)) || !w.some(x => ACK_STRONG.has(x))) return true;
+  const ai = botAi(bot), last = ai.lastAsk && ai.lastAsk[sender.id];
+  if (last && round - last.round <= 1 && /^(yes|yeah|yep|sure|no|nope|nah|maybe|ok|okay)\b/.test(t)) return true; // an answer to a question it asked
+  if (/\b(thanks?|thank|thx|ty|appreciate|appreciated|cheers)\b/.test(t) && round - ((ai.lastHelp || {})[sender.id] ?? -99) <= 1) return chance(0.6);
+  return chance(0.03);
+}
+// It could not make sense of the message: say so, and use whatever it did pick up.
+function botConfused(bot, text, sender) {
+  const it = botParse(text, bot), t = plainText(text);
+  if (it.houseIds.length) return pickOne([`You mention House ${capWord(houseName(it.houseIds[0]))}, but I do not follow what you want me to do about it.`, `I caught the name ${HN(it.houseIds[0])}, but not what you are asking. Say it plainly.`]);
+  if (t.split(/\s+/).length > 28) return 'That is a great deal to take in at once. What is it you want from me?';
+  return botVoice(bot, sender, pickOne(['I am sorry, I do not understand. What do you mean?', 'I cannot tell what you are asking of me. Say it plainly.', 'I do not follow. Could you put that another way?', 'You have lost me. What exactly do you want?']));
+}
 // The meat of the conversation: understand the request, decide, act, and say something that fits. Returns the reply text.
 function botConverse(bot, sender, text) {
   const ai = botAi(bot), h = bot.w, sh = sender.houseId, words = HOUSE_WORDS[bot.houseId] || '';
@@ -2105,11 +2174,23 @@ function botConverse(bot, sender, text) {
     if (it.kind) return 'Pretty words. Your army says otherwise.';
     return pickOne([`Your army is at my gates and you want to chat? Withdraw it, ${sender.username}.`, 'We have nothing to discuss while you attack me.', 'You are my enemy. Speak to my soldiers.']);
   }
+  // Context first: the king nagging about the tax, or the speaker answering the bot's own tax demand.
+  const dFrom = botDecreeFrom(bot, sender), dTo = botDecreeTo(bot, sender);
+  if (dFrom && !it.offer && !it.promise && !it.threats.attack && (it.taxWord || it.money || it.payNag) && !it.amount) return botDecreeNudge(bot, sender, dFrom);
+  if (dTo && (it.promise || it.delay || it.unable || it.refusePay)) return botTaxTalk(bot, sender, it, dTo);
+  ai.lastHelp = ai.lastHelp || {}; ai.ctx = ai.ctx || {};
   const allied = areAllied(bot.houseId, sh), stance = ai.stance[sh] || 'neutral';
   const lying = () => Math.random() < (1 - ai.honesty) * 0.4 + (stance === 'betray' ? 0.35 : 0);
   let acted = false;
   const hasThreat = Object.keys(it.threats).length > 0;
-  if (it.offer) {
+  if (it.promise || it.delay || it.unable || it.refusePay) {
+    acted = true;
+    const fresh = ai.ctx[sender.id] && round - ai.ctx[sender.id].round <= 2;
+    if (it.refusePay) parts.push(pickOne(['I understand. Then we will not count on you.', 'As you wish. I will remember it.']));
+    else if (fresh) { botTrust(bot, sh, 1); parts.push(pickOne([`Good. I will hold you to it, ${sender.username}.`, 'Very well. I will wait for it, but not for long.'])); }
+    else parts.push(pickOne([`Pay what, ${sender.username}? I am not aware that you owe me anything. Tell me what you mean.`, 'I do not know what you are promising. Is this about a treaty, or about something else?']));
+  }
+  if (it.offer && !it.promise) {
     acted = true; botTrust(bot, sh, 3 + Math.min(5, it.offerAmount || 0));
     parts.push(pickOne([`My thanks, ${HN(sh)}. I will remember it.`, 'A generous offer. I will not forget it.', 'That is welcome. I shall repay it in kind.']));
   }
@@ -2144,6 +2225,7 @@ function botConverse(bot, sender, text) {
       if (lying()) { ai.lies++; parts.push(pickOne([`Gold? It is on its way, ${HN(sh)}.`, 'You shall have it once my coffers are counted.'])); }
       else {
         const g = botGiveGold(bot, sender, it.amount, `Sent to House ${capWord(houseName(sh))}.`);
+        if (g) ai.lastHelp[sender.id] = round;
         parts.push(g ? (g.now ? `I have sent you ${g.amt} gold. Spend it well.` : `You shall have ${g.amt} gold when the armies gather. Ask me then if it does not arrive.`) : 'My coffers are bare, I am afraid.');
       }
     } else parts.push(lying() ? 'My coffers are bare, I am afraid.' : pickOne([`Gold is not wheat to be scattered, ${HN(sh)}. Earn it.`, 'Not this time. Ask me when I am richer, or when we are closer.']));
@@ -2153,6 +2235,7 @@ function botConverse(bot, sender, text) {
     const s = botWillingness(bot, sender, 'troops');
     if (s > 0.3 && !lying()) {
       const g = botGiveTroops(bot, sender, it.amount, it.ships);
+      if (g) ai.lastHelp[sender.id] = round;
       parts.push(g ? (g.now ? `I send you ${g.infantry} soldiers${g.navy ? ` and ${g.navy} ships` : ''}.` : `${g.infantry} soldiers will reach you when the armies gather.`) : 'I have none to spare. My own walls need them.');
     } else parts.push(pickOne(['I cannot spare men. My own borders are thin.', 'My soldiers stay with me.', 'Ask me again when we have fought a common enemy.']));
   }
@@ -2168,6 +2251,7 @@ function botConverse(bot, sender, text) {
         if (lying()) { ai.lies++; parts.push(`I will strike ${tc ? tc.name : 'them'} with you.`); }
         else {
           if (tc) ai.pledges.push({ capitalId: tc.id, forHouse: sh, round, expires: round + 3 });
+          ai.lastHelp[sender.id] = round;
           parts.push(tc ? `Agreed. My banners will march on ${tc.name}.` : 'Agreed. I will pick a target and strike it.');
         }
       } else parts.push(friendly ? `${HN(tc.ownerHouseId)} is a friend of mine. Choose another target.` : pickOne(['Not now. I have my own plans.', 'The odds do not favour it.']));
@@ -2179,7 +2263,7 @@ function botConverse(bot, sender, text) {
     const besieged = capitals.find(c => c.siege && c.ownerHouseId === sh);
     if (s > 0.15) {
       if (lying()) { ai.lies++; parts.push('Hold on. My army is on its way.'); }
-      else if (besieged) { ai.relief.push({ capitalId: besieged.id, forHouse: sh, round, expires: round + 3 }); parts.push(`I will relieve ${besieged.name}.`); }
+      else if (besieged) { ai.lastHelp[sender.id] = round; ai.relief.push({ capitalId: besieged.id, forHouse: sh, round, expires: round + 3 }); parts.push(`I will relieve ${besieged.name}.`); }
       else {
         ai.peace[sh] = round + 4;
         const g = botGiveGold(bot, sender, null, 'Help.');
@@ -2191,7 +2275,7 @@ function botConverse(bot, sender, text) {
     acted = true;
     const s = botWillingness(bot, sender, 'peace');
     if (s > 0) {
-      ai.peace[sh] = round + 2 + randomInt(0, 3);
+      ai.peace[sh] = round + 2 + randomInt(0, 3); ai.lastHelp[sender.id] = round;
       if (lying() && !allied) { ai.peaceLie[sh] = true; ai.lies++; }
       parts.push(pickOne([`Peace, then. I will not move against ${HN(sh)}.`, 'A truce suits me, for now.']));
     } else parts.push(pickOne(['No promises.', 'Peace is earned.']));
@@ -2491,6 +2575,7 @@ function botHandleDecree(bot, d) {
   const ai = botAi(bot), h = bot.w, king = players.get(d.kingPlayerId);
   const demand = [d.gold && `${d.gold} gold`, d.infantry && `${d.infantry} soldiers`, d.navy && `${d.navy} ships`].filter(Boolean).join(' and ');
   if (!demand) return false;
+  ai.decreeStatus = ai.decreeStatus || {};
   const afford = h.money >= d.gold && h.infantry >= d.infantry && h.navy >= d.navy;
   const friend = areAllied(bot.houseId, d.kingHouseId);
   const kh = d.kingHouseId;
@@ -2500,23 +2585,27 @@ function botHandleDecree(bot, d) {
   if (afford && roll < willing) {
     const ok1 = botDo(bot, 'respond-decree', { decreeId: d.id });
     if (ok1 && chance(0.6)) tell(pickOne([`Your decree is answered, ${king.username}: ${demand} sent.`, `${demand}, as the crown commands. I trust it is put to good use.`, `Paid. Do not say House ${capWord(h.name)} is disloyal.`]));
-    if (ok1) botTrust(bot, kh, 1);
+    if (ok1) { botTrust(bot, kh, 1); ai.decreeStatus[d.id] = 'paid'; }
     return ok1;
   }
   if (!afford) {
+    ai.decreeStatus[d.id] = 'poor';
     const have = `${h.money} gold${d.infantry ? `, ${h.infantry} soldiers` : ''}${d.navy ? `, ${h.navy} ships` : ''}`;
-    if (chance(0.45) && ai.honesty > 0.35) { ai.payLater = ai.payLater || []; ai.payLater.push({ decreeId: d.id, round: round + 1 }); tell(pickOne([`I cannot afford ${demand} right now, I only have ${have}. Give me a round or two and I will pay what I owe.`, `The treasury cannot bear ${demand} this round. I will pay later, you have my word.`])); }
+    if (chance(0.45) && ai.honesty > 0.35) { ai.decreeStatus[d.id] = 'later'; ai.payLater = ai.payLater || []; ai.payLater.push({ decreeId: d.id, round: round + 1 }); tell(pickOne([`I cannot afford ${demand} right now, I only have ${have}. Give me a round or two and I will pay what I owe.`, `The treasury cannot bear ${demand} this round. I will pay later, you have my word.`])); }
     else tell(pickOne([`${demand} is more than I have. I only hold ${have}. Ask for less and I might oblige.`, `I would pay, but I simply cannot afford ${demand}.`, `The crown asks for ${demand} from a house with ${have}. That is not a tax, that is a siege.`]));
     return true;
   }
   // Could pay, but is unwilling: put it off, plead poverty (a lie), or defy.
   const r2 = Math.random();
   if (r2 < 0.35 && ai.honesty > 0.3) {
+    ai.decreeStatus[d.id] = 'later';
     ai.payLater = ai.payLater || []; ai.payLater.push({ decreeId: d.id, round: round + 1 });
     tell(pickOne([`I will pay, ${king?.username}, but not this round. My army needs feeding first.`, `Soon. ${demand} will reach you once my coffers recover.`, 'Patience, my king. You will have your due.']));
   } else if (r2 < 0.55 && ai.honesty < 0.7) {
+    ai.decreeStatus[d.id] = 'poor';
     ai.lies++; tell(pickOne([`I do not have ${demand} to spare, I am afraid. The treasury is bare.`, 'You ask for more than I can give. My lands are poor this season.']));
   } else {
+    ai.decreeStatus[d.id] = 'defied';
     botTrust(bot, kh, -10); ai.crownGrudge = round;
     const line = ai.aggr > 0.6 ? pickOne([`No. House ${capWord(h.name)} pays no tribute to ${king ? 'King ' + king.username : 'the crown'}.`, `Come and take it, ${king?.username || 'your grace'}.`]) : pickOne([`I respectfully decline. ${demand} is too much to ask of a free house.`, 'I will not pay this. Ask me nicely and we can talk.']);
     if (chance(0.4)) botSay(bot, `${line} ${chance(0.5) ? 'Let the whole table hear it.' : ''}`.trim()); else tell(line);
@@ -2540,7 +2629,7 @@ function botAskAllies(bot, plan, target) {
     if (!ask) continue;
     const people = houseMembers(friend).filter(p => !p.eliminated);
     const humans = people.filter(p => !p.isBot);
-    if (humans.length) botSay(bot, line, humans[0]);
+    if (humans.length) { botSay(bot, line, humans[0]); ai.ctx = ai.ctx || {}; ai.ctx[humans[0].id] = { kind: 'ask', ask, round }; }
     for (const other of botsOf(friend)) {
       botLater(other, () => {
         const reply = botConverseStructured(other, bot, ask, line);
@@ -2560,6 +2649,14 @@ function botTurn(bot) {
   // Promises made earlier
   const owe = ai.owe.splice(0);
   for (const o of owe) { const to = players.get(o.toPlayerId); if (to && !to.left && !to.eliminated) { const gold = Math.min(o.gold, h.money), inf = Math.min(o.infantry, h.infantry), nav = Math.min(o.navy, h.navy); if (gold + inf + nav > 0) botDo(bot, 'send-gift', { toPlayerId: o.toPlayerId, gold, infantry: inf, navy: nav, message: o.message || '' }); } }
+  // Players who promised to pay the crown's decree: remind them once the time is up, then hold it against them.
+  for (const [pid, e] of Object.entries(ai.expect || {})) {
+    const d = taxLedger.find(x => x.id === e.decreeId), to = players.get(pid);
+    const pending = d && to && d.recipients.some(r => r.houseId === to.houseId && r.state === 'pending');
+    if (!pending) { delete ai.expect[pid]; continue; }
+    if (round > e.due && !e.nudged) { e.nudged = true; botSay(bot, pickOne([`${to.username}, the ${demandText(d)} was promised by Round ${e.due}. I am still waiting.`, `Your word was "soon", ${to.username}. Soon has come and gone.`]), to); }
+    else if (round > e.due + 1) { botTrust(bot, to.houseId, -8); ai.grudge[to.houseId] = (ai.grudge[to.houseId] || 0) + 6; botSay(bot, 'You gave your word and broke it. The crown will remember.', to); delete ai.expect[pid]; }
+  }
   // Decrees it promised to pay later
   if (ai.payLater?.length) {
     ai.payLater = ai.payLater.filter(pl => {
@@ -2710,7 +2807,7 @@ function botTick() {
     // Answer royal decrees: pay, promise to pay later, plead poverty, or refuse outright.
     for (const d of taxLedger) {
       const r = d.recipients.find(x => x.houseId === bot.houseId && x.state === 'pending');
-      if (!r || d.kingPlayerId === bot.id || !botReady(bot, `dec${d.id}`, 3000, 10000)) continue;
+      if (!r || d.kingPlayerId === bot.id || botAi(bot).decreeStatus?.[d.id] || !botReady(bot, `dec${d.id}`, 3000, 10000)) continue;
       done(botHandleDecree(bot, d));
     }
     // Settle disputed spoils in its own favour.
@@ -2728,7 +2825,9 @@ function botTick() {
       const sender = players.get(m.senderId);
       if (!sender || sender.isBot || !botReady(bot, `msg${m.id}`, 3000, 9000)) continue;
       if (m.scope !== 'secret' && !named(m)) { if (botAnswered.has(m.id)) continue; botAnswered.add(m.id); }
+      if (!botNeedsReply(bot, sender, m.message)) { done(true); break; }
       const text = botConverse(bot, sender, m.message);
+      if (!text) { done(true); break; }
       const sent = botSay(bot, text, m.scope === 'secret' ? sender : null);
       if (sent && !botHostile(bot, sender.houseId) && /alli|ally|pact|join|together/.test(m.message.toLowerCase()) && sender.houseId && sender.houseId !== bot.houseId && !areAllied(bot.houseId, sender.houseId)
         && !allianceOffers.some(o => (o.fromHouseId === bot.houseId && o.toHouseId === sender.houseId) || (o.fromHouseId === sender.houseId && o.toHouseId === bot.houseId))
@@ -2796,7 +2895,9 @@ function botReply(bot, text, sender) {
     } else reply = pickOne(['Fair enough.', 'I see. Thank you for being straight with me.', 'Good to know.', 'Hm, noted.']);
     return botVoice(bot, sender, reply) + (chance(0.25) ? ' ' + botAsk(bot, sender, pickOne(['plans', 'worry', 'trade'])) : '');
   }
-  if (/\b(hi|hello|hey|greetings|good (day|morning|evening)|well met|my lord|my lady)\b/.test(t)) {
+  if (/\b(thank|thanks|thx|ty|appreciate|cheers)\b/.test(t) && !/\b(not|no)\b/.test(t)) {
+    reply = pickOne(['You are welcome.', 'Think nothing of it.', 'Glad to help. Remember it when I need a favour.']);
+  } else if (/\b(hi|hello|hey|greetings|good (day|morning|evening)|well met|my lord|my lady)\b/.test(t)) {
     reply = pickOne(['Hello. What brings you to me?', 'Well met. What can I do for you?', 'Greetings. I was starting to wonder who would speak first.', `Hello, ${sender?.username || 'friend'}. Anything on your mind?`]);
     if (chance(0.35)) ask = 'plans';
   } else if (/\b(how are you|hows it going|how is it going|whats up|how are things|how are you doing)\b/.test(t)) {
@@ -2824,12 +2925,8 @@ function botReply(bot, text, sender) {
     if (chance(0.4)) ask = 'trade';
   } else if (/^(yes|yeah|yep|sure|ok|okay|alright|fine|agreed|deal|no|nope|nah|maybe)\b/.test(t)) {
     reply = /^(no|nope|nah)/.test(t) ? pickOne(['Then that is that.', 'Pity. The offer may not stand.']) : pickOne(['Good. Then we understand each other.', 'Then it is settled.', 'Very well.']);
-  } else if (/\?\s*$/.test(text.trim())) {
-    reply = pickOne(['Hard to say. What do you think?', 'I would have to think about that. What is your own view?', 'Maybe. Tell me more about why you ask.', 'Depends who is asking, and why.']);
   } else {
-    reply = pickOne(['I hear you. Go on.', 'Interesting. What exactly are you proposing?', 'Hm. And what would you like me to do about it?', 'Noted. Anything else?', 'I am listening.', `That is one way to see it.`]);
-    if (chance(0.08) && words) reply += ' ' + words;
-    if (chance(0.45)) ask = pickOne(['trade', 'plans', 'worry']);
+    return botConfused(bot, text, sender);
   }
   let out = botVoice(bot, sender, reply);
   if (ask && !/\?/.test(out)) out += ' ' + botAsk(bot, sender, ask);

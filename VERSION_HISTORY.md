@@ -2,6 +2,11 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.1.9 (Nov 7, 2026)
+- **Bots understand what a message refers to.** If a bot king sent you a tax decree and you say "I will pay soon", it knows you mean the tax: it notes when to expect the payment and reminds you (and holds it against you) if the time passes. The same goes for "I cannot afford it", "give me more time" and "I will not pay". If the king asks you to "pay me" or "where is my tax", a bot recognises it as the decree it hasn't settled and pays, repeats its answer, or says it is coming.
+- **Bots say when they do not understand.** Instead of random filler, a bot now says it doesn't follow, and mentions any house name it picked up.
+- **Bots stop answering replies.** Messages like "ok", "very well", "sounds good" or "your welcome" almost never get an answer. A thank-you right after a bot has agreed to help still gets a "you are welcome" most of the time.
+
 ## v1.1.8 (Nov 6, 2026)
 - **Map:** capital names are hidden unless you hover (or tap on a touch screen). Banners now hop up and down, and each city shows the castle icon on a disc in its owner's colour instead of a dot.
 - **Dice:** no more glowing. Each die is tinted with its house colour, shows a clear unit icon (infantry, ship, dragon or garrison) and the house banner, so allied armies fighting together are easy to tell apart.
