@@ -20,11 +20,15 @@
   <meta property="og:url" content="https://playwesteros.github.io/">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"playwesteros","alternateName":["Westeros","playwesteros.github.io"],"url":"https://playwesteros.github.io/"}</script>
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=2">
-  <link rel="stylesheet" href="./style.css?v=63">
+  <script>
+    // The one place to bump on every change: it versions the stylesheet and scripts too, so browsers never reuse stale copies.
+    window.APP_VERSION = '1.2.3';
+    document.write('<link rel="stylesheet" href="./style.css?v=' + APP_VERSION + '">');
+  </script>
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
-  <script src="./config.js?v=17" defer></script>
-  <script src="./wheels.js?v=3"></script>
-  <script src="./app.js?v=83" defer></script>
+  <script>
+    document.write('<script src="./config.js?v=' + APP_VERSION + '" defer><\/script><script src="./wheels.js?v=' + APP_VERSION + '"><\/script><script src="./app.js?v=' + APP_VERSION + '" defer><\/script>');
+  </script>
 </head>
 <body>
   <div class="orientation-lock" role="status" aria-live="polite"><div><strong>Turn your phone upright</strong><span>War of Westeros is designed for portrait play.</span></div></div>
@@ -51,7 +55,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden>v1.2.1<i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden><span id="verText">v1.2.3</span><script>document.getElementById('verText').textContent = 'v' + APP_VERSION;</script><i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">

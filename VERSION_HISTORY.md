@@ -2,6 +2,12 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.2.3 (Nov 7, 2026)
+- **No more stale files after an update.** The stylesheet and scripts are now loaded using the game version number, so every version bump makes browsers fetch fresh copies automatically. The version is set in one place in index.html.
+
+## v1.2.2 (Nov 7, 2026)
+- **Banner fix actually reaches browsers.** The page kept loading the old cached stylesheet, so the banners still hopped. The stylesheet and script links now carry new version numbers so browsers fetch the current files.
+
 ## v1.2.1 (Nov 7, 2026)
 - **Secret messages follow your selection.** Pick one or more players to whisper to and only the whispers shared with exactly those players are shown. Pick nobody to see them all.
 - **Map banners stay still** (the hovering pop-out on hover/tap is unchanged).
