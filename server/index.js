@@ -1975,7 +1975,9 @@ function botConverse(bot, sender, text) {
     parts.push(pickOne(['Noted.', 'Kind words cost nothing. I will remember them.']));
   }
   if (!acted) return botReply(bot, text, sender);
-  return parts.join(' ');
+  let out = parts.join(' ');
+  if (chance(0.25) && !/\?/.test(out)) out += ' ' + botAsk(bot, sender, pickOne(['trade', 'plans', 'worry', 'ally']));
+  return out;
 }
 // What a bot tells somebody who asks what it has learned. It tells friends the truth, and others what suits it.
 function botIntelFor(bot, sender) {
@@ -2233,6 +2235,44 @@ function botAttackPlan(bot) {
   return best;
 }
 
+// How a bot answers a demand from the king: it pays, says it will pay later, says it cannot afford it, or defies the crown.
+function botHandleDecree(bot, d) {
+  const ai = botAi(bot), h = bot.w, king = players.get(d.kingPlayerId);
+  const demand = [d.gold && `${d.gold} gold`, d.infantry && `${d.infantry} soldiers`, d.navy && `${d.navy} ships`].filter(Boolean).join(' and ');
+  if (!demand) return false;
+  const afford = h.money >= d.gold && h.infantry >= d.infantry && h.navy >= d.navy;
+  const friend = areAllied(bot.houseId, d.kingHouseId);
+  const kh = d.kingHouseId;
+  const willing = 0.3 + ai.diplo * 0.3 + (friend ? 0.25 : 0) + (ai.trust[kh] || 0) / 200 - (ai.grudge[kh] || 0) / 150 - (d.gold > h.money * 0.5 ? 0.25 : 0) - (ai.crownGrudge ? 0.3 : 0);
+  const tell = text => king && botSay(bot, text, king);
+  const roll = Math.random();
+  if (afford && roll < willing) {
+    const ok1 = botDo(bot, 'respond-decree', { decreeId: d.id });
+    if (ok1 && chance(0.6)) tell(pickOne([`Your decree is answered, ${king.username}: ${demand} sent.`, `${demand}, as the crown commands. I trust it is put to good use.`, `Paid. Do not say House ${capWord(h.name)} is disloyal.`]));
+    if (ok1) botTrust(bot, kh, 1);
+    return ok1;
+  }
+  if (!afford) {
+    const have = `${h.money} gold${d.infantry ? `, ${h.infantry} soldiers` : ''}${d.navy ? `, ${h.navy} ships` : ''}`;
+    if (chance(0.45) && ai.honesty > 0.35) { ai.payLater = ai.payLater || []; ai.payLater.push({ decreeId: d.id, round: round + 1 }); tell(pickOne([`I cannot afford ${demand} right now, I only have ${have}. Give me a round or two and I will pay what I owe.`, `The treasury cannot bear ${demand} this round. I will pay later, you have my word.`])); }
+    else tell(pickOne([`${demand} is more than I have. I only hold ${have}. Ask for less and I might oblige.`, `I would pay, but I simply cannot afford ${demand}.`, `The crown asks for ${demand} from a house with ${have}. That is not a tax, that is a siege.`]));
+    return true;
+  }
+  // Could pay, but is unwilling: put it off, plead poverty (a lie), or defy.
+  const r2 = Math.random();
+  if (r2 < 0.35 && ai.honesty > 0.3) {
+    ai.payLater = ai.payLater || []; ai.payLater.push({ decreeId: d.id, round: round + 1 });
+    tell(pickOne([`I will pay, ${king?.username}, but not this round. My army needs feeding first.`, `Soon. ${demand} will reach you once my coffers recover.`, 'Patience, my king. You will have your due.']));
+  } else if (r2 < 0.55 && ai.honesty < 0.7) {
+    ai.lies++; tell(pickOne([`I do not have ${demand} to spare, I am afraid. The treasury is bare.`, 'You ask for more than I can give. My lands are poor this season.']));
+  } else {
+    botTrust(bot, kh, -10); ai.crownGrudge = round;
+    const line = ai.aggr > 0.6 ? pickOne([`No. House ${capWord(h.name)} pays no tribute to ${king ? 'King ' + king.username : 'the crown'}.`, `Come and take it, ${king?.username || 'your grace'}.`]) : pickOne([`I respectfully decline. ${demand} is too much to ask of a free house.`, 'I will not pay this. Ask me nicely and we can talk.']);
+    if (chance(0.4)) botSay(bot, `${line} ${chance(0.5) ? 'Let the whole table hear it.' : ''}`.trim()); else tell(line);
+  }
+  return true;
+}
+
 // ---- A bot's turn --------------------------------------------------------
 function botAskAllies(bot, plan, target) {
   const ai = botAi(bot), h = bot.w;
@@ -2269,6 +2309,16 @@ function botTurn(bot) {
   // Promises made earlier
   const owe = ai.owe.splice(0);
   for (const o of owe) { const to = players.get(o.toPlayerId); if (to && !to.left && !to.eliminated) { const gold = Math.min(o.gold, h.money), inf = Math.min(o.infantry, h.infantry), nav = Math.min(o.navy, h.navy); if (gold + inf + nav > 0) botDo(bot, 'send-gift', { toPlayerId: o.toPlayerId, gold, infantry: inf, navy: nav, message: o.message || '' }); } }
+  // Decrees it promised to pay later
+  if (ai.payLater?.length) {
+    ai.payLater = ai.payLater.filter(pl => {
+      if (round < pl.round) return true;
+      const d = taxLedger.find(x => x.id === pl.decreeId), r = d && d.recipients.find(x => x.houseId === bot.houseId && x.state === 'pending');
+      if (!r) return false;
+      if (h.money >= d.gold && h.infantry >= d.infantry && h.navy >= d.navy) { if (botDo(bot, 'respond-decree', { decreeId: d.id })) { const king = players.get(d.kingPlayerId); if (king && chance(0.6)) botSay(bot, pickOne(['As promised, the crown has its due.', 'I said I would pay. It is sent.']), king); } return false; }
+      pl.round = round + 1; return (pl.tries = (pl.tries || 0) + 1) < 3;
+    });
+  }
   // Spies: scout, then read and share what came back.
   if (bot.lastSpyRound !== round && h.money >= 8 && Math.random() < bias.spy) {
     const pool = houses.filter(x => x.id !== bot.houseId && houseMembers(x.id).length && !houseFallen(x));
@@ -2341,7 +2391,28 @@ function botTurn(bot) {
       }
     }
   } else if (Math.random() < 0.2) {
-    botSay(bot, pickOne([HOUSE_WORDS[bot.houseId] || 'The realm is watching.', `House ${capWord(h.name)} is watching the realm.`, 'Trust is a luxury in this game.', 'Some will rise this round. Some will not.']));
+    const others = houses.filter(x => x.id !== bot.houseId && houseMembers(x.id).length && !houseFallen(x));
+    const king = players.get(kingPlayerId);
+    botSay(bot, pickOne([
+      h.money < 8 ? 'Is anyone else running short of gold, or is it just me?' : 'My treasury is in decent shape this round. Do not get any ideas.',
+      others.length ? `Has anyone heard anything from House ${capWord(pickOne(others).name)} lately?` : 'It is getting quiet out there.',
+      king && king.houseId !== bot.houseId ? `Whoever advises King ${king.username} should tell him to watch his back.` : 'The crown is heavy, but somebody has to carry it.',
+      armySize(h) > 12 ? 'I have more soldiers than I know what to do with. Anyone want to make use of them?' : 'Soldiers are not cheap. Anyone else feeling it?',
+      'Alliances are only as good as the people in them. Choose wisely.',
+      chance(0.1) && HOUSE_WORDS[bot.houseId] ? HOUSE_WORDS[bot.houseId] : 'Something tells me this round will not be quiet.'
+    ]));
+  }
+  // Now and then, start a conversation with a person: a question about their plans, their friends or the king.
+  if (Math.random() < 0.2 + ai.diplo * 0.25) {
+    const humans = [...players.values()].filter(p => !p.isBot && !p.left && !p.eliminated && p.houseId && p.houseId !== bot.houseId);
+    const target = humans.length ? pickOne(humans) : null;
+    ai.askedHuman = ai.askedHuman || {};
+    if (target && (ai.askedHuman[target.id] || 0) < round - 1) {
+      ai.askedHuman[target.id] = round;
+      const topic = (ai.grudge[target.houseId] || 0) > 30 ? 'trade' : areAllied(bot.houseId, target.houseId) ? pickOne(['plans', 'worry', 'king']) : pickOne(['ally', 'worry', 'plans', 'king']);
+      const openers = { plans: 'Quiet round so far.', worry: 'The table is getting tense.', king: 'Have you seen the way the crown behaves lately?', ally: 'I have been thinking about who to trust.', trade: 'Let us speak plainly.' };
+      botSay(bot, `${openers[topic]} ${botAsk(bot, target, topic)}`, target);
+    }
   }
   // Ask friends for what the plan needs.
   botAskAllies(bot, plan, target || null);
@@ -2383,14 +2454,11 @@ function botTick() {
         if (botReady(bot, `tr${t.id}`)) done(botDo(bot, 'respond-treaty', { treatyId: t.id, accept: Math.random() < 0.9 }));
       }
     }
-    // Decide whether to pay a royal decree.
+    // Answer royal decrees: pay, promise to pay later, plead poverty, or refuse outright.
     for (const d of taxLedger) {
       const r = d.recipients.find(x => x.houseId === bot.houseId && x.state === 'pending');
       if (!r || d.kingPlayerId === bot.id || !botReady(bot, `dec${d.id}`, 3000, 10000)) continue;
-      const afford = h.money >= d.gold && h.infantry >= d.infantry && h.navy >= d.navy;
-      const friend = areAllied(bot.houseId, d.kingHouseId);
-      const willing = Math.random() < 0.3 + ai.diplo * 0.3 + (friend ? 0.25 : 0) - (d.gold > h.money * 0.5 ? 0.25 : 0) - (ai.crownGrudge ? 0.3 : 0);
-      if (afford && willing) done(botDo(bot, 'respond-decree', { decreeId: d.id }));
+      done(botHandleDecree(bot, d));
     }
     // Settle disputed spoils in its own favour.
     for (const s of spoils) {
@@ -2399,11 +2467,14 @@ function botTick() {
     }
     // Reply to private messages, and to public ones that name it.
     const sees = privateMessages.filter(m => m.senderId !== bot.id && (m.targets || []).some(t => t.id === bot.id) && m.round >= round - 1);
+    const named = m => m.message.toLowerCase().includes(bot.username.toLowerCase()) || (lead && houseIsBotOnly(bot.houseId) && m.message.toLowerCase().includes(`house ${h.name.toLowerCase()}`));
+    // It answers anything addressed to it, and joins in on about half of other public talk (one bot per message).
     const pub = publicMessages.filter(m => m.senderId !== bot.id && m.round >= round - 1 && players.get(m.senderId) && !players.get(m.senderId).isBot
-      && (m.message.toLowerCase().includes(bot.username.toLowerCase()) || (lead && houseIsBotOnly(bot.houseId) && m.message.toLowerCase().includes(`house ${h.name.toLowerCase()}`))));
+      && (named(m) || (!botAnswered.has(m.id) && (ai.joined?.[m.id] ?? (ai.joined = ai.joined || {}, ai.joined[m.id] = Math.random() < 0.5)))));
     for (const m of [...sees, ...pub]) {
       const sender = players.get(m.senderId);
       if (!sender || sender.isBot || !botReady(bot, `msg${m.id}`, 3000, 9000)) continue;
+      if (m.scope !== 'secret' && !named(m)) { if (botAnswered.has(m.id)) continue; botAnswered.add(m.id); }
       const text = botConverse(bot, sender, m.message);
       const sent = botSay(bot, text, m.scope === 'secret' ? sender : null);
       if (sent && /alli|ally|pact|join|together/.test(m.message.toLowerCase()) && sender.houseId && sender.houseId !== bot.houseId && !areAllied(bot.houseId, sender.houseId)
@@ -2423,18 +2494,91 @@ function botTick() {
   return acted;
 }
 
+// ---- Talking like a person -----------------------------------------------
+const botAnswered = new Set();
+const chance = p => Math.random() < p;
+// A short remark about how the bot feels toward the speaker, used to colour replies.
+function botTone(bot, sender) {
+  const ai = botAi(bot), sh = sender?.houseId, t = (ai.trust[sh] || 0) + (areAllied(bot.houseId, sh) ? 20 : 0), g = ai.grudge[sh] || 0;
+  return g > 35 ? 'cold' : t > 30 ? 'warm' : 'plain';
+}
+const QUESTIONS = {
+  plans: ['What are you planning for the next round?', 'Where do you mean to strike next?', 'Are you building up or getting ready to march?'],
+  worry: ['Who worries you most right now?', 'Which house do you think is the real danger?', 'Who do you trust at this table?'],
+  king: ['What do you make of the king?', 'Are you with the crown or against it?'],
+  ally: ['Would you stand with me if it came to war?', 'Have you made any pacts I should know about?', 'Who are your friends at this table?'],
+  trade: ['What would you give me in return?', 'What do you need from me?', 'Is there something you want?']
+};
+function botAsk(bot, sender, topic) {
+  const ai = botAi(bot), q = pickOne(QUESTIONS[topic] || QUESTIONS.plans);
+  ai.lastAsk = ai.lastAsk || {}; ai.lastAsk[sender.id] = { topic, round };
+  return q;
+}
+function botVoice(bot, sender, core) {
+  const tone = botTone(bot, sender);
+  if (tone === 'cold') return pickOne(['', '', 'Hm. ']) + core;
+  if (tone === 'warm' && chance(0.4)) return pickOne(['Friend, ', 'My friend, ', `Well, ${sender.username}, `]) + core.charAt(0).toLowerCase() + core.slice(1);
+  return core;
+}
+// Free-form talk: greetings, questions about its plans, how it is doing, insults, answers to its own questions.
 function botReply(bot, text, sender) {
-  const t = text.toLowerCase(), h = bot.w, words = HOUSE_WORDS[bot.houseId] || '';
-  if (/alli|ally|pact|join|together/.test(t)) {
-    if (sender && areAllied(bot.houseId, sender.houseId)) return `We already stand together. ${words}`;
-    return pickOne([`An alliance? Perhaps. Let us see if your deeds match your words. ${words}`, 'I will hear your terms. Do not waste my time.', 'Friends are useful. Enemies are expensive. Let us talk.']);
+  const t = plainText(text), ai = botAi(bot), h = bot.w, words = HOUSE_WORDS[bot.houseId] || '';
+  const sh = sender?.houseId, allied = sh && areAllied(bot.houseId, sh);
+  const goal = ai.plan?.goal || 'hold';
+  let reply = null, ask = null;
+  // The answer to something it asked
+  const last = ai.lastAsk && sender && ai.lastAsk[sender.id];
+  if (last && round - last.round <= 1 && !/\?/.test(text.trim().slice(-1))) {
+    delete ai.lastAsk[sender.id];
+    const hs = houses.filter(x => t.includes(x.name.toLowerCase())).map(x => x.id).filter(x => x !== bot.houseId);
+    if (sh) botTrust(bot, sh, 2);
+    if (hs.length && (last.topic === 'plans' || last.topic === 'worry')) {
+      const target = hs[0];
+      ai.intel.push({ kind: 'hearsay', aboutHouseId: target, round, value: 2, text: `${sender.username} says House ${capWord(houseName(target))} is the one to watch.` });
+      if (areAllied(bot.houseId, target)) reply = pickOne([`${HN(target)} is my friend, so I'll be careful what I make of that.`, `I'd be surprised. ${HN(target)} has dealt straight with me.`]);
+      else reply = pickOne([`${HN(target)}, hm. That fits what I've been hearing.`, `Interesting. I'll keep an eye on ${HN(target)}.`, `I had my doubts about ${HN(target)} too.`]);
+    } else if (last.topic === 'king') {
+      reply = /\b(good|great|fine|loyal|fair|support|like)\b/.test(t) ? pickOne(['A kind view. I am not so sure myself.', 'Loyalty is easy while the crown is paying.']) : pickOne(['Some of us share that opinion.', 'Careful, the walls have ears.']);
+    } else reply = pickOne(['Fair enough.', 'I see. Thank you for being straight with me.', 'Good to know.', 'Hm, noted.']);
+    return botVoice(bot, sender, reply) + (chance(0.25) ? ' ' + botAsk(bot, sender, pickOne(['plans', 'worry', 'trade'])) : '');
   }
-  if (/attack|war|fight|kill|destroy|invade|threat|crush/.test(t)) return pickOne([`Come, then. My banners are many and my patience is short. ${words}`, 'Threats are wind. My army is steel.', 'You would be wise to measure your army before you measure your words.']);
-  if (/gold|coin|money|pay|tax|tribute|loan|send|help/.test(t)) return pickOne(['Gold is not wheat to be scattered. Make your case.', `I keep ${h.money > 25 ? 'a healthy' : 'a thin'} purse, and I keep it close.`, 'Earn my trust and my coin may follow.']);
-  if (/king|crown|throne|hand|rule/.test(t)) return pickOne(['The Iron Throne finds the ambitious. Mind your head.', 'A crown is only heavy for those who wear it badly.', 'Many want the throne. Few survive it.']);
-  if (/peace|truce|friend|thank|sorry/.test(t)) return pickOne(['Peace is good for trade. For now.', 'Kind words cost nothing. I will remember them.', 'We shall see.']);
-  if (/spy|raven|secret|traitor/.test(t)) return pickOne(['Ravens fly both ways, my lord.', 'Every house has secrets. Mine are well guarded.', 'Careful whom you accuse.']);
-  return pickOne([words || 'We shall see.', 'I hear you. Speak plainly and I may answer in kind.', `House ${capWord(h.name)} marks your words.`]);
+  if (/\b(hi|hello|hey|greetings|good (day|morning|evening)|well met|my lord|my lady)\b/.test(t)) {
+    reply = pickOne(['Hello. What brings you to me?', 'Well met. What can I do for you?', 'Greetings. I was starting to wonder who would speak first.', `Hello, ${sender?.username || 'friend'}. Anything on your mind?`]);
+    if (chance(0.35)) ask = 'plans';
+  } else if (/\b(how are you|hows it going|how is it going|whats up|how are things|how are you doing)\b/.test(t)) {
+    reply = pickOne([`Can't complain. ${h.money > 25 ? 'The treasury is healthy' : h.money < 8 ? 'Gold is tight' : 'Gold is steady'} and I have ${armySize(h)} units under arms.`, `Busy. ${goal === 'build' ? 'Mostly building up my forces.' : goal === 'defend' ? 'Keeping a close eye on my borders.' : goal === 'conquer' ? 'Looking for an opening.' : 'Waiting to see who blinks first.'}`, 'Well enough. And you?']);
+    if (chance(0.4)) ask = 'plans';
+  } else if (/\b(what.*(your plan|you planning|you doing|you up to|next move)|your plans?|where.*strike|who.*attack(ing)?)\b/.test(t)) {
+    const honest = chance(ai.honesty * (allied ? 1 : 0.55));
+    const truth = goal === 'build' ? 'Mostly building up. I want a bigger army before I take any risks.' : goal === 'conquer' ? 'I am looking for a soft target. I will not say which.' : goal === 'defend' ? 'Defence. Someone has their eye on my lands.' : goal === 'betray' ? 'Keeping my options open.' : goal === 'support' ? 'Helping a friend who is in trouble.' : 'Watching and waiting.';
+    reply = honest ? truth : pickOne(['Nothing special. Staying quiet this round.', 'Just building up, like everyone.']);
+    if (!honest) ai.lies++;
+    if (chance(0.6)) ask = 'plans';
+  } else if (/\b(why|how come|explain)\b/.test(t)) {
+    reply = pickOne(['Because it suits my house. Surely you would do the same.', 'There are reasons. Not all of them are for sharing.', 'Fair question. Short answer: trust has to be earned.']);
+    if (chance(0.4)) ask = 'trade';
+  } else if (/\b(king|crown|throne|hand|rule[rs]?)\b/.test(t)) {
+    const kp = players.get(kingPlayerId), isMe = kp && kp.houseId === bot.houseId;
+    reply = isMe ? pickOne(['The crown is heavy, but I am used to the weight.', 'Ruling is mostly paperwork and enemies.']) : pickOne([`${kp ? `King ${kp.username}` : 'Whoever sits there'} holds it for now. For now.`, 'Many want it. Few survive it.', 'A crown is only as safe as the armies behind it.']);
+    ask = chance(0.5) ? 'king' : null;
+  } else if (/\b(idiot|stupid|fool|coward|weak|pathetic|useless|shut up|hate you|worthless)\b/.test(t)) {
+    if (sh) botTrust(bot, sh, -4);
+    reply = pickOne(['Insults are what people say when they have run out of armies.', 'Careful. I have a long memory.', 'That was unnecessary.']);
+  } else if (/\b(trust|promise|swear|word|honest)\b/.test(t)) {
+    reply = (allied || (ai.trust[sh] || 0) > 10) ? pickOne(['I have kept my word so far. I mean to keep it.', 'We will see how the next few rounds go.']) : pickOne(['Trust is earned in rounds, not in messages.', 'Words are cheap. Show me.']);
+    if (chance(0.4)) ask = 'trade';
+  } else if (/^(yes|yeah|yep|sure|ok|okay|alright|fine|agreed|deal|no|nope|nah|maybe)\b/.test(t)) {
+    reply = /^(no|nope|nah)/.test(t) ? pickOne(['Then that is that.', 'Pity. The offer may not stand.']) : pickOne(['Good. Then we understand each other.', 'Then it is settled.', 'Very well.']);
+  } else if (/\?\s*$/.test(text.trim())) {
+    reply = pickOne(['Hard to say. What do you think?', 'I would have to think about that. What is your own view?', 'Maybe. Tell me more about why you ask.', 'Depends who is asking, and why.']);
+  } else {
+    reply = pickOne(['I hear you. Go on.', 'Interesting. What exactly are you proposing?', 'Hm. And what would you like me to do about it?', 'Noted. Anything else?', 'I am listening.', `That is one way to see it.`]);
+    if (chance(0.08) && words) reply += ' ' + words;
+    if (chance(0.45)) ask = pickOne(['trade', 'plans', 'worry']);
+  }
+  let out = botVoice(bot, sender, reply);
+  if (ask && !/\?/.test(out)) out += ' ' + botAsk(bot, sender, ask);
+  return out;
 }
 
 setInterval(() => {

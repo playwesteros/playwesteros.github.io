@@ -2,6 +2,11 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.1.3 (Nov 6, 2026)
+- **More natural bots.** Bots now talk like people instead of repeating house words: they answer greetings, "how are you", questions about their plans (honestly or not), "why", the king, insults and trust talk, with a warmer or colder tone depending on how they feel about you. House mottos are rare now.
+- **They answer and ask.** Bots answer anything sent to them, join in on about half of public chat (one bot per message), and sometimes ask questions back or start a conversation, about your plans, who you worry about, the king, or alliances. Your answers can feed into what they think.
+- **Royal decrees.** A bot that gets a demand from the king may pay (often with a note), say it will pay later (and then do, once it can afford it), say it cannot afford it, plead poverty falsely, or openly defy the crown, in private or sometimes in public. Defiance costs the king's trust.
+
 ## v1.1.2 (Nov 6, 2026)
 - **Ships sail through water.** Fleets now follow the real coastline: the shortest route through open sea between two cities, plus a short march if a city is inland. Ships travel at 1200 map units per round (infantry 300, dragons 700), so they beat armies on most trips, though sailing around the whole continent can still take a round or two.
 - **Sand-blue sea.** The war map's water is now a sand blue instead of parchment, and the internal region borders are clipped to the land.

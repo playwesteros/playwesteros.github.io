@@ -392,7 +392,7 @@
         if (!flag) {
           const NS = 'http://www.w3.org/2000/svg';
           flag = document.createElementNS(NS, 'g');
-          flag.setAttribute('class', 'cap-banner'); flag.setAttribute('transform', 'translate(-24 -76) scale(0.1463)');
+          flag.setAttribute('class', 'cap-banner'); flag.setAttribute('transform', 'translate(-24 -58) scale(0.1463)');
           const clip = document.createElementNS(NS, 'g'); clip.setAttribute('clip-path', 'url(#bannerClip)');
           const img = document.createElementNS(NS, 'image');
           img.setAttribute('href', './assets/house-banners.png'); img.setAttribute('width', '1312'); img.setAttribute('height', '760');

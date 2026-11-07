@@ -972,3 +972,11 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
 .battle-summary.show { opacity: 1; }
 @media (max-width: 520px) { .die { width: 47%; } .announce-card.battle-card { padding: 20px 12px 14px; } }
 @media (prefers-reduced-motion: reduce) { .die, .battle-summary { transition: none; } .die.rolling { animation: none; } }
+
+/* War map: a capital is just its house banner; the name and house appear (with the same little jump) on hover, focus or tap. */
+.map-cap .cap-name, .map-cap .cap-sub { transform: translate(14px, -32px); transition: opacity .18s; }
+.map-cap .cap-name { opacity: 0; }
+.map-cap:hover .cap-name, .map-cap:focus-visible .cap-name, .map-cap.is-active .cap-name { opacity: 1; }
+.map-cap:has(.cap-banner) .cap-dot { display: none; }
+.map-cap:has(.cap-banner) .cap-ring { display: none; }
+.map-dialog.pick-mode .map-cap.is-target:has(.cap-banner) .cap-ring, .map-cap.is-contested:has(.cap-banner) .cap-ring { display: inline; }
