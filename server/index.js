@@ -1153,7 +1153,7 @@ io.on('connection', socket => {
     h.spyReports.unshift(report);
     if (h.spyReports.length > 15) h.spyReports.length = 15;
     addEvent('normal', caught ? `Spies were caught in House ${target.name}'s halls.` : `House ${h.name} sent spies toward House ${target.name}.`);
-    if (caught) { notify('spy-caught', [target.id], [], 'Spies caught', `Agents of House ${capWord(h.name)} were caught spying on your house.`, [h.id, target.id]); botOnSpyCaught(h.id, target.id); }
+    if (caught) { notify('spy-caught', [target.id], [], 'Spies caught', `Agents of House ${capWord(h.name)} were caught spying on your house.`, [h.id, target.id]); botOnSpyCaught(h.id, target.id, player); }
     return ok(caught ? `Your spies were captured. House ${target.name} knows it was you.` : success ? `Your spies returned with intelligence from House ${target.name}.` : `Your spy mission against House ${target.name} failed.`);
   });
 
@@ -1596,6 +1596,7 @@ function arriveArmy(w) {
     const pact = alliances.find(x => [x.houseA, x.houseB].includes(w.id) && [x.houseA, x.houseB].includes(defender.id));
     if (pact) { alliances.splice(alliances.indexOf(pact), 1); notify('alliance-broken', [w.id, defender.id], [], 'Allies at war', `House ${capWord(w.name)} marched on its ally House ${capWord(defender.name)}. The alliance is broken.`, [w.id, defender.id]); }
   }
+  if (defender && defender.id !== w.id) botOnAttacked(w.id, defender.id);
   if (!target.siege) {
     target.siege = { id: randomUUID(), startRound: round, battles: 0, attackers: [], relief: [], garrison: garrisonFor(target, defender) };
     addEvent('important', `${target.name} is under siege by House ${w.name}.`);
@@ -1729,9 +1730,11 @@ function botAi(bot) {
     due: {}, turnFor: 0, turnAt: 0, turnDone: false, dipRound: 0,
     trust: {}, grudge: {}, stance: {}, score: {}, buffer: {}, peace: {}, peaceLie: {}, pledges: [], relief: [], owe: [], todo: [],
     intel: [], est: {}, threats: {}, seenReports: {}, seenSieges: {}, owned: null, plan: { goal: 'hold', focus: null, round: 0 },
-    asked: {}, stanceRound: 0, lastRound: 0, crownGrudge: 0, lies: 0
+    asked: {}, stanceRound: 0, lastRound: 0, crownGrudge: 0, lies: 0, caughtBy: {}, spiedOn: {}
   });
   if (!bot.ai) bot.ai = fresh();
+  if (!bot.ai.caughtBy) bot.ai.caughtBy = {};
+  if (!bot.ai.spiedOn) bot.ai.spiedOn = {};
   const ai = bot.ai;
   if (ai.lastRound > round) { const keep = { aggr: ai.aggr, diplo: ai.diplo, honesty: ai.honesty, greed: ai.greed }; Object.assign(ai, fresh(), keep); }
   ai.lastRound = round;
@@ -1761,6 +1764,8 @@ function botSayHouse(bot, houseId, text) {
   if (!people.length) return botSay(bot, text);
   return botDo(bot, 'send-chat', { scope: 'secret', targetPlayerIds: people.map(p => p.id), message: text });
 }
+// A bot knows a house is attacking it when that house besieges or takes its city, or its spies saw the army marching on it.
+const botHostile = (bot, houseId) => Boolean(houseId) && round - ((botAi(bot).attackedBy || {})[houseId] ?? -99) <= 4;
 const botsOf = houseId => houseMembers(houseId).filter(p => p.isBot && !p.eliminated && p.w);
 function botTrust(bot, houseId, d) {
   const ai = botAi(bot); if (!houseId || houseId === bot.houseId) return;
@@ -1817,28 +1822,69 @@ function botDefenders(bot, c) {
 // ---- Understanding what people ask ---------------------------------------
 const plainText = s => String(s || '').toLowerCase().replace(/[’']/g, '');
 function botParse(text, bot) {
-  const t0 = plainText(text), out = { raw: t0 };
-  const t = t0.replace(/\b(do not|dont|never|no need to|stop|please do not) (attack|invade|strike|assault)\b/g, 'hold off');
-  const nums = (t.match(/\d+/g) || []).map(Number).filter(n => n > 0 && n < 1000);
-  const houseIds = houses.filter(x => t.includes(x.name.toLowerCase()) || new RegExp(`\\b${x.id}\\b`).test(t)).map(x => x.id);
-  const capIds = capitals.filter(c => t.includes(plainText(c.name))).map(c => c.id);
-  out.houseIds = houseIds; out.capIds = capIds; out.amount = nums[0] || null;
-  const ask = /\b(give|send|lend|spare|need|want|loan|pay|can you|could you|will you|please|i require|lets have|hand over|donate)\b/.test(t);
-  if (/\b(gold|coins?|money|funds?|silver|tribute|loan|purse|dragons? of gold|pay me)\b/.test(t) && ask) out.money = true;
-  if (/\b(troops?|soldiers?|men|infantry|army|ships?|navy|fleet|reinforcements?|swords)\b/.test(t) && /\b(give|send|lend|spare|need|want|reinforce|loan|donate)\b/.test(t) && !/\b(send|march)\b.{0,25}\b(to|against|on) (the )?[a-z]/.test(t.replace(/ me\b/, ' ME'))) out.troops = true;
-  if (/\b(ships?|navy|fleet)\b/.test(t)) out.ships = true;
-  if (/\b(attack|strike|invade|march on|march against|conquer|crush|assault|besiege|siege|go after|move against|join me against|take)\b/.test(t) && (houseIds.length || capIds.length || /\b(attack|invade|conquer|assault|strike)\b/.test(t))) {
-    const selfTarget = houseIds.includes(bot.houseId) || capIds.some(id => findCapital(id)?.ownerHouseId === bot.houseId);
-    if (selfTarget && !/\b(together|join|with me|help)\b/.test(t)) out.threat = true; else out.attack = true;
+  const t = plainText(text)
+    .replace(/\bim\b/g, 'i am').replace(/\bill\b/g, 'i will').replace(/\bgonna\b/g, 'going to').replace(/\bwanna\b/g, 'want to')
+    .replace(/\bu\b/g, 'you').replace(/\bur\b/g, 'your').replace(/\bdont\b/g, 'do not').replace(/\bwont\b/g, 'will not').replace(/\bcant\b/g, 'can not')
+    .replace(/\bive\b/g, 'i have').replace(/\bwe ll\b/g, 'we will');
+  const out = { raw: t, threats: {}, houseIds: [], capIds: [], amount: null, offerAmount: null };
+  const hs = s => houses.filter(x => s.includes(x.name.toLowerCase()) || new RegExp(`\\b${x.id}\\b`).test(s)).map(x => x.id);
+  const cs = s => capitals.filter(c => s.includes(plainText(c.name))).map(c => c.id);
+  out.houseIds = hs(t); out.capIds = cs(t);
+  const myName = bot.w ? houseName(bot.houseId).toLowerCase() : '';
+  const mineCities = capitals.filter(c => c.ownerHouseId === bot.houseId).map(c => plainText(c.name));
+  const toMe = s => /\b(you|your|yours|yourself)\b/.test(s) || (myName && s.includes(myName)) || mineCities.some(n => s.includes(n)) || s.includes(plainText(bot.username));
+  out.conditional = /\b(if you|unless you|or else|otherwise)\b/.test(t);
+  // Split into clauses so "I will send you gold, but you must send me troops" is read as two different things.
+  const clauses = t.split(/[.!?;,]+|\b(?:but|so|then|otherwise|or else|or|and|because|since|unless|if)\b(?= (?:you|i|we|your|my|the|a)\b)/).map(c => c.trim()).filter(Boolean);
+  const GIVE = '(?:give|send|lend|spare|pay|gift|donate|bring|hand|offer|loan)';
+  for (const c of clauses) {
+    const nums = (c.match(/\d+/g) || []).map(Number).filter(n => n > 0 && n < 1000);
+    const cHouses = hs(c), cCaps = cs(c);
+    const firstPerson = /\b(i|we)\b/.test(c);
+    const futureFrame = /\b(i|we) (?:will|shall|am going to|are going to|am about to|are about to|plan to|intend to|am planning to|have decided to|must|would|can|could|might)\b|\bi am (?:sending|giving|paying|marching|attacking|moving|preparing|going)\b|\bwe are (?:sending|marching|attacking|moving)\b/.test(c);
+    const negFirst = /\b(i|we) (?:will not|do not|would never|am not going to|are not going to|promise not to|have no intention of|never will)\b/.test(c);
+    // Offers: the speaker is giving to the bot ("i will send you 5 gold", "i sent you troops", "here is a gift")
+    const offerRe = new RegExp(`\\b(?:i|we)\\b[^]*?\\b(?:${GIVE}|sent|gave|paid|giving|sending|paying)\\b[^]*?\\byou\\b|\\bhere (?:is|are)\\b|\\btake this\\b|\\ba gift for you\\b|\\bon me\\b`);
+    const youGive = new RegExp(`\\b(?:${GIVE}) (?:me|us)\\b|\\byou (?:should|must|need to|have to|will|can|could|would|better) ${GIVE}\\b|\\b(?:can|could|would|will) you\\b[^]*?\\b${GIVE}\\b|\\bneed you to\\b|\\bi (?:need|want|require)\\b`);
+    const isOffer = offerRe.test(c) && !youGive.test(c) && !/\b(i|we)\b[^]*?\bme\b/.test(c);
+    if (isOffer) { out.offer = true; out.offerAmount = out.offerAmount || nums[0] || null; if (/\b(troops?|soldiers?|men|infantry|ships?|navy|fleet)\b/.test(c)) out.offerTroops = true; continue; }
+    // Caught spies
+    if (/\b(caught|captured|seized|discovered|exposed|hanged|arrested|intercepted|killed|found)\b[^]*?\b(spy|spies|agent|agents|scout|scouts|informers?)\b|\b(spy|spies|agents?|scouts?)\b[^]*?\b(caught|captured|seized|hanged|arrested|found out|dead|killed)\b|\bcaught you (?:spying|snooping)\b|\byou (?:spied|have been spying)\b/.test(c)) { out.caught = true; if (nums[0] && /gold|coin/.test(c) === false) { /* number not about gold */ } }
+    // Threats (aimed at the bot), unless the speaker is saying they will NOT do it
+    const hasAttackVerb = /\b(attack|invade|destroy|crush|besiege|siege|conquer|assault|raze|burn|take|kill|crash|end|smash|come for|march on|march against|go to war|declare war|wage war|strike|hit)\b/.test(c);
+    if (negFirst && /\b(attack|invade|harm|hurt|betray|strike|touch|move against)\b/.test(c)) out.assure = true;
+    else {
+      if (hasAttackVerb && (firstPerson || /\b(going to|will|shall)\b/.test(c)) && toMe(c) && !/\byou (?:should|must|can|could) (?:attack|take|invade)\b/.test(c) && !/\bwith me\b/.test(c)) out.threats.attack = true;
+      if (/\btraitor\b/.test(c) && /\b(label|brand|mark|name|call|declare|proclaim|make|name you|have you named)\b/.test(c) && /\b(i|we|king|crown|will)\b/.test(c) && !/\b(you are|you re|youre) (?:a )?traitor\b/.test(c)) out.threats.traitor = true;
+      if (/\b(break|end|cancel|dissolve|leave|abandon|renounce)\b[^]*?\b(alliance|pact|treaty|friendship|our deal)\b/.test(c) && (firstPerson || /\bwill\b/.test(c))) out.threats.break = true;
+      if (/\b(tell|expose|reveal|spread|announce|inform|report)\b[^]*?\b(everyone|all|realm|king|secrets?|table|court|others|them all)\b/.test(c) && (firstPerson || /\bwill\b/.test(c))) out.threats.expose = true;
+      if (/\b(you will pay|you will regret|you will die|beware|or else|you will be sorry|bend the knee|your head|burn you|you are done|you are finished)\b/.test(c)) out.threats.generic = true;
+    }
+    // Declarations: "i will attack lannister" (the speaker announcing something, not asking the bot to do anything)
+    if (futureFrame && hasAttackVerb && !toMe(c) && (cHouses.length || cCaps.length) && !negFirst) { out.declare = { houseIds: cHouses.filter(x => x !== bot.houseId), capIds: cCaps }; }
+    // Requests
+    const imperative = /^(?:please |just |now |kindly )?(?:attack|strike|invade|conquer|crush|assault|besiege|take|join|help|send|give|lend|spare|support|follow|tell|share)\b/.test(c);
+    const youShould = /\b(you (?:should|must|need to|have to|will|better|can|could|would)|can you|could you|would you|will you|please|lets|let us|join me|with me|help me)\b/.test(c);
+    const requestFrame = imperative || youShould || /\bi (?:need|want|require|ask)\b|\bgive me\b|\bsend me\b/.test(c) || /\bme\b/.test(c) && new RegExp(`\\b${GIVE}\\b`).test(c);
+    if (requestFrame && !isOffer) {
+      if (/\b(gold|coins?|money|funds?|silver|tribute|loan|purse|dragons?)\b/.test(c) && (new RegExp(`\\b${GIVE}\\b|\\bneed\\b|\\bwant\\b|\\bloan\\b|\\bpay\\b`)).test(c)) { out.money = true; out.amount = out.amount || nums[0] || null; }
+      if (/\b(troops?|soldiers?|men|infantry|army|ships?|navy|fleet|reinforcements?|swords)\b/.test(c) && /\b(give|send|lend|spare|need|want|reinforce|loan|donate)\b/.test(c) && !/\b(send|march)\b[^]*?\b(to|against|on) (?!me|us)[a-z]/.test(c)) { out.troops = true; out.amount = out.amount || nums[0] || null; }
+      if (/\b(attack|strike|invade|conquer|crush|assault|besiege|siege|go after|move against|join me against|take)\b/.test(c) && (cHouses.length || cCaps.length || /\b(attack|invade|conquer|assault|strike)\b/.test(c)) && !toMe(c)) { out.attack = true; }
+      if (/\b(help|aid|assist|defend|protect|save|rescue|relieve|reinforce|back me|stand with me|come to my)\b/.test(c)) out.help = true;
+    }
+    if (/\b(ships?|navy|fleet)\b/.test(c)) out.ships = true;
+    if (/\b(peace|truce|ceasefire|stand down|spare me|leave me alone|non-?aggression|hold off|do not attack|do not invade|stop attacking)\b/.test(c) && !firstPerson) out.peace = true;
+    if (/\b(intel|intelligence|spy report|spies|scouts?|what did you (learn|see|find|hear)|any news|what do you know|rumou?rs?|did you spy|what have you heard)\b/.test(c) && !out.caught) out.intel = true;
+    if (/\b(alli(ance|ed|es)|ally|pact)\b/.test(c) && !out.threats.break && !out.assure) out.ally = true;
+    if (/\b(follow me|follow my lead|side with me|stand with me|obey|kneel|swear|support me|back me)\b/.test(c)) out.follow = true;
+    if (/\b(you are|you re|youre|you have been|such a) (?:a |an |the )?(traitor|liar|snake|backstabber|oathbreaker|cheat)\b|\byou (?:betrayed|lied|cheated|backstabbed)\b/.test(c)) out.accuse = true;
+    if (/\b(thanks|thank you|grateful|sorry|apolog|forgive|my thanks)\b/.test(c)) out.kind = true;
   }
-  if (/\b(help|aid|assist|defend|protect|save|rescue|relieve|reinforce|back me|stand with me|come to my)\b/.test(t)) out.help = true;
-  if (/\b(peace|truce|ceasefire|stand down|dont attack|do not attack|spare me|leave me alone|non-?aggression|hold off)\b/.test(t)) out.peace = true;
-  if (/\b(intel|intelligence|spy report|spies|scouts?|what did you (learn|see|find|hear)|any news|what do you know|rumou?rs?|did you spy|what have you heard)\b/.test(t)) out.intel = true;
-  if (/\b(alli(ance|ed|es)|ally|pact)\b/.test(t)) out.ally = true;
-  if (/\b(follow me|follow my lead|side with me|stand with me|obey|kneel|swear|support me|back me)\b/.test(t)) out.follow = true;
-  if (/\b(or else|you will pay|ill (destroy|crush|kill|burn)|beware|surrender|submit|yield|bend the knee|your head|you will die|burn you)\b/.test(t)) out.threat = true;
-  if (/\b(traitor|betray(ed|er)?|liar|snake|backstab|oathbreaker|cheat(ed|er)?)\b/.test(t)) out.accuse = true;
-  if (/\b(thanks|thank you|grateful|sorry|apolog|forgive|my thanks)\b/.test(t)) out.kind = true;
+  if (out.caught) out.intel = false;
+  // Two-part demands: "give me 5 gold or i will attack you" / "if you do not give me 5 gold i will attack you"
+  const threatKinds = Object.keys(out.threats);
+  out.demand = Boolean(out.money || out.troops || out.follow || (out.attack && !out.declare));
+  out.ultimatum = threatKinds.length > 0 && (out.demand || out.caught && /\bgive|send|pay|or\b/.test(t));
   return out;
 }
 
@@ -1856,6 +1902,7 @@ function botWillingness(bot, sender, kind) {
   if (kind === 'attack') s += ai.aggr * 0.25;
   if (kind === 'peace') s += ai.diplo * 0.25;
   if (kind === 'help') s += 0.1;
+  if (botHostile(bot, sh)) s -= 1.5;
   s += (Math.random() - 0.5) * 0.5;
   return s;
 }
@@ -1881,26 +1928,138 @@ function botGiveTroops(bot, sender, wanted, ships) {
 function botPickTargetCity(bot, houseId) {
   return capitals.filter(c => c.ownerHouseId === houseId && capitalLive(c)).sort((a, b) => a.defense - b.defense)[0] || null;
 }
+
+// Somebody tells a bot they caught its spies. Guilty bots admit, deny or defy; innocent ones deny.
+function botCaughtReply(bot, sender, it) {
+  const ai = botAi(bot), sh = sender.houseId, honest = Math.random() < ai.honesty;
+  const guilty = round - (ai.caughtBy[sh] ?? -99) <= 6;
+  if (!guilty) {
+    return pickOne([`My spies? I sent none against ${HN(sh)}. Whoever you caught, they did not wear my colours.`, 'Prove it. I have no spies in your halls.', `A fine accusation, ${sender.username}. Do you have a name, or only a rumour?`]);
+  }
+  botTrust(bot, sh, -2);
+  if (honest && ai.diplo > 0.45) { botTrust(bot, sh, 3); return pickOne([`Aye, they were mine. Every house watches its neighbours, ${HN(sh)}. Let us not make war of it.`, 'You caught them fairly. I will not insult you with a denial. It will not happen again.']); }
+  if (ai.aggr > 0.65) { ai.grudge[sh] = (ai.grudge[sh] || 0) + 5; return pickOne(['And if they were mine? You should guard your halls better.', 'Spies are the price of a careless house. Do not blame me for your doors.']); }
+  ai.lies++;
+  return pickOne(['Not my spies. Someone is trying to set us against each other.', 'I do not know what you speak of. Perhaps another house wishes you to blame me.']);
+}
+// A threat with no demand attached: a bot answers according to which threat it was and who made it.
+function botThreatReply(bot, sender, it) {
+  const ai = botAi(bot), sh = sender.houseId, th = it.threats;
+  const strong = botPower(bot, sh) > botPower(bot, bot.houseId) * 1.4;
+  const lines = [];
+  if (th.attack || th.generic) {
+    botTrust(bot, sh, -12);
+    lines.push(strong ? pickOne(['Your words are heard. There is no need for this to end in blood.', 'Let us not be hasty. I would rather deal than fight.']) : pickOne([`Threats are wind, ${HN(sh)}. My army is steel.`, `Come, then. My banners are many and my patience is short. ${HOUSE_WORDS[bot.houseId] || ''}`]));
+  }
+  if (th.traitor) {
+    if (sender.id === kingPlayerId) { botTrust(bot, sh, -6); ai.crownGrudge = round; lines.push(ai.aggr > 0.5 ? 'Brand me a traitor, then, and see how loyal the lords remain to a king who does it.' : 'I have done nothing to deserve that label. Do not do this, my king.'); }
+    else { botTrust(bot, sh, -3); lines.push(`You have no authority to name traitors, ${sender.username}. Only the king may.`); }
+  }
+  if (th.break) { botTrust(bot, sh, -2); lines.push(areAllied(bot.houseId, sh) ? pickOne(['Break it, then, if you must. But you will regret losing a friend.', 'I thought our word meant something. Think carefully before you cast it away.']) : 'We have no alliance to break.'); }
+  if (th.expose) { botTrust(bot, sh, -3); lines.push(pickOne(['Tell them what you like. I have nothing to hide.', 'Spread your rumours. I will spread mine, and see whom the lords believe.'])); }
+  return lines.join(' ');
+}
+// "Give me X or I attack you": weigh fear against pride, then comply, stall, or defy.
+function botUltimatum(bot, sender, it) {
+  const ai = botAi(bot), h = bot.w, sh = sender.houseId, th = it.threats;
+  let fear = 0;
+  const ratio = botPower(bot, sh) / Math.max(3, botPower(bot, bot.houseId));
+  fear += clampN((ratio - 0.8) * 0.9, -0.4, 0.9);
+  if (th.attack || th.generic) fear += 0.1;
+  if (th.traitor) fear += sender.id === kingPlayerId ? 0.35 : 0;
+  if (th.break) fear += areAllied(bot.houseId, sh) ? 0.15 : 0;
+  if (th.expose) fear += 0.1;
+  if (it.caught && round - (ai.caughtBy[sh] ?? -99) <= 6) fear += 0.3;
+  const score = fear - ai.aggr * 0.55 + ai.diplo * 0.25 + (Math.random() - 0.5) * 0.4 - (ai.grudge[sh] || 0) / 120 + (ai.trust[sh] || 0) / 250;
+  const asked = it.money ? 'gold' : it.troops ? 'troops' : 'obedience';
+  if (score > 0.15) {
+    botTrust(bot, sh, -6);
+    if (it.money) {
+      const want = it.amount || Math.max(2, Math.round(h.money * 0.15));
+      const give = Math.min(want, Math.floor(h.money * 0.7));
+      if (give >= 1) {
+        const sent = phase === 'ACTION' ? botDo(bot, 'send-gift', { toPlayerId: sender.id, gold: give, infantry: 0, navy: 0, message: 'Under protest.' }) : false;
+        if (!sent) ai.owe.push({ toPlayerId: sender.id, gold: give, infantry: 0, navy: 0, message: 'Under protest.' });
+        return `Very well. ${give} gold${sent ? ' is yours' : ' will reach you when the armies gather'}. Take it and leave me be. I will not forget being coerced.`;
+      }
+      return 'I would pay if I had it. My coffers are empty. Do not attack a house with nothing to take.';
+    }
+    if (it.troops) {
+      const g = botGiveTroops(bot, sender, it.amount, it.ships);
+      return g ? `You leave me no choice. ${g.infantry} soldiers are yours${g.now ? '' : ' soon'}. Do not ask twice.` : 'I have no men to spare, and you know it.';
+    }
+    return 'I yield. For now. Do not mistake it for loyalty.';
+  }
+  if (score > -0.2) {
+    botTrust(bot, sh, -8);
+    return pickOne([`Threats and demands, ${HN(sh)}? Come to the table and ask properly, and we may reach terms.`, `I will not be bullied into ${asked}. Make me a real offer and I will listen.`, 'Give me a few days to think on it. And lower your voice while you ask.']);
+  }
+  botTrust(bot, sh, -15);
+  ai.grudge[sh] = (ai.grudge[sh] || 0) + 12;
+  ai.stance[sh] = 'betray';
+  ai.attackedBy[sh] = round - 2;
+  return pickOne([`Not a coin, ${HN(sh)}. If you want a war, you will have one.`, `You demand ${asked} from me with a threat? Then my answer is steel. ${HOUSE_WORDS[bot.houseId] || ''}`, 'Do your worst. I have buried bigger threats than you.']);
+}
+// Somebody announces what they will do to a third party: react according to how that third party relates to the bot.
+function botDeclareReply(bot, sender, it) {
+  const ai = botAi(bot), sh = sender.houseId, d = it.declare;
+  const target = d.houseIds[0] || (d.capIds[0] && findCapital(d.capIds[0])?.ownerHouseId) || null;
+  if (target === bot.houseId) return botThreatReply(bot, sender, { threats: { attack: true } });
+  if (!target) return pickOne(['Noted. I will watch how that goes.', 'Bold. I wish you luck.']);
+  if (areAllied(bot.houseId, target)) { botTrust(bot, sh, -5); return `${HN(target)} is my ally. Think twice before you move against them.`; }
+  if (botHostile(bot, target) || ai.stance[target] === 'betray' || (ai.grudge[target] || 0) > 20) {
+    botTrust(bot, sh, 2);
+    const cap = d.capIds[0] ? findCapital(d.capIds[0]) : botPickTargetCity(bot, target);
+    if (cap && capitalLive(cap) && Math.random() < 0.4) ai.pledges.push({ capitalId: cap.id, forHouse: sh, round, expires: round + 3 });
+    return pickOne([`${HN(target)} has earned it. If you march, I may march with you.`, `Good. ${HN(target)} has been a thorn in my side too.`]);
+  }
+  return pickOne([`${HN(target)}, is it? I will be watching how that goes.`, 'A bold move. Do you want my help, or only my silence?', 'That is your business. Do not expect me to take sides yet.']);
+}
 // The meat of the conversation: understand the request, decide, act, and say something that fits. Returns the reply text.
 function botConverse(bot, sender, text) {
   const ai = botAi(bot), h = bot.w, sh = sender.houseId, words = HOUSE_WORDS[bot.houseId] || '';
   const it = botParse(text, bot), parts = [];
   if (!sh || !sender.w) return botReply(bot, text, sender);
+  if (botHostile(bot, sh)) {
+    if (it.peace) return pickOne([`Peace? Pull your army back from my walls first, then we will talk.`, 'You want peace while your soldiers march on my cities? Withdraw them and ask again.']);
+    if (it.ally || it.follow) return pickOne(['An alliance, from the house that is attacking me? Do not insult me.', 'You march on my lands and ask for my loyalty? You will get none.']);
+    if (it.money || it.troops || it.help || it.attack) return pickOne(['After what you have done to my lands, you ask me for favours? No.', 'Not a coin, not a soldier. You are at war with me.']);
+    if (it.kind) return 'Pretty words. Your army says otherwise.';
+    return pickOne([`Your army is at my gates and you want to chat? Withdraw it, ${sender.username}.`, 'We have nothing to discuss while you attack me.', 'You are my enemy. Speak to my soldiers.']);
+  }
   const allied = areAllied(bot.houseId, sh), stance = ai.stance[sh] || 'neutral';
   const lying = () => Math.random() < (1 - ai.honesty) * 0.4 + (stance === 'betray' ? 0.35 : 0);
   let acted = false;
-  if (it.threat) {
+  const hasThreat = Object.keys(it.threats).length > 0;
+  if (it.offer) {
+    acted = true; botTrust(bot, sh, 3 + Math.min(5, it.offerAmount || 0));
+    parts.push(pickOne([`My thanks, ${HN(sh)}. I will remember it.`, 'A generous offer. I will not forget it.', 'That is welcome. I shall repay it in kind.']));
+  }
+  if (it.assure) {
     acted = true;
-    botTrust(bot, sh, -12);
-    const strong = botPower(bot, sh) > botPower(bot, bot.houseId) * 1.4;
-    parts.push(strong ? pickOne(['Your words are heard. There is no need for this to end in blood.', 'Let us not be hasty. I would rather deal than fight.']) : pickOne([`Threats are wind, ${HN(sh)}. My army is steel.`, `Come, then. My banners are many and my patience is short. ${words}`]));
+    parts.push(stance === 'betray' && Math.random() < 0.6 ? 'Words are cheap, my lord. Show me with deeds.' : pickOne(['Then we understand each other.', 'Good. I have no wish to fight you either.']));
+  }
+  if (it.caught) {
+    acted = true;
+    parts.push(botCaughtReply(bot, sender, it));
+  }
+  if (it.ultimatum) {
+    acted = true;
+    parts.push(botUltimatum(bot, sender, it));
+  } else if (hasThreat) {
+    acted = true;
+    parts.push(botThreatReply(bot, sender, it));
+  }
+  if (it.declare && !hasThreat) {
+    acted = true;
+    parts.push(botDeclareReply(bot, sender, it));
   }
   if (it.accuse) {
     acted = true;
     const guilty = Object.values(ai.stance).includes('betray') && ai.stance[sh] === 'betray';
     parts.push(guilty && Math.random() < 0.7 ? pickOne(['A traitor? I have only ever acted in my own house’s interest.', 'You have no proof of that, my lord.']) : pickOne(['Careful with such words. They travel faster than ravens.', 'I have kept every oath I have made.']));
   }
-  if (it.money) {
+  if (it.money && !it.ultimatum) {
     acted = true;
     const s = botWillingness(bot, sender, 'money');
     if (s > 0.25) {
@@ -1911,7 +2070,7 @@ function botConverse(bot, sender, text) {
       }
     } else parts.push(lying() ? 'My coffers are bare, I am afraid.' : pickOne([`Gold is not wheat to be scattered, ${HN(sh)}. Earn it.`, 'Not this time. Ask me when I am richer, or when we are closer.']));
   }
-  if (it.troops) {
+  if (it.troops && !it.ultimatum) {
     acted = true;
     const s = botWillingness(bot, sender, 'troops');
     if (s > 0.3 && !lying()) {
@@ -1919,7 +2078,7 @@ function botConverse(bot, sender, text) {
       parts.push(g ? (g.now ? `I send you ${g.infantry} soldiers${g.navy ? ` and ${g.navy} ships` : ''}.` : `${g.infantry} soldiers will reach you when the armies gather.`) : 'I have none to spare. My own walls need them.');
     } else parts.push(pickOne(['I cannot spare men. My own borders are thin.', 'My soldiers stay with me.', 'Ask me again when we have fought a common enemy.']));
   }
-  if (it.attack) {
+  if (it.attack && !it.declare && !it.ultimatum) {
     acted = true;
     const targets = [...it.capIds.map(findCapital), ...it.houseIds.map(id => botPickTargetCity(bot, id))].filter(c => c && c.ownerHouseId !== bot.houseId && capitalLive(c));
     const tc = targets[0];
@@ -2021,7 +2180,7 @@ function botReadReports(bot) {
       const cap = capitals.find(c => c.name === f.movingOn);
       ai.est[tid] = { infantry: f.infantry, navy: f.navy, dragons: f.dragons, round: r.round };
       const mine = cap && cap.ownerHouseId === bot.houseId, friend = cap && cap.ownerHouseId && areAllied(bot.houseId, cap.ownerHouseId);
-      if (cap && mine) ai.threats[cap.id] = round;
+      if (cap && mine) { ai.threats[cap.id] = round; ai.attackedBy = ai.attackedBy || {}; ai.attackedBy[tid] = round; botTrust(bot, tid, -15); }
       item = { kind: 'movement', aboutHouseId: tid, capitalId: cap?.id, round: r.round, value: mine ? 9 : friend ? 7 : 3, ownerHouseId: cap?.ownerHouseId, text: `${tn} has an army of about ${f.infantry} soldiers, ${f.navy} ships and ${f.dragons} dragons marching on ${f.movingOn || 'a city'}.` };
     } else if (f.kind === 'alliance') {
       const names = (f.houses || []).map(HN).join(' and ');
@@ -2098,6 +2257,7 @@ function botEvalStances(bot) {
     let st = s > w ? 'follow' : s < -lowBar ? 'betray' : 'neutral';
     if (prev === 'follow' && s > -w * 0.3) st = 'follow';
     if (prev === 'betray' && s < w * 0.3) st = 'betray';
+    if (botHostile(bot, x.id)) st = 'betray';
     ai.stance[x.id] = st; ai.score[x.id] = s;
   }
   // time heals a little
@@ -2128,7 +2288,8 @@ const PLAN_BIAS = {
 };
 
 // ---- Reactions to what other people do to a bot -------------------------
-function botOnSpyCaught(spyHouseId, targetHouseId) {
+function botOnSpyCaught(spyHouseId, targetHouseId, spyPlayer) {
+  if (spyPlayer && spyPlayer.isBot) botAi(spyPlayer).caughtBy[targetHouseId] = round;
   for (const b of botsOf(targetHouseId)) {
     const ai = botAi(b);
     botTrust(b, spyHouseId, -22);
@@ -2148,6 +2309,14 @@ function botOnTraitor(target, king) {
   }
   for (const b of botsOf(target.houseId)) if (b.id !== target.id) botTrust(b, king.houseId, -12);
 }
+// An army has reached a bot's city: that house is now an enemy, however friendly it was before.
+function botOnAttacked(attackerHouseId, defenderHouseId) {
+  for (const b of botsOf(defenderHouseId)) {
+    const ai = botAi(b); ai.attackedBy = ai.attackedBy || {};
+    ai.attackedBy[attackerHouseId] = round; ai.stance[attackerHouseId] = 'betray';
+    botTrust(b, attackerHouseId, -40);
+  }
+}
 function botOnBetrayed(breakerHouseId, otherHouseId) {
   for (const b of botsOf(otherHouseId)) {
     botTrust(b, breakerHouseId, -35);
@@ -2164,6 +2333,10 @@ function botWatch(bot) {
   const ai = botAi(bot);
   const now = Date.now();
   ai.todo = ai.todo.filter(t => { if (now < t.at) return true; try { t.fn(); } catch (e) { console.error('Bot task failed:', e); } return false; });
+  ai.attackedBy = ai.attackedBy || {};
+  for (const c of capitals) {
+    if (c.siege && c.ownerHouseId === bot.houseId) for (const e of c.siege.attackers) ai.attackedBy[e.houseId] = round;
+  }
   for (const c of capitals) {
     if (!c.siege) continue;
     const key = `${c.id}:${c.siege.id || c.siege.startRound}`;
@@ -2188,7 +2361,7 @@ function botWatch(bot) {
   }
   // Cities lost since the last look
   const owned = capitals.filter(c => c.ownerHouseId === bot.houseId).map(c => c.id);
-  if (ai.owned) for (const id of ai.owned) if (!owned.includes(id)) { const c = findCapital(id); if (c && c.ownerHouseId) { botTrust(bot, c.ownerHouseId, -45); if (c.id === 'kings-landing') ai.crownGrudge = round; } }
+  if (ai.owned) for (const id of ai.owned) if (!owned.includes(id)) { const c = findCapital(id); if (c && c.ownerHouseId) { ai.attackedBy[c.ownerHouseId] = round; botTrust(bot, c.ownerHouseId, -45); if (c.id === 'kings-landing') ai.crownGrudge = round; } }
   ai.owned = owned;
   ai.pledges = ai.pledges.filter(p => p.expires >= round);
   ai.relief = ai.relief.filter(p => p.expires >= round);
@@ -2328,6 +2501,7 @@ function botTurn(bot) {
     if (pick) {
       const r = Math.random();
       const mission = (ai.grudge[pick.id] || 0) > 25 && r < 0.3 ? 'messages' : r < 0.12 ? 'wealth' : 'war';
+      ai.spiedOn[pick.id] = round;
       botDo(bot, 'spy', { targetHouseId: pick.id, mission, spend: clampN(Math.round(h.money * (0.15 + ai.greed * 0.1)), 2, 20) });
     }
   }
@@ -2381,7 +2555,7 @@ function botTurn(bot) {
   if (ai.dipRound !== round && mine < 3 && Math.random() < ai.diplo * 0.75) {
     ai.dipRound = round;
     const options = houses.filter(x => x.id !== bot.houseId && houseMembers(x.id).length && !houseFallen(x) && !areAllied(bot.houseId, x.id) && x.id !== target?.ownerHouseId
-      && (ai.stance[x.id] || 'neutral') !== 'betray' && (ai.grudge[x.id] || 0) < 40
+      && (ai.stance[x.id] || 'neutral') !== 'betray' && (ai.grudge[x.id] || 0) < 40 && !botHostile(bot, x.id)
       && !allianceOffers.some(o => (o.fromHouseId === bot.houseId && o.toHouseId === x.id) || (o.fromHouseId === x.id && o.toHouseId === bot.houseId)));
     if (options.length) {
       const pick = pickOne(options);
@@ -2404,14 +2578,15 @@ function botTurn(bot) {
   }
   // Now and then, start a conversation with a person: a question about their plans, their friends or the king.
   if (Math.random() < 0.2 + ai.diplo * 0.25) {
-    const humans = [...players.values()].filter(p => !p.isBot && !p.left && !p.eliminated && p.houseId && p.houseId !== bot.houseId);
+    const humans = [...players.values()].filter(p => !p.isBot && !p.left && !p.eliminated && p.houseId && p.houseId !== bot.houseId && !botHostile(bot, p.houseId));
     const target = humans.length ? pickOne(humans) : null;
     ai.askedHuman = ai.askedHuman || {};
     if (target && (ai.askedHuman[target.id] || 0) < round - 1) {
       ai.askedHuman[target.id] = round;
       const topic = (ai.grudge[target.houseId] || 0) > 30 ? 'trade' : areAllied(bot.houseId, target.houseId) ? pickOne(['plans', 'worry', 'king']) : pickOne(['ally', 'worry', 'plans', 'king']);
+      const topicFixed = topic === 'king' && target.id === kingPlayerId ? 'worry' : topic;
       const openers = { plans: 'Quiet round so far.', worry: 'The table is getting tense.', king: 'Have you seen the way the crown behaves lately?', ally: 'I have been thinking about who to trust.', trade: 'Let us speak plainly.' };
-      botSay(bot, `${openers[topic]} ${botAsk(bot, target, topic)}`, target);
+      botSay(bot, `${openers[topicFixed]} ${botAsk(bot, target, topicFixed)}`, target);
     }
   }
   // Ask friends for what the plan needs.
@@ -2448,10 +2623,10 @@ function botTick() {
         const marching = h.pendingAttack && findCapital(h.pendingAttack.targetCapitalId)?.ownerHouseId === o.fromHouseId;
         const crowded = alliances.filter(a => [a.houseA, a.houseB].includes(bot.houseId)).length >= 3;
         const fromHouse = o.fromHouseId, bias = ((ai.trust[fromHouse] || 0) / 200) - ((ai.grudge[fromHouse] || 0) / 150) - (ai.stance[fromHouse] === 'betray' ? 0.3 : 0);
-        done(botDo(bot, 'respond-alliance', { offerId: o.id, accept: !marching && Math.random() < (crowded ? 0.2 : 0.4 + ai.diplo * 0.45) + bias }));
+        done(botDo(bot, 'respond-alliance', { offerId: o.id, accept: !marching && !botHostile(bot, fromHouse) && Math.random() < (crowded ? 0.2 : 0.4 + ai.diplo * 0.45) + bias }));
       }
       for (const t of treaties.filter(x => x.status === 'pending' && x.toHouseId === bot.houseId)) {
-        if (botReady(bot, `tr${t.id}`)) done(botDo(bot, 'respond-treaty', { treatyId: t.id, accept: Math.random() < 0.9 }));
+        if (botReady(bot, `tr${t.id}`)) done(botDo(bot, 'respond-treaty', { treatyId: t.id, accept: Math.random() < 0.9 && !botHostile(bot, t.fromHouseId) }));
       }
     }
     // Answer royal decrees: pay, promise to pay later, plead poverty, or refuse outright.
@@ -2477,7 +2652,7 @@ function botTick() {
       if (m.scope !== 'secret' && !named(m)) { if (botAnswered.has(m.id)) continue; botAnswered.add(m.id); }
       const text = botConverse(bot, sender, m.message);
       const sent = botSay(bot, text, m.scope === 'secret' ? sender : null);
-      if (sent && /alli|ally|pact|join|together/.test(m.message.toLowerCase()) && sender.houseId && sender.houseId !== bot.houseId && !areAllied(bot.houseId, sender.houseId)
+      if (sent && !botHostile(bot, sender.houseId) && /alli|ally|pact|join|together/.test(m.message.toLowerCase()) && sender.houseId && sender.houseId !== bot.houseId && !areAllied(bot.houseId, sender.houseId)
         && !allianceOffers.some(o => (o.fromHouseId === bot.houseId && o.toHouseId === sender.houseId) || (o.fromHouseId === sender.houseId && o.toHouseId === bot.houseId))
         && Math.random() < 0.3 + ai.diplo * 0.5 + (ai.trust[sender.houseId] || 0) / 200 - (ai.grudge[sender.houseId] || 0) / 150) {
         botDo(bot, 'offer-alliance', { targetHouseId: sender.houseId, scope: m.scope === 'secret' ? 'secret' : 'public' });
@@ -2500,7 +2675,7 @@ const chance = p => Math.random() < p;
 // A short remark about how the bot feels toward the speaker, used to colour replies.
 function botTone(bot, sender) {
   const ai = botAi(bot), sh = sender?.houseId, t = (ai.trust[sh] || 0) + (areAllied(bot.houseId, sh) ? 20 : 0), g = ai.grudge[sh] || 0;
-  return g > 35 ? 'cold' : t > 30 ? 'warm' : 'plain';
+  return botHostile(bot, sh) || g > 35 ? 'cold' : t > 30 ? 'warm' : 'plain';
 }
 const QUESTIONS = {
   plans: ['What are you planning for the next round?', 'Where do you mean to strike next?', 'Are you building up or getting ready to march?'],
@@ -2510,6 +2685,7 @@ const QUESTIONS = {
   trade: ['What would you give me in return?', 'What do you need from me?', 'Is there something you want?']
 };
 function botAsk(bot, sender, topic) {
+  if (topic === 'king' && sender.id === kingPlayerId) topic = 'worry'; // never ask the king what he thinks of the king
   const ai = botAi(bot), q = pickOne(QUESTIONS[topic] || QUESTIONS.plans);
   ai.lastAsk = ai.lastAsk || {}; ai.lastAsk[sender.id] = { topic, round };
   return q;
@@ -2559,8 +2735,9 @@ function botReply(bot, text, sender) {
     if (chance(0.4)) ask = 'trade';
   } else if (/\b(king|crown|throne|hand|rule[rs]?)\b/.test(t)) {
     const kp = players.get(kingPlayerId), isMe = kp && kp.houseId === bot.houseId;
-    reply = isMe ? pickOne(['The crown is heavy, but I am used to the weight.', 'Ruling is mostly paperwork and enemies.']) : pickOne([`${kp ? `King ${kp.username}` : 'Whoever sits there'} holds it for now. For now.`, 'Many want it. Few survive it.', 'A crown is only as safe as the armies behind it.']);
-    ask = chance(0.5) ? 'king' : null;
+    const toKing = sender && sender.id === kingPlayerId;
+    reply = toKing ? pickOne(['You wear the crown, your grace, you tell me how it sits.', 'It is your crown, king. I only hope it is worn wisely.', 'Ask yourself, your grace. You know the realm better than I.']) : isMe ? pickOne(['The crown is heavy, but I am used to the weight.', 'Ruling is mostly paperwork and enemies.']) : pickOne([`${kp ? `King ${kp.username}` : 'Whoever sits there'} holds it for now. For now.`, 'Many want it. Few survive it.', 'A crown is only as safe as the armies behind it.']);
+    ask = toKing ? (chance(0.5) ? 'worry' : null) : chance(0.5) ? 'king' : null;
   } else if (/\b(idiot|stupid|fool|coward|weak|pathetic|useless|shut up|hate you|worthless)\b/.test(t)) {
     if (sh) botTrust(bot, sh, -4);
     reply = pickOne(['Insults are what people say when they have run out of armies.', 'Careful. I have a long memory.', 'That was unnecessary.']);

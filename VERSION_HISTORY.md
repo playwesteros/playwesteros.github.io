@@ -2,6 +2,17 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.1.6 (Nov 6, 2026)
+- **Bots understand who is doing what.** "I will send you 5 gold" is now an offer (they thank you), not a request for money. Messages are read clause by clause, so several things in one message are all understood.
+- **Caught spies.** Tell a bot you caught its spies and it admits, denies or defies you, depending on whether its spies really were caught and on its personality.
+- **Specific threats.** Threatening to attack, label them a traitor (carries weight only from the king), break an alliance or expose them each get a different answer.
+- **Ultimatums.** "If you don't give me 5 gold, I'm going to attack you" is weighed against your strength and their pride: they may pay under protest, stall, or defy and turn hostile.
+- Announcing an attack on someone else gets a reaction based on whether that house is their ally or enemy.
+
+## v1.1.5 (Nov 6, 2026)
+- **Bots no longer fake loyalty to an attacker.** Once a house marches on a bot's city (or its spies see the army coming), the bot treats that house as an enemy for several rounds: it refuses alliances, treaties, gifts, help and requests to follow, answers coldly, and stops starting friendly conversations with them.
+- **Bots no longer ask the king what they think of the king.** Questions about the crown are skipped for the king, and talk about the crown is addressed to them directly.
+
 ## v1.1.4 (Nov 6, 2026)
 - **Secret messages to bots.** Bots now appear in the private-message recipient list, so you can message them secretly (and include them under "Everyone").
 
