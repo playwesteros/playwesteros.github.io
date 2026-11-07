@@ -779,7 +779,7 @@
   }
 
   const selectedRecipients = new Set();
-  const chatOthers = () => (state?.players || []).filter(p => !p.left && !p.isBot && p.id !== state.me?.id).sort((x, y) => houseIndex(x.houseId) - houseIndex(y.houseId));
+  const chatOthers = () => (state?.players || []).filter(p => !p.left && p.id !== state.me?.id).sort((x, y) => houseIndex(x.houseId) - houseIndex(y.houseId));
 
   function messageMarkup(messages, isPrivate = false) {
     const myId = state.me?.id;

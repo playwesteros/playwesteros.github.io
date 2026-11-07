@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.1.4 (Nov 6, 2026)
+- **Secret messages to bots.** Bots now appear in the private-message recipient list, so you can message them secretly (and include them under "Everyone").
+
 ## v1.1.3 (Nov 6, 2026)
 - **More natural bots.** Bots now talk like people instead of repeating house words: they answer greetings, "how are you", questions about their plans (honestly or not), "why", the king, insults and trust talk, with a warmer or colder tone depending on how they feel about you. House mottos are rare now.
 - **They answer and ask.** Bots answer anything sent to them, join in on about half of public chat (one bot per message), and sometimes ask questions back or start a conversation, about your plans, who you worry about, the king, or alliances. Your answers can feed into what they think.
