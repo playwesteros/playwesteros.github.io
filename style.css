@@ -982,3 +982,25 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
 .map-dialog.pick-mode .map-cap.is-target:has(.cap-banner) .cap-ring, .map-cap.is-contested:has(.cap-banner) .cap-ring { display: inline; }
 
 .march-list{display:grid;gap:6px;margin-top:8px}.march-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;padding:6px 8px;border:1px solid rgba(200,168,108,.35);border-radius:6px}.march-row span{flex:1}
+
+/* v1.1.8: city icons, bobbing banners, names only on hover, flat dice with readable unit and house */
+.map-cap .cap-dot { display: none !important; }
+.map-cap .cap-disk { fill: var(--cap-color, #7d2a14); stroke: #f3e6c2; stroke-width: 2.4; pointer-events: none; }
+.map-cap.is-idle .cap-disk { fill: #8d8d8d; }
+.map-cap .cap-icon { pointer-events: none; }
+.map-cap .cap-name, .map-cap .cap-sub { opacity: 0 !important; }
+.map-cap:hover .cap-name, .map-cap:hover .cap-sub { opacity: 1 !important; }
+@media (hover: none) { .map-cap.is-active .cap-name, .map-cap.is-active .cap-sub { opacity: 1 !important; } }
+.map-cap.is-idle:hover .cap-sub { opacity: 0 !important; }
+.cap-banner > g { animation: capHop 2.2s ease-in-out infinite; }
+.map-caps .map-cap:nth-child(3n+1) .cap-banner > g { animation-delay: -.7s; }
+.map-caps .map-cap:nth-child(3n+2) .cap-banner > g { animation-delay: -1.4s; }
+@keyframes capHop { 0%, 55%, 100% { transform: translateY(0); } 15% { transform: translateY(-75px); } 30% { transform: translateY(0); } 40% { transform: translateY(-28px); } 48% { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .cap-banner > g { animation: none; } }
+.die { background: linear-gradient(160deg, color-mix(in srgb, var(--hc, #8a6a3a) 55%, #1b130a), color-mix(in srgb, var(--hc, #8a6a3a) 30%, #120c06)) !important; color: #f6ead0; border-color: var(--hc, #c8a86c) !important; box-shadow: 0 2px 0 rgba(0,0,0,.55) !important; }
+.die.def { flex-direction: row; }
+.die img.die-unit { width: 24px; height: 24px; filter: none; }
+.die .die-banner { display: inline-block; width: 17px; height: 21px; flex: 0 0 17px; }
+.die.u-dragons, .die.won, .die.lost { box-shadow: 0 2px 0 rgba(0,0,0,.55) !important; }
+.die.won { outline: 2px solid #7fd18f; outline-offset: -1px; }
+.die.lost { outline: 2px solid #c0584a; outline-offset: -1px; }

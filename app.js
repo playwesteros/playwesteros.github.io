@@ -396,7 +396,7 @@
         if (!flag) {
           const NS = 'http://www.w3.org/2000/svg';
           flag = document.createElementNS(NS, 'g');
-          flag.setAttribute('class', 'cap-banner'); flag.setAttribute('transform', 'translate(-24 -58) scale(0.1463)');
+          flag.setAttribute('class', 'cap-banner'); flag.setAttribute('transform', 'translate(-24 -78) scale(0.1463)');
           const clip = document.createElementNS(NS, 'g'); clip.setAttribute('clip-path', 'url(#bannerClip)');
           const img = document.createElementNS(NS, 'image');
           img.setAttribute('href', './assets/house-banners.png'); img.setAttribute('width', '1312'); img.setAttribute('height', '760');
@@ -405,6 +405,13 @@
         const flagImg = flag.querySelector('image');
         flagImg.setAttribute('x', String(-col * 328)); flagImg.setAttribute('y', String(-row * 380));
       } else if (flag) flag.remove();
+      if (pop && !pop.querySelector('.cap-icon')) {
+        const NS = 'http://www.w3.org/2000/svg', anchor = pop.querySelector('.cap-dot');
+        const disk = document.createElementNS(NS, 'circle'); disk.setAttribute('class', 'cap-disk'); disk.setAttribute('r', '19');
+        const icon = document.createElementNS(NS, 'image'); icon.setAttribute('class', 'cap-icon'); icon.setAttribute('href', './assets/game-castle.png?v=3');
+        icon.setAttribute('x', '-14'); icon.setAttribute('y', '-14'); icon.setAttribute('width', '28'); icon.setAttribute('height', '28');
+        pop.insertBefore(disk, anchor); pop.insertBefore(icon, anchor);
+      }
       const sub = el.querySelector('.cap-sub');
       if (sub) sub.textContent = cap.vacant ? 'Empty throne' : cap.contested ? 'Contested' : owner ? `House ${capName(owner.name)}` : '';
       el.classList.toggle('is-target', pickingTarget && state.myHouse && !warTargetProblem(cap));
@@ -1361,7 +1368,8 @@
     $('announceTitle').textContent = n.title;
     stage.classList.remove('has-old'); stage.classList.add('is-notice', 'is-battle');
     const names = list => [...new Set(list.map(d => d.houseId))].map(id => `House ${escapeHtml(capName(prettyHouse(id)))}`).join(' · ') || '—';
-    const dieHtml = (d, side, i) => `<div class="die ${side} u-${d.unit}" data-side="${side}" data-i="${i}"><img src="./assets/${DIE_ICON[d.unit] || 'ui-spear'}.png?v=3" alt=""><b>?</b></div>`;
+    const UNIT_NAME = { infantry: 'Infantry', navy: 'Ship', dragons: 'Dragon', garrison: 'Garrison' };
+    const dieHtml = (d, side, i) => { const hh = state.houses.find(x => x.id === d.houseId); return `<div class="die ${side} u-${d.unit}" data-side="${side}" data-i="${i}" style="--hc:${escapeHtml(hh?.color || '#8a6a3a')}" title="${escapeHtml(UNIT_NAME[d.unit] || '')}${hh ? ` of House ${escapeHtml(capName(hh.name))}` : ''}"><img class="die-unit" src="./assets/${DIE_ICON[d.unit] || 'ui-spear'}.png?v=3" alt="${escapeHtml(UNIT_NAME[d.unit] || '')}"><b>?</b>${hh ? houseBanner(hh, 'die-banner') : ''}</div>`; };
     stage.innerHTML = `<div class="dice-arena"><div class="dice-head"><span>${b.field ? 'First army' : 'Attackers'}<small>${names(b.attackers)}</small></span><span>${b.field ? 'Second army' : 'Defenders'}<small>${names(b.defenders)}</small></span></div>
       <div class="dice-scroll"><div class="dice-board" style="height:${rows * ROW}px">${b.attackers.map((d, i) => dieHtml(d, 'att', i)).join('')}${b.defenders.map((d, i) => dieHtml(d, 'def', i)).join('')}</div></div>
       <div class="dice-legend"><span>${b.field ? 'Highest rolls face each other · tied dice are discarded · spare dice are discarded' : 'Highest rolls face each other · ties go to the defenders · spare dice are discarded'}</span></div></div>`;

@@ -2,6 +2,10 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.1.8 (Nov 6, 2026)
+- **Map:** capital names are hidden unless you hover (or tap on a touch screen). Banners now hop up and down, and each city shows the castle icon on a disc in its owner's colour instead of a dot.
+- **Dice:** no more glowing. Each die is tinted with its house colour, shows a clear unit icon (infantry, ship, dragon or garrison) and the house banner, so allied armies fighting together are easy to tell apart.
+
 ## v1.1.7 (Nov 6, 2026)
 - **Send as many armies as you like.** You can now send reinforcements to the same city back to back, or several attacks in the same round. Each army marches on its own.
 - **Call an army back.** A "Call back" button lists every army on the road. If it has not left yet it comes home at once; otherwise it turns around and takes as long to return as it has already marched.
