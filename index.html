@@ -22,7 +22,7 @@
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=2">
   <script>
     // The one place to bump on every change: it versions the stylesheet and scripts too, so browsers never reuse stale copies.
-    window.APP_VERSION = '1.2.5';
+    window.APP_VERSION = '1.2.6';
     document.write('<link rel="stylesheet" href="./style.css?v=' + APP_VERSION + '">');
   </script>
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
@@ -55,7 +55,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden><span id="verText">v1.2.5</span><script>document.getElementById('verText').textContent = 'v' + APP_VERSION;</script><i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden><span id="verText">v1.2.6</span><script>document.getElementById('verText').textContent = 'v' + APP_VERSION;</script><i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -397,12 +397,7 @@
               <label for="spyGold">Gold to spend (2–20)</label><div class="spy-gold-row"><input id="spyGold" type="number" min="2" max="20" placeholder="2–20" inputmode="numeric"><div id="spyOdds" class="spy-odds"></div></div>
               <button class="button button-secondary button-full" type="submit">Attempt spy mission</button>
             </form>
-            <form id="dragonSpyForm" class="action-card" hidden>
-              <img class="action-icon-image" src="./assets/ui-dragon.png?v=4" alt=""><h3>Hunt the Dragons</h3><p class="muted small-text">Learn if a Dragon hides in a house. Spend 2–20 gold.</p>
-              <label for="dragonSpyTarget">Target house</label><select id="dragonSpyTarget" required></select>
-              <label for="dragonSpyGold">Gold to spend (2–20)</label><div class="spy-gold-row"><input id="dragonSpyGold" type="number" min="2" max="20" placeholder="2–20" inputmode="numeric"><div id="dragonSpyOdds" class="spy-odds"></div></div>
-              <button class="button button-secondary button-full" type="submit">Hunt for a Dragon</button>
-            </form></div>
+</div>
                 <div id="spyReports" class="spy-reports"></div>
               </section>
             </div>

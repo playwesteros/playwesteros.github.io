@@ -514,10 +514,10 @@
     const prevSpy = $('spyTarget').value;
     $('spyTarget').innerHTML = '<option value="">Choose a house</option>' + state.houses.filter(h => h.id !== house.id && (h.players || []).some(p => !p.left)).map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name)}</option>`).join('');
     if ([...$('spyTarget').options].some(o => o.value === prevSpy)) $('spyTarget').value = prevSpy;
-    const prevDr = $('dragonSpyTarget').value;
-    $('dragonSpyTarget').innerHTML = $('spyTarget').innerHTML;
-    if ([...$('dragonSpyTarget').options].some(o => o.value === prevDr)) $('dragonSpyTarget').value = prevDr;
-    $('dragonSpyForm').hidden = state.settings?.gameType !== 'LAST_DRAGON';
+    // Dragon hunts are one more kind of spy mission, offered only in Last Dragon games.
+    const missionSel = $('spyMission'), hasDragon = [...missionSel.options].some(o => o.value === 'dragon'), wantDragon = state.settings?.gameType === 'LAST_DRAGON';
+    if (wantDragon && !hasDragon) { const o = document.createElement('option'); o.value = 'dragon'; o.textContent = 'Hunt a Dragon'; missionSel.appendChild(o); window.__wheels?.refresh(state); }
+    else if (!wantDragon && hasDragon) { if (missionSel.value === 'dragon') missionSel.value = ''; [...missionSel.options].find(o => o.value === 'dragon').remove(); window.__wheels?.refresh(state); }
     const prevGift = $('giftTarget').value;
     $('giftTarget').innerHTML = '<option value="">Choose a player</option>' + state.players.filter(p => p.id !== state.me.id && !p.left && !p.eliminated && p.houseId).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.username)} · House ${escapeHtml(state.houses.find(x => x.id === p.houseId)?.name || '')}</option>`).join('');
     if ([...$('giftTarget').options].some(o => o.value === prevGift)) $('giftTarget').value = prevGift;
@@ -564,32 +564,21 @@
     else body = `<p>About ${f.infantry} infantry · ${f.navy} ships · ${f.dragons} dragons. Counts may be off by 1 or 2.${f.marching ? '' : ' No army on the march.'}</p>`;
     return `<article class="spy-report">${head}${body}</article>`;
   }
-  function updateDragonSpyForm() {
-    if (!state?.myHouse || $('dragonSpyForm').hidden) return;
-    const raw = $('dragonSpyGold').value.trim(), spend = Number(raw);
-    const valid = raw !== '' && Number.isInteger(spend) && spend >= 2 && spend <= 20;
-    if (valid && $('dragonSpyTarget').value) {
-      const o = spyOddsFor(spend, $('dragonSpyTarget').value, 'dragon');
-      const diff = o.success >= 0.5 ? 'Easy' : o.success >= 0.3 ? 'Medium' : 'Hard';
-      const danger = o.caught >= 0.6 ? 'High' : o.caught >= 0.35 ? 'Medium' : 'Low';
-      $('dragonSpyOdds').innerHTML = `<span>Difficulty <b class="lvl-${diff === 'Easy' ? 'good' : diff === 'Medium' ? 'mid' : 'bad'}">${diff}</b> \u00b7 ${Math.round(o.success * 100)}%</span><span>Danger <b class="lvl-${danger === 'Low' ? 'good' : danger === 'Medium' ? 'mid' : 'bad'}">${danger}</b> \u00b7 ${Math.round(o.caught * 100)}%</span>`;
-    } else $('dragonSpyOdds').innerHTML = '';
-    lock($('dragonSpyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastDragonSpyRound === state.round ? 'You have already hunted for dragons this round.' : !$('dragonSpyTarget').value ? 'Choose a target house.' : !valid ? 'Spend 2\u201320 gold.' : state.myHouse.money < spend ? 'Not enough gold.' : '');
-  }
   function updateSpyForm() {
     const house = state?.myHouse;
     if (!house) return;
     const raw = $('spyGold').value.trim();
     const spend = Number(raw);
     const valid = raw !== '' && Number.isInteger(spend) && spend >= 2 && spend <= 20;
-    const ready = valid && $('spyTarget').value && $('spyMission').value;
+    const mission = $('spyMission').value;
+    const ready = valid && $('spyTarget').value && mission;
     if (ready) {
       const o = spyOddsFor(spend, $('spyTarget').value, $('spyMission').value);
       const diff = o.success >= 0.5 ? 'Easy' : o.success >= 0.3 ? 'Medium' : 'Hard';
       const danger = o.caught >= 0.6 ? 'High' : o.caught >= 0.35 ? 'Medium' : 'Low';
       $('spyOdds').innerHTML = `<span>Difficulty <b class="lvl-${diff === 'Easy' ? 'good' : diff === 'Medium' ? 'mid' : 'bad'}">${diff}</b> · ${Math.round(o.success * 100)}%</span><span>Danger <b class="lvl-${danger === 'Low' ? 'good' : danger === 'Medium' ? 'mid' : 'bad'}">${danger}</b> · ${Math.round(o.caught * 100)}%</span>`;
     } else $('spyOdds').innerHTML = '';
-    lock($('spyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : state.me.lastSpyRound === state.round ? 'You have already sent spies this round.' : !$('spyTarget').value ? 'Choose a target house.' : !$('spyMission').value ? 'Choose a mission.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
+    lock($('spyForm').querySelector('button[type="submit"]'), state.phase !== 'ACTION' ? 'Spies can only be sent during the action phase.' : (mission === 'dragon' ? state.me.lastDragonSpyRound : state.me.lastSpyRound) === state.round ? (mission === 'dragon' ? 'You have already hunted for dragons this round.' : 'You have already sent spies this round.') : !$('spyTarget').value ? 'Choose a target house.' : !$('spyMission').value ? 'Choose a mission.' : !valid ? 'Spend a whole number of gold between 2 and 20.' : house.money < spend ? `You chose to spend ${spend} gold, but your house only has ${house.money}.` : '');
   }
   const giftNum = id => { const raw = $(id).value.trim(); return raw === '' ? 0 : Number(raw); };
   function updateGiftForm() {
@@ -607,12 +596,6 @@
   $('spyGold').addEventListener('input', updateSpyForm);
   $('spyMission').addEventListener('change', updateSpyForm);
   $('spyTarget').addEventListener('change', updateSpyForm);
-  $('dragonSpyGold').addEventListener('input', updateDragonSpyForm);
-  $('dragonSpyTarget').addEventListener('change', updateDragonSpyForm);
-  $('dragonSpyForm').addEventListener('submit', event => {
-    event.preventDefault();
-    emitAction('spy', { targetHouseId: $('dragonSpyTarget').value, mission: 'dragon', spend: Number($('dragonSpyGold').value) });
-  });
 
   function updateDisbandButton() {
     const house = state?.myHouse;
@@ -1460,7 +1443,7 @@
   }
 
   // House dropdowns: the real <select> stays hidden (value + change events), a custom list shows each house's banner and colour, ordered by house.
-  const HOUSE_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget', 'dragonSpyTarget', 'giftTarget', 'newHandSelect', 'handPlayerSelect'];
+  const HOUSE_SELECTS = ['allianceTarget', 'treatyTarget', 'decreeTarget', 'spyTarget', 'giftTarget', 'newHandSelect', 'handPlayerSelect'];
   const houseIndex = id => { const i = (state?.houses || []).findIndex(h => h.id === id); return i < 0 ? 99 : i; };
   const houseOfValue = value => {
     const house = state.houses.find(x => x.id === value);
@@ -1607,7 +1590,7 @@
     }
     updateSelectBanners();
     updateRecruitButton();
-    if (state.myHouse) { updateAttackLock(); updateSpyForm(); updateDragonSpyForm(); updateDisbandButton(); }
+    if (state.myHouse) { updateAttackLock(); updateSpyForm(); updateDisbandButton(); }
     window.__wheels?.refresh(state);
     if (wasFocused) {
       const element = $(wasFocused);

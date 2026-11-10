@@ -1022,3 +1022,13 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
 .attack-columns { grid-template-columns: 1fr; }
 .attack-columns > div[hidden] { display: none; }
 .attack-columns > div:first-child { grid-column: auto; }
+
+/* v1.2.6 layout fit */
+@media (min-width: 900px){
+  #actionPanel{display:grid;grid-template-columns:minmax(0,420px) minmax(0,1fr);column-gap:18px;align-items:start}
+  #actionPanel .section-head{grid-column:1/-1}
+  #actionPanel .action-grid{grid-template-columns:1fr}
+  #actionPanel .spy-reports{margin-top:0;max-height:60vh;overflow:auto}
+  #spyReports:empty::before{content:"No intelligence yet. Reports from your spy missions will appear here.";display:block;color:var(--muted,#b9ad94);font-size:.85rem;padding:14px;border:1px dashed var(--line,#3a3426);border-radius:8px}
+}
+@media (max-width: 900px){ .hub-sheet{max-height:100dvh} }

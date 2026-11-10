@@ -2,6 +2,10 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.2.6 (Nov 10, 2026)
+- **Hunt a Dragon is now a spy mission** (Last Dragon games only) in the normal spy form, with its own cooldown. The separate menu card is gone.
+- **Spy menu fits laptop screens.** The form sits beside the intelligence reports instead of leaving the right half empty.
+
 ## v1.2.5 (Nov 9, 2026)
 - **Whisper filter reworked.** With several players selected you see everything each of them sent you, even if it was also sent to others. Your own whispers show only if you sent them to exactly the selected group. Selecting everyone shows every secret message sent to you.
 

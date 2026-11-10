@@ -86,7 +86,6 @@
     {id:'unitAmount',unit:'units',big:1,icon:()=>UNIT_ICON[$('unitSelect')?.value]||'ui-spear',min:()=>1,max:s=>Math.max(1,Math.floor(hm(s,'money')/cost()))},
     {id:'disbandAmount',unit:'units',big:1,icon:()=>UNIT_ICON[$('disbandUnit')?.value]||'ui-spear',min:()=>1,max:s=>Math.max(1,hm(s,$('disbandUnit')?.value||'infantry'))},
     {id:'spyGold',unit:'gold',big:1,icon:'game-coins',min:()=>2,max:s=>Math.max(2,Math.min(20,hm(s,'money')))},
-    {id:'dragonSpyGold',unit:'gold',big:1,icon:'game-coins',min:()=>2,max:s=>Math.max(2,Math.min(20,hm(s,'money')))},
     {id:'attackInfantry',unit:'infantry',icon:'ui-spear',min:()=>0,max:s=>hm(s,'infantry')},
     {id:'attackNavy',unit:'ships',icon:'ui-ship',min:()=>0,max:s=>hm(s,'navy')},
     {id:'attackDragons',unit:'dragons',icon:'ui-dragon',min:()=>0,max:s=>hm(s,'dragons')}
@@ -96,7 +95,7 @@
   const DROPS={
     unitSelect:{infantry:['ui-spear','#c8a86c'],navy:['ui-ship','#4f8fb5']},
     disbandUnit:{infantry:['ui-spear','#c8a86c'],navy:['ui-ship','#4f8fb5'],dragons:['ui-dragon','#d9602f']},
-    spyMission:{wealth:['game-coins','#d9b24a'],messages:['game-raven','#9fb4c9'],war:['game-swords','#c9574c']},
+    spyMission:{wealth:['game-coins','#d9b24a'],messages:['game-raven','#9fb4c9'],war:['game-swords','#c9574c'],dragon:['ui-dragon','#d9602f']},
     decreeKind:{tax:['game-coins','#d9b24a'],hand:['game-hand','#8fa8c4'],traitor:['game-chain','#b5483f'],crown:['game-throne','#c8a86c']}
   };
   const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
