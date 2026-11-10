@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.9 (Nov 10, 2026)
+- **Phone view stays put:** the phone-only "tap to go full screen" behaviour was kicking in inside the laptop phone frame and blowing it up to the whole screen. It is now off in Phone view.
+
 ## v1.3.8 (Nov 10, 2026)
 - **Rotate message only on real phones:** "Turn your phone upright" now appears only on an actual phone held sideways, never on a laptop, even in Phone view.
 

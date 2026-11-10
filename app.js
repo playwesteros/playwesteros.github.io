@@ -84,7 +84,7 @@
     clearTimeout(fsTimer);
     fsTimer = setTimeout(() => { if (fsWanted && !fsActive()) enterFullscreen(); }, FS_IDLE_MS);
   }
-  if (fsRequest && fsExit && !isInstalledApp) {
+  if (fsRequest && fsExit && !isInstalledApp && !window.PHONE_FRAME) {  // never inside the laptop phone frame
     document.addEventListener('click', event => {
       if (!isMobileDevice()) return;
       if (!fsWanted) { fsWanted = true; enterFullscreen(); return; }       // first tap: go full screen
