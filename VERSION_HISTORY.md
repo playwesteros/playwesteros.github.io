@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.4 (Nov 10, 2026)
+- **"Original" interface style:** the settings menu now offers Medieval or Original. Original brings back the interface exactly as it was before the v1.3 overhaul (old colours, buttons, full-screen menus on phones, long phase button). The phone footer tabs belong to Medieval only. Switching is instant and remembered per device.
+
 ## v1.3.3 (Nov 10, 2026)
 - **Phone footer tabs:** Money, Relations and Army are a permanent footer on phones. One is always selected and its page stays open above the footer; tapping another switches pages. No more opening and closing a full-screen sheet.
 - **Removed the round/phase banner** under the top bar on phones during the round, to give the pages more room.

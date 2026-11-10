@@ -660,7 +660,7 @@
     const rd = state.ready || { mode: 'off', ready: 0, total: 0 };
     const canReady = !state.isHost && rd.mode !== 'off' && ['ACTION', 'COURT', 'RESOLUTION'].includes(state.phase) && state.myHouse && !state.me?.eliminated;
     if (canReady) {
-      const phone = document.body.classList.contains('mobile-device');
+      const phone = document.body.classList.contains('mobile-device') && document.documentElement.classList.contains('style-med');
       pill.textContent = rd.me ? 'READY ✓' : phone ? 'READY' : `ROUND ${state.round} · READY`;
       pill.dataset.action = 'toggle-ready';
       pill.title = rd.me ? 'Tap to cancel' : 'Tell the host you are done';
@@ -672,7 +672,7 @@
     pill.classList.remove('is-ready');
     if (step) {
       const count = rd.mode !== 'off' && rd.total ? ` (${rd.ready}/${rd.total})` : '';
-      const phone = document.body.classList.contains('mobile-device');
+      const phone = document.body.classList.contains('mobile-device') && document.documentElement.classList.contains('style-med');
       pill.textContent = phone ? `${state.phase === 'ACTION' ? 'COURT' : 'NEXT'}${rd.mode !== 'off' && rd.total ? ` ${rd.ready}/${rd.total}` : ''} →` : `ROUND ${state.round} · ${step[0]}${count} →`;
       pill.dataset.action = 'advance-phase';
       pill.title = rd.mode === 'wait' && rd.ready < rd.total ? 'Waiting for everyone to be ready' : step[1];
@@ -850,7 +850,7 @@
     updateBadges();
   }
   // On phones the three category buttons are a footer of tabs: one is always selected and its page stays open above it.
-  const onPhone = () => document.body.classList.contains('mobile-device');
+  const onPhone = () => document.body.classList.contains('mobile-device') && document.documentElement.classList.contains('style-med');
   const inHubPhase = () => state && (state.phase === 'ACTION' || state.phase === 'COURT');
   let lastPhoneHub = 'money';
   function openHub(kind, sub = null) {
@@ -2117,7 +2117,7 @@
     $('pmName').textContent = me?.username || '';
     const house = me?.houseId ? state.houses.find(h => h.id === me.houseId) : null;
     $('pmHouse').textContent = house ? `House ${capName(house.name)}` : 'No house yet';
-    $('pmStyle').value = document.documentElement.classList.contains('style-med') ? 'medieval' : 'classic';
+    $('pmStyle').value = document.documentElement.classList.contains('style-med') ? 'medieval' : 'original';
     const scheme = schemePref();
     $('pmScheme').innerHTML = [['auto', house ? `My house (${capName(house.name)})` : 'My house'], ['none', 'None (classic gold)'], ...state.houses.map(h => [h.id, `House ${capName(h.name)}`])]
       .map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === scheme ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
@@ -2137,7 +2137,7 @@
     menu.style.left = `${Math.max(8, Math.round(r.left))}px`;
     menu.hidden = false;
   }
-  $('pmStyle').addEventListener('change', () => { const med = $('pmStyle').value === 'medieval'; document.documentElement.classList.toggle('style-med', med); try { localStorage.setItem('westerosStyle', med ? 'medieval' : 'classic'); } catch { /* storage unavailable */ } });
+  $('pmStyle').addEventListener('change', () => { const med = $('pmStyle').value === 'medieval'; document.documentElement.classList.toggle('style-med', med); try { localStorage.setItem('westerosStyle', med ? 'medieval' : 'original'); } catch { /* storage unavailable */ } if (state) { renderHub(); updateRoundPill(); } });
   $('pmScheme').addEventListener('change', () => { writePref('warOfWesterosScheme', $('pmScheme').value); applyTheme(); });
   $('pmPopupList').addEventListener('change', event => {
     const sel = event.target.closest('[data-popup-pref]'); if (!sel) return;
