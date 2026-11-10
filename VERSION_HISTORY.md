@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.2.5 (Nov 9, 2026)
+- **Whisper filter reworked.** With several players selected you see everything each of them sent you, even if it was also sent to others. Your own whispers show only if you sent them to exactly the selected group. Selecting everyone shows every secret message sent to you.
+
 ## v1.2.4 (Nov 7, 2026)
 - **No repeat notifications in the ledger.** Alliance offers and treaty offers no longer appear in the ledger, since they already have their own menus and badges. Red NEW marks in the ledger are now only for things that have no popup or menu of their own (gifts received). Decrees, treaties, alliances and sieges keep their popups and menus.
 

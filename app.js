@@ -825,9 +825,13 @@
     // Who a private message goes to: individual players, any number of them.
     const others = chatOthers();
     [...selectedRecipients].forEach(id => { if (!others.some(p => p.id === id)) selectedRecipients.delete(id); });
-    // With players picked, only the whispers shared with exactly those players are shown.
+    // With players picked: everything the picked players sent to me, plus what I sent only if it went to exactly that group.
     const myId = state.me?.id;
-    const thread = m => { const who = new Set([m.senderId, ...(m.targets || []).map(t => t.id)]); who.delete(myId); return who.size === selectedRecipients.size && [...who].every(id => selectedRecipients.has(id)); };
+    const thread = m => {
+      if (m.senderId !== myId) return selectedRecipients.has(m.senderId);
+      const to = new Set((m.targets || []).map(t => t.id)); to.delete(myId);
+      return to.size === selectedRecipients.size && [...to].every(id => selectedRecipients.has(id));
+    };
     $('secretChat').innerHTML = messageMarkup(selectedRecipients.size ? (state.privateMessages || []).filter(thread) : (state.privateMessages || []), true);
     logs.forEach(([el, atBottom]) => { if (atBottom) el.scrollTop = el.scrollHeight; });
     $('chatRecipients').hidden = !isPrivate;
