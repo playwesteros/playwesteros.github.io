@@ -2,6 +2,10 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.2 (Nov 10, 2026)
+- **Phone layout:** the Money, Relations and Army buttons now sit in a bar at the bottom of the screen, and the game area scrolls above it.
+- **Shorter phase button on phones:** "READY", "COURT 2/4 →" or "NEXT 2/4 →" instead of the long "ROUND 3 · NEXT ROUND (2/4) →". Laptops keep the full text.
+
 ## v1.3.1 (Nov 10, 2026)
 - **Medieval style fixes:** the top-bar phase buttons (Next phase, Ready, round timer) are readable again, and numbers use a clear lining face instead of the old-print font's tiny numerals.
 

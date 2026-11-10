@@ -660,7 +660,8 @@
     const rd = state.ready || { mode: 'off', ready: 0, total: 0 };
     const canReady = !state.isHost && rd.mode !== 'off' && ['ACTION', 'COURT', 'RESOLUTION'].includes(state.phase) && state.myHouse && !state.me?.eliminated;
     if (canReady) {
-      pill.textContent = rd.me ? 'READY ✓' : `ROUND ${state.round} · READY`;
+      const phone = document.body.classList.contains('mobile-device');
+      pill.textContent = rd.me ? 'READY ✓' : phone ? 'READY' : `ROUND ${state.round} · READY`;
       pill.dataset.action = 'toggle-ready';
       pill.title = rd.me ? 'Tap to cancel' : 'Tell the host you are done';
       pill.disabled = false;
@@ -671,7 +672,8 @@
     pill.classList.remove('is-ready');
     if (step) {
       const count = rd.mode !== 'off' && rd.total ? ` (${rd.ready}/${rd.total})` : '';
-      pill.textContent = `ROUND ${state.round} · ${step[0]}${count} →`;
+      const phone = document.body.classList.contains('mobile-device');
+      pill.textContent = phone ? `${state.phase === 'ACTION' ? 'COURT' : 'NEXT'}${rd.mode !== 'off' && rd.total ? ` ${rd.ready}/${rd.total}` : ''} →` : `ROUND ${state.round} · ${step[0]}${count} →`;
       pill.dataset.action = 'advance-phase';
       pill.title = rd.mode === 'wait' && rd.ready < rd.total ? 'Waiting for everyone to be ready' : step[1];
       pill.disabled = false;

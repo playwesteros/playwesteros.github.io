@@ -1106,3 +1106,15 @@ html.style-med button.round-pill:disabled:not(.round-pill-action):not(.is-ready)
 html.style-med .ledger-round, html.style-med .hs-item small, html.style-med .phase-timer, html.style-med .note-badge, html.style-med .hub-badge { font-family: Cinzel, 'MedDigits', Georgia, serif; }
 html.style-med .hs-item b { font-size: 15px; }
 html.style-med input[type="number"], html.style-med .wh-mount, html.style-med .wh-mount * { font-family: Cinzel, 'MedDigits', Georgia, serif; }
+
+/* v1.3.2: phone layout. The three category buttons sit in a bar at the bottom; the phase button stays short. */
+body.mobile-device .action-hub { position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0; padding: 8px 8px max(8px, env(safe-area-inset-bottom)); background: #0b0807; border-top: 3px solid #040302; box-shadow: 0 -1px 0 #2a2119, 0 -10px 24px rgba(0,0,0,.6); }
+body.mobile-device .action-hub[hidden] { display: none; }
+body.mobile-device .action-hub .hub-button { flex-direction: column; gap: 2px; padding: 8px 4px 7px; min-height: 62px; border-radius: 3px; box-shadow: none; }
+body.mobile-device .action-hub .hub-button img { width: 30px; height: 30px; }
+body.mobile-device .action-hub .hub-button h3 { font-size: 12px; letter-spacing: .06em; }
+body.mobile-device .action-hub .hub-badge { top: 4px; right: 6px; }
+body.mobile-device .action-hub .hub-badge-left { right: auto; left: 6px; }
+body.mobile-device .action-hub .gold-gain { top: -12px; }
+body.mobile-device .game-screen { padding-bottom: 96px; }
+body.mobile-device button.round-pill { max-width: 104px; overflow: hidden; text-overflow: ellipsis; padding: 7px 10px; font-size: 10px; }

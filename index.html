@@ -23,7 +23,7 @@
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=2">
   <script>
     // The one place to bump on every change: it versions the stylesheet and scripts too, so browsers never reuse stale copies.
-    window.APP_VERSION = '1.3.1';
+    window.APP_VERSION = '1.3.2';
     document.write('<link rel="stylesheet" href="./style.css?v=' + APP_VERSION + '">');
   </script>
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
@@ -56,7 +56,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden><span id="verText">v1.3.1</span><script>document.getElementById('verText').textContent = 'v' + APP_VERSION;</script><i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden><span id="verText">v1.3.2</span><script>document.getElementById('verText').textContent = 'v' + APP_VERSION;</script><i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
