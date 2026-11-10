@@ -2,6 +2,20 @@
 <html lang="en">
 <head>
   <script>try{if(!['classic','original'].includes(localStorage.getItem('westerosStyle')))document.documentElement.classList.add('style-med')}catch(e){document.documentElement.classList.add('style-med')}</script>
+  <script>
+    // Phone view: on a wide screen, show the whole game inside a phone-sized frame (the game itself runs in the frame, as a phone).
+    window.PHONE_FRAME = false;
+    try {
+      var inFrame = /[?&]phoneframe=1/.test(location.search);
+      window.PHONE_FRAME = inFrame;
+      if (!inFrame && localStorage.getItem('westerosView') === 'phone') {
+        var u = location.href.split('#')[0]; u += (u.indexOf('?') < 0 ? '?' : '&') + 'phoneframe=1' + (location.hash || '');
+        document.open();
+        document.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Westeros</title><style>html,body{margin:0;height:100%;background:#0a0807}body{display:flex;align-items:center;justify-content:center}.ph{width:min(390px,100vw);height:min(844px,100dvh);box-sizing:border-box;border:10px solid #1b1612;border-radius:44px;box-shadow:0 0 0 2px #3a2f26,0 30px 80px rgba(0,0,0,.8);overflow:hidden;background:#000}.ph iframe{width:100%;height:100%;border:0;display:block}@media (max-width:420px){.ph{border:0;border-radius:0;box-shadow:none;width:100vw;height:100dvh}}</style></head><body><div class="ph"><iframe src="' + u.replace(/"/g, '&quot;') + '" title="Westeros, phone view" allow="clipboard-write"></iframe></div></body></html>');
+        document.close();
+      }
+    } catch (e) { /* storage unavailable: normal layout */ }
+  </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="theme-color" content="#101318">
@@ -23,7 +37,7 @@
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=2">
   <script>
     // The one place to bump on every change: it versions the stylesheet and scripts too, so browsers never reuse stale copies.
-    window.APP_VERSION = '1.3.5';
+    window.APP_VERSION = '1.3.6';
     document.write('<link rel="stylesheet" href="./style.css?v=' + APP_VERSION + '">');
   </script>
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
@@ -56,7 +70,7 @@
       <button id="roundPill" class="round-pill" type="button" disabled>LOBBY</button>
     </div>
   </header>
-  <span id="gameVersion" class="version-tag" hidden><span id="verText">v1.3.5</span><script>document.getElementById('verText').textContent = 'v' + APP_VERSION;</script><i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
+  <span id="gameVersion" class="version-tag" hidden><span id="verText">v1.3.6</span><script>document.getElementById('verText').textContent = 'v' + APP_VERSION;</script><i id="serverDot" class="server-dot is-off" title="Server offline" aria-label="Server offline"></i></span>
 
   <!-- Step 1: house selection. Step 2: name. Step 3: waiting room. Step 4: game. -->
   <section id="throneScreen" class="throne-screen" aria-label="War of Westeros throne selection">
@@ -133,6 +147,7 @@
     <button class="pm-item" type="button" role="menuitem" data-action="pm-name">Change name</button>
     <div class="pm-field"><label for="pmScheme">Colour scheme</label><select id="pmScheme"></select></div>
     <div class="pm-field"><label for="pmStyle">Interface style</label><select id="pmStyle"><option value="medieval">Medieval</option><option value="original">Original</option></select></div>
+    <div class="pm-field"><label for="pmView">Screen layout</label><select id="pmView"><option value="normal">Normal</option><option value="phone">Phone view</option></select></div>
     <details class="pm-popups"><summary>Popups</summary><p class="muted small-text">Your choice overrides the host’s popup settings.</p><div id="pmPopupList"></div></details>
     <button id="pmHost" class="pm-item" type="button" role="menuitem" data-action="pm-host" hidden>Host game settings…</button>
     </div>

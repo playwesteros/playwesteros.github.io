@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.6 (Nov 10, 2026)
+- **Phone view:** new "Screen layout" option in the settings menu. Choose Phone view and the whole game runs inside a phone-sized frame on your screen, behaving exactly as it does on a phone. Switch back to Normal any time; remembered per device.
+
 ## v1.3.5 (Nov 10, 2026)
 - **Phone footer fixed:** it was inheriting an old tall-grid rule, so it was oversized and its buttons floated near the top. It is now a slim bar pinned to the bottom edge.
 

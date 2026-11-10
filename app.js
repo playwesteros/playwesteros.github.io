@@ -43,7 +43,7 @@
     if (frame?.contentWindow) frame.contentWindow.postMessage({ type: 'iron-throne:set-mode', mode }, location.origin === 'null' ? '*' : location.origin);
   }
   setThronePage(gameCode ? 'house' : 'entry');
-  const isMobileDevice = () => Boolean(navigator.userAgentData?.mobile || /Android|iPhone|iPod|Mobile/i.test(navigator.userAgent) || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900));
+  const isMobileDevice = () => Boolean(window.PHONE_FRAME || navigator.userAgentData?.mobile || /Android|iPhone|iPod|Mobile/i.test(navigator.userAgent) || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900));
   const syncMobileLayout = () => document.body.classList.toggle('mobile-device', isMobileDevice());
   syncMobileLayout();
   window.addEventListener('resize', syncMobileLayout, { passive: true });
@@ -2117,6 +2117,7 @@
     $('pmName').textContent = me?.username || '';
     const house = me?.houseId ? state.houses.find(h => h.id === me.houseId) : null;
     $('pmHouse').textContent = house ? `House ${capName(house.name)}` : 'No house yet';
+    $('pmView').value = window.PHONE_FRAME ? 'phone' : 'normal';
     $('pmStyle').value = document.documentElement.classList.contains('style-med') ? 'medieval' : 'original';
     const scheme = schemePref();
     $('pmScheme').innerHTML = [['auto', house ? `My house (${capName(house.name)})` : 'My house'], ['none', 'None (classic gold)'], ...state.houses.map(h => [h.id, `House ${capName(h.name)}`])]
@@ -2137,6 +2138,7 @@
     menu.style.left = `${Math.max(8, Math.round(r.left))}px`;
     menu.hidden = false;
   }
+  $('pmView').addEventListener('change', () => { try { localStorage.setItem('westerosView', $('pmView').value); } catch { /* storage unavailable */ } const clean = location.href.replace(/[?&]phoneframe=1/, m => m.startsWith('?') ? '?' : '').replace(/\?$/, ''); if (window.PHONE_FRAME) window.top.location.href = clean; else location.reload(); });
   $('pmStyle').addEventListener('change', () => { const med = $('pmStyle').value === 'medieval'; document.documentElement.classList.toggle('style-med', med); try { localStorage.setItem('westerosStyle', med ? 'medieval' : 'original'); } catch { /* storage unavailable */ } if (state) { renderHub(); updateRoundPill(); } });
   $('pmScheme').addEventListener('change', () => { writePref('warOfWesterosScheme', $('pmScheme').value); applyTheme(); });
   $('pmPopupList').addEventListener('change', event => {
