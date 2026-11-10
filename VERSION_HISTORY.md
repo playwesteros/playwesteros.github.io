@@ -2,6 +2,10 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.2.7 (Nov 10, 2026)
+- **Hosting right after a refresh now works.** The green light only shows once the server actually answers; a dead first connection is reset automatically, and pressing Host while it connects waits and then opens the game (with retries) instead of doing nothing.
+- **Banners never move.** Removed the remaining pulse and hover scaling on map banners, and the drop-in motion on announcement banners (they now just fade).
+
 ## v1.2.6 (Nov 10, 2026)
 - **Hunt a Dragon is now a spy mission** (Last Dragon games only) in the normal spy form, with its own cooldown. The separate menu card is gone.
 - **Spy menu fits laptop screens.** The form sits beside the intelligence reports instead of leaving the right half empty.

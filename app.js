@@ -1634,7 +1634,14 @@
     });
     $('returnNo').addEventListener('click', () => { $('returnOverlay').hidden = true; forgetSaved(); });
     socket.on('connect', () => {
-      setConnection(true, 'Connected to server');
+      // Only show green once the server really answers; a half-open connection gets reset.
+      setConnection(false, 'Connecting');
+      let alive = false;
+      socket.emit('check-room', { pin: '0000' }, () => {
+        alive = true; setConnection(true, 'Connected to server');
+        if (hostPending) hostGame();
+      });
+      setTimeout(() => { if (!alive && socket.connected) { socket.disconnect(); socket.connect(); } }, 4000);
       if (!gameCode) offerReturn();
       const restoreSession = () => {
         socket.emit('request-state');
@@ -1678,24 +1685,39 @@
     });
   }
 
+  // Host a new game. If the socket is still waking up (or silently dead), wait for it and retry instead of doing nothing.
+  let hostPending = false, hostTimer = 0;
+  function throneSay(message) { $('throneFrame')?.contentWindow?.postMessage({ type: 'iron-throne:mode-error', message }, location.origin === 'null' ? '*' : location.origin); }
+  function hostGame(retry = 0) {
+    if (!socket) return throneSay('The game server library did not load. Refresh the page.');
+    if (!socket.connected) { hostPending = true; throneSay('Waking the server… your game opens as soon as it connects.'); return; }
+    hostPending = false;
+    let answered = false;
+    clearTimeout(hostTimer);
+    hostTimer = setTimeout(() => {
+      if (answered) return;
+      if (retry < 2) { setConnection(false, 'Reconnecting'); hostPending = true; socket.disconnect(); socket.connect(); throneSay('Still connecting… one moment.'); }
+      else throneSay('The server did not answer. Please try again.');
+    }, 6000);
+    socket.emit('create-game-room', { clientToken }, result => {
+      answered = true; clearTimeout(hostTimer);
+      if (!result?.ok || !result.pin) return throneSay(result?.message || 'Could not create a game.');
+      gameCode = result.pin;
+      localStorage.setItem(roomCodeKey, gameCode);
+      localStorage.removeItem(usernameKey);
+      setPickedHouse(null);
+      preparingHost = true;
+      showHostSetup = true;
+      render();
+    });
+  }
+
   // Messages from the throne screen (same site only).
   window.addEventListener('message', event => {
     const frame = $('throneFrame');
     if (!frame || event.source !== frame.contentWindow || !event.data) return;
     if (event.data.type === 'iron-throne:ready') sendHousesToThrone();
-    if (event.data.type === 'iron-throne:host') {
-      if (!socket?.connected) return frame.contentWindow.postMessage({ type: 'iron-throne:mode-error', message: 'Connecting to the game server. Try again in a moment.' }, location.origin === 'null' ? '*' : location.origin);
-      socket.emit('create-game-room', { clientToken }, result => {
-        if (!result?.ok || !result.pin) return frame.contentWindow.postMessage({ type: 'iron-throne:mode-error', message: result?.message || 'Could not create a game.' }, location.origin === 'null' ? '*' : location.origin);
-        gameCode = result.pin;
-        localStorage.setItem(roomCodeKey, gameCode);
-        localStorage.removeItem(usernameKey);
-        setPickedHouse(null);
-        preparingHost = true;
-        showHostSetup = true;
-        render();
-      });
-    }
+    if (event.data.type === 'iron-throne:host') hostGame();
     if (event.data.type === 'iron-throne:join-pin' && typeof event.data.pin === 'string') {
       const pin = event.data.pin.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
       if (pin.length !== 4) return frame.contentWindow.postMessage({ type: 'iron-throne:mode-error', message: 'Enter the complete four-character game PIN.' }, location.origin === 'null' ? '*' : location.origin);

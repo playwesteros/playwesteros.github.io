@@ -1032,3 +1032,10 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
   #spyReports:empty::before{content:"No intelligence yet. Reports from your spy missions will appear here.";display:block;color:var(--muted,#b9ad94);font-size:.85rem;padding:14px;border:1px dashed var(--line,#3a3426);border-radius:8px}
 }
 @media (max-width: 900px){ .hub-sheet{max-height:100dvh} }
+
+/* v1.2.6: banners never move. No pulsing, no hover scaling, no drop-in animation; changes just fade. */
+.map-cap .cap-pop, .map-dialog.pick-mode .map-cap.is-target .cap-pop { animation: none !important; transition: none !important; transform: none !important; }
+.map-cap:hover .cap-pop, .map-cap:focus-visible .cap-pop, .map-cap.is-active .cap-pop { transform: none !important; }
+.announce-banner.ann-new, .announce-banner.ann-new.ann-first { animation: ann-fade .6s ease-out 1.2s both; }
+.announce-banner.ann-new.ann-first { animation-delay: .25s; }
+.announce-banner.ann-old { animation: ann-fade-out .6s ease-in .6s forwards; }
