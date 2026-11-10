@@ -1127,3 +1127,5 @@ html.style-med body.mobile-device .hub-backdrop { display: none; }
 html.style-med body.mobile-device .hub-sheet { height: 100%; max-height: none; border-radius: 0; border-left: 0; border-right: 0; border-top: 0; box-shadow: none; }
 html.style-med body.mobile-device .hub-head-actions [data-action="close-hub"] { display: none; }
 html.style-med body.mobile-device .game-screen.hub-mode .welcome-strip, html.style-med body.mobile-device .game-screen.hub-mode .dragon-note { display: none; }
+/* v1.3.5: the footer is a slim bar pinned to the bottom (cancels the old tall-grid rules). */
+html.style-med body.mobile-device .action-hub { min-height: 0; height: auto; grid-template-rows: none; grid-auto-rows: auto; align-items: stretch; }

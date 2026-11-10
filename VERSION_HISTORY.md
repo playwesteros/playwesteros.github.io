@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.5 (Nov 10, 2026)
+- **Phone footer fixed:** it was inheriting an old tall-grid rule, so it was oversized and its buttons floated near the top. It is now a slim bar pinned to the bottom edge.
+
 ## v1.3.4 (Nov 10, 2026)
 - **"Original" interface style:** the settings menu now offers Medieval or Original. Original brings back the interface exactly as it was before the v1.3 overhaul (old colours, buttons, full-screen menus on phones, long phase button). The phone footer tabs belong to Medieval only. Switching is instant and remembered per device.
 
