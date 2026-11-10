@@ -2101,6 +2101,7 @@
     $('pmName').textContent = me?.username || '';
     const house = me?.houseId ? state.houses.find(h => h.id === me.houseId) : null;
     $('pmHouse').textContent = house ? `House ${capName(house.name)}` : 'No house yet';
+    $('pmStyle').value = document.documentElement.classList.contains('style-med') ? 'medieval' : 'classic';
     const scheme = schemePref();
     $('pmScheme').innerHTML = [['auto', house ? `My house (${capName(house.name)})` : 'My house'], ['none', 'None (classic gold)'], ...state.houses.map(h => [h.id, `House ${capName(h.name)}`])]
       .map(([value, label]) => `<option value="${escapeHtml(value)}" ${value === scheme ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
@@ -2120,6 +2121,7 @@
     menu.style.left = `${Math.max(8, Math.round(r.left))}px`;
     menu.hidden = false;
   }
+  $('pmStyle').addEventListener('change', () => { const med = $('pmStyle').value === 'medieval'; document.documentElement.classList.toggle('style-med', med); try { localStorage.setItem('westerosStyle', med ? 'medieval' : 'classic'); } catch { /* storage unavailable */ } });
   $('pmScheme').addEventListener('change', () => { writePref('warOfWesterosScheme', $('pmScheme').value); applyTheme(); });
   $('pmPopupList').addEventListener('change', event => {
     const sel = event.target.closest('[data-popup-pref]'); if (!sel) return;

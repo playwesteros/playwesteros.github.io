@@ -2,6 +2,11 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.0 (Nov 10, 2026)
+- **New Medieval interface style, on by default.** Dark leather-and-iron panels, an old-print serif font, iron-plaque buttons with an inner border, sunken fields, and spy reports as parchment letters under a wax seal in your house colour (cracked seal when your spy was caught). The accent follows your colour scheme.
+- **Switch back any time:** the settings menu (click your name) has a new "Interface style" choice, Medieval or Classic. Your choice is remembered on that device.
+- This is a style layer only; nothing about gameplay changed.
+
 ## v1.2.7 (Nov 10, 2026)
 - **Hosting right after a refresh now works.** The green light only shows once the server actually answers; a dead first connection is reset automatically, and pressing Host while it connects waits and then opens the game (with retries) instead of doing nothing.
 - **Banners never move.** Removed the remaining pulse and hover scaling on map banners, and the drop-in motion on announcement banners (they now just fade).
