@@ -1041,6 +1041,8 @@ body:has(#gameScreen:not([hidden])) .footer { display: none; }
 .announce-banner.ann-old { animation: ann-fade-out .6s ease-in .6s forwards; }
 
 /* ===== v1.3.0: Medieval interface style (default). Classic = remove html.style-med via the settings menu. ===== */
+/* The old-print font has tiny old-style numerals; digits borrow a plain lining face instead. */
+@font-face { font-family: 'MedDigits'; src: local('Cinzel'), local('Segoe UI'), local('Helvetica Neue'), local('Roboto'), local('Arial'), local('Liberation Sans'); unicode-range: U+0030-0039, U+0025; }
 html.style-med body {
   --bg: #0e0b09; --bg-soft: #16110e; --panel: #1a1511; --panel-2: #221b16;
   --line: #3a2f26; --line-bright: #54442f;
@@ -1048,7 +1050,7 @@ html.style-med body {
   --gold-bright: color-mix(in srgb, var(--accent, #c8a86c) 72%, #fff);
   --text: #eee3d0; --muted: #a79a88;
   --seal: color-mix(in srgb, var(--accent, #c8a86c) 55%, #2a0d0b);
-  font-family: 'IM Fell English', Georgia, serif; font-size-adjust: .5;
+  font-family: 'MedDigits', 'IM Fell English', Georgia, serif; font-size-adjust: .5;
   background: var(--bg);
 }
 html.style-med button, html.style-med input, html.style-med select, html.style-med textarea { font-family: inherit; font-size-adjust: inherit; }
@@ -1066,10 +1068,10 @@ html.style-med .hub-sheet-head h2, html.style-med .section-head h2, html.style-m
 html.style-med .hub-button { background: linear-gradient(#211a15, #15110d); border: 2px solid #040302; border-radius: 3px; box-shadow: inset 0 0 0 1px #3a2f26, 0 4px 0 #040302; }
 html.style-med .hub-button:hover, html.style-med .hub-button:focus-visible { transform: none; border-color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold), 0 4px 0 #040302; }
 html.style-med .hub-button h3 { letter-spacing: .06em; text-transform: none; }
-html.style-med label, html.style-med .eyebrow, html.style-med .panel-kicker { font-family: 'IM Fell English SC', Georgia, serif; text-transform: none; letter-spacing: .1em; font-size: 13px; color: var(--gold); font-weight: 400; }
+html.style-med label, html.style-med .eyebrow, html.style-med .panel-kicker { font-family: 'MedDigits', 'IM Fell English SC', Georgia, serif; text-transform: none; letter-spacing: .1em; font-size: 13px; color: var(--gold); font-weight: 400; }
 html.style-med input, html.style-med select, html.style-med textarea { background: #0c0907; border: 1px solid #3a2f26; border-radius: 2px; box-shadow: inset 0 3px 7px rgba(0,0,0,.8); font-size: 14px; }
 html.style-med input:focus, html.style-med select:focus { border-color: var(--gold); box-shadow: inset 0 3px 7px rgba(0,0,0,.8), 0 0 0 1px var(--gold); }
-html.style-med .button { border-radius: 2px; border: 1px solid #040302; font-family: 'IM Fell English SC', Georgia, serif; letter-spacing: .14em; text-transform: none; font-weight: 400; font-size: 14px; min-height: 40px;
+html.style-med .button { border-radius: 2px; border: 1px solid #040302; font-family: 'MedDigits', 'IM Fell English SC', Georgia, serif; letter-spacing: .14em; text-transform: none; font-weight: 400; font-size: 14px; min-height: 40px;
   background: linear-gradient(#211a15, #15110d); color: #cdbfa8; box-shadow: inset 0 1px 0 rgba(255,235,200,.07), 0 2px 0 #040302; }
 html.style-med .button:not(:disabled):hover { color: var(--text); border-color: var(--gold); background: linear-gradient(#2a221b, #1a1510); }
 html.style-med .button-primary, html.style-med body.house-themed .button-primary { background: var(--gold); border-color: #040302; color: #170d07;
@@ -1094,3 +1096,13 @@ html.style-med .spy-report.spy-failed::before { background: #6b1a14; clip-path: 
 html.style-med .spy-report.spy-failed p { color: #6b1f14; }
 html.style-med .toast { background: #15110d; border: 2px solid #040302; border-radius: 2px; box-shadow: 0 0 0 1px #3a2f26, 0 8px 24px #000a; }
 html.style-med .player-menu .pm-item { border-radius: 2px; }
+
+/* v1.3.1: readable top-bar buttons and numbers */
+html.style-med .round-pill, html.style-med .status-pill { font-family: Cinzel, 'MedDigits', Georgia, serif; font-size: 11px; letter-spacing: .08em; font-weight: 700; }
+html.style-med button.round-pill.round-pill-action { background: var(--gold); color: #170d07; border: 1px solid #040302; box-shadow: inset 0 0 0 2px var(--gold), inset 0 0 0 3px #170d07, 0 2px 0 #040302; cursor: pointer; }
+html.style-med button.round-pill.round-pill-action:hover { background: var(--gold-bright); filter: none; }
+html.style-med button.round-pill.is-ready { background: linear-gradient(#1d3a23, #12261a); color: #cdeed2; border-color: #5fae6b; }
+html.style-med button.round-pill:disabled:not(.round-pill-action):not(.is-ready) { color: var(--gold-bright); }
+html.style-med .ledger-round, html.style-med .hs-item small, html.style-med .phase-timer, html.style-med .note-badge, html.style-med .hub-badge { font-family: Cinzel, 'MedDigits', Georgia, serif; }
+html.style-med .hs-item b { font-size: 15px; }
+html.style-med input[type="number"], html.style-med .wh-mount, html.style-med .wh-mount * { font-family: Cinzel, 'MedDigits', Georgia, serif; }

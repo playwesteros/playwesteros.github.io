@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.1 (Nov 10, 2026)
+- **Medieval style fixes:** the top-bar phase buttons (Next phase, Ready, round timer) are readable again, and numbers use a clear lining face instead of the old-print font's tiny numerals.
+
 ## v1.3.0 (Nov 10, 2026)
 - **New Medieval interface style, on by default.** Dark leather-and-iron panels, an old-print serif font, iron-plaque buttons with an inner border, sunken fields, and spy reports as parchment letters under a wax seal in your house colour (cracked seal when your spy was caught). The accent follows your colour scheme.
 - **Switch back any time:** the settings menu (click your name) has a new "Interface style" choice, Medieval or Classic. Your choice is remembered on that device.
