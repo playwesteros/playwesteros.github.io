@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.7 (Nov 10, 2026)
+- **Phone view fixes:** the "Turn your phone upright" message no longer appears on a laptop, and the page behind the phone frame is gone, so nothing shows outside the phone screen. Fullscreen and sound are allowed inside the frame.
+
 ## v1.3.6 (Nov 10, 2026)
 - **Phone view:** new "Screen layout" option in the settings menu. Choose Phone view and the whole game runs inside a phone-sized frame on your screen, behaving exactly as it does on a phone. Switch back to Normal any time; remembered per device.
 
