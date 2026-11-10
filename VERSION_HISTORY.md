@@ -2,6 +2,10 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.3 (Nov 10, 2026)
+- **Phone footer tabs:** Money, Relations and Army are a permanent footer on phones. One is always selected and its page stays open above the footer; tapping another switches pages. No more opening and closing a full-screen sheet.
+- **Removed the round/phase banner** under the top bar on phones during the round, to give the pages more room.
+
 ## v1.3.2 (Nov 10, 2026)
 - **Phone layout:** the Money, Relations and Army buttons now sit in a bar at the bottom of the screen, and the game area scrolls above it.
 - **Shorter phase button on phones:** "READY", "COURT 2/4 →" or "NEXT 2/4 →" instead of the long "ROUND 3 · NEXT ROUND (2/4) →". Laptops keep the full text.

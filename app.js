@@ -849,9 +849,15 @@
     $('hubOverlay').querySelector('.hub-sheet-body').scrollTop = 0;
     updateBadges();
   }
+  // On phones the three category buttons are a footer of tabs: one is always selected and its page stays open above it.
+  const onPhone = () => document.body.classList.contains('mobile-device');
+  const inHubPhase = () => state && (state.phase === 'ACTION' || state.phase === 'COURT');
+  let lastPhoneHub = 'money';
   function openHub(kind, sub = null) {
     const cfg = HUBS[kind];
     if (!cfg) return;
+    if (onPhone()) { if (currentHub && currentHub !== kind) markHubSeen(currentHub); lastPhoneHub = kind; }
+    document.querySelectorAll('#actionHub .hub-button[data-hub]').forEach(b => b.classList.toggle('is-active', b.dataset.hub === kind));
     $('hubEyebrow').textContent = cfg[0];
     $('hubTitle').textContent = cfg[1];
     for (const [key, value] of Object.entries(HUBS)) $(value[2]).hidden = key !== kind;
@@ -863,6 +869,8 @@
   }
   function closeHub() {
     if ($('hubOverlay').hidden) return;
+    if (onPhone() && inHubPhase()) return;
+    document.querySelectorAll('#actionHub .hub-button.is-active').forEach(b => b.classList.remove('is-active'));
     markHubSeen(currentHub);
     $('hubOverlay').hidden = true;
     currentHub = null;
@@ -880,6 +888,12 @@
     $('mapToggleButton').hidden = visible;
     if (!visible) closeHub();
     const courtOnly = state.phase === 'COURT';
+    if (onPhone()) {
+      const tb = document.querySelector('.topbar');
+      if (tb) document.documentElement.style.setProperty('--topbar-h', `${tb.offsetHeight}px`);
+      const fh = $('actionHub').offsetHeight; if (fh) document.documentElement.style.setProperty('--footer-h', `${fh}px`);
+      if (visible && $('hubOverlay').hidden) { if (courtOnly) openHub('relations', 'messages'); else openHub(HUBS[lastPhoneHub] ? lastPhoneHub : 'money'); }
+    }
     document.querySelectorAll('#actionHub .hub-button[data-hub]').forEach(b => {
       const shut = courtOnly && b.dataset.hub !== 'relations';
       b.classList.toggle('is-locked', shut); b.setAttribute('aria-disabled', String(shut));
