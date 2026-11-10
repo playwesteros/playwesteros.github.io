@@ -43,8 +43,9 @@
     if (frame?.contentWindow) frame.contentWindow.postMessage({ type: 'iron-throne:set-mode', mode }, location.origin === 'null' ? '*' : location.origin);
   }
   setThronePage(gameCode ? 'house' : 'entry');
-  const isMobileDevice = () => Boolean(window.PHONE_FRAME || navigator.userAgentData?.mobile || /Android|iPhone|iPod|Mobile/i.test(navigator.userAgent) || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900));
-  const syncMobileLayout = () => document.body.classList.toggle('mobile-device', isMobileDevice());
+  const isRealPhone = () => Boolean(navigator.userAgentData?.mobile || /Android|iPhone|iPod|Mobile/i.test(navigator.userAgent) || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900));
+  const isMobileDevice = () => Boolean(window.PHONE_FRAME || isRealPhone());
+  const syncMobileLayout = () => { document.body.classList.toggle('mobile-device', isMobileDevice()); document.body.classList.toggle('real-phone', isRealPhone()); };
   syncMobileLayout();
   window.addEventListener('resize', syncMobileLayout, { passive: true });
   window.addEventListener('orientationchange', syncMobileLayout, { passive: true });

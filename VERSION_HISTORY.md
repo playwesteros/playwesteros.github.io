@@ -2,6 +2,9 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.3.8 (Nov 10, 2026)
+- **Rotate message only on real phones:** "Turn your phone upright" now appears only on an actual phone held sideways, never on a laptop, even in Phone view.
+
 ## v1.3.7 (Nov 10, 2026)
 - **Phone view fixes:** the "Turn your phone upright" message no longer appears on a laptop, and the page behind the phone frame is gone, so nothing shows outside the phone screen. Fullscreen and sound are allowed inside the frame.
 

@@ -442,11 +442,11 @@ body.mobile-device .lobby-settings { margin-top: 10px; }
 
 body.mobile-device .footer { display: none; }
 @media (orientation: landscape) {
-  body.mobile-device { overflow: hidden; }
-  body.mobile-device .orientation-lock { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(7, 8, 10, .98); text-align: center; }
-  body.mobile-device .orientation-lock > div { display: grid; gap: 10px; max-width: 320px; }
-  body.mobile-device .orientation-lock strong { font: 600 24px Cinzel, Georgia, serif; color: var(--gold-bright); }
-  body.mobile-device .orientation-lock span { color: var(--muted); line-height: 1.6; }
+  body.real-phone { overflow: hidden; }
+  body.real-phone .orientation-lock { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(7, 8, 10, .98); text-align: center; }
+  body.real-phone .orientation-lock > div { display: grid; gap: 10px; max-width: 320px; }
+  body.real-phone .orientation-lock strong { font: 600 24px Cinzel, Georgia, serif; color: var(--gold-bright); }
+  body.real-phone .orientation-lock span { color: var(--muted); line-height: 1.6; }
 }
 
 /* Old-style realm map */
