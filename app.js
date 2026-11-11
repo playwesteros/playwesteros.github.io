@@ -389,6 +389,7 @@
   const normName = text => String(text || '').toLowerCase().replace(/[^a-z]/g, '');
   // Pieces: the game's own icons (units and castles) recoloured to a house colour and set on a chess-piece base, so they stand out on land and sea.
   const SVG_NS = 'http://www.w3.org/2000/svg';
+  const CITY_SIZE = 84, CITY_BASE = 32; // city piece size, and the y of its base bottom (relative to the city point)
   const ICON_FILE = { infantry: 'ui-spear.png?v=3', navy: 'ui-ship.png?v=3', dragons: 'ui-dragon.png?v=3', castle: 'game-castle.png?v=3' };
   const KIND_NAME = { infantry: 'infantry', navy: 'ships', dragons: 'dragons' };
   const mixHex = (hex, other, t) => {
@@ -444,6 +445,7 @@
       if (!cap) return;
       const owner = state.houses.find(h => h.id === cap.ownerHouseId);
       el.dataset.capital = cap.id;
+      el.querySelectorAll('.cap-name, .cap-sub').forEach(t => t.setAttribute('x', String(Math.round(CITY_SIZE * 0.5 + 6))));
       el.classList.toggle('is-mine', Boolean(state.myHouse && cap.ownerHouseId === state.myHouse.id));
       el.style.setProperty('--cap-color', owner?.color || '#7d2a14');
       el.classList.toggle('is-contested', Boolean(cap.contested));
@@ -459,7 +461,7 @@
         if (!flag) {
           const NS = 'http://www.w3.org/2000/svg';
           flag = document.createElementNS(NS, 'g');
-          flag.setAttribute('class', 'cap-banner'); flag.setAttribute('transform', 'translate(-24 -78) scale(0.1463)');
+          flag.setAttribute('class', 'cap-banner'); flag.setAttribute('transform', `translate(-24 ${Math.round(CITY_BASE - CITY_SIZE * 0.97 - 55)}) scale(0.1463)`);
           const clip = document.createElementNS(NS, 'g'); clip.setAttribute('clip-path', 'url(#bannerClip)');
           const img = document.createElementNS(NS, 'image');
           img.setAttribute('href', './assets/house-banners.png'); img.setAttribute('width', '1312'); img.setAttribute('height', '760');
@@ -474,7 +476,7 @@
           pop.dataset.pieceColor = fillCol;
           pop.querySelectorAll('.cap-piece').forEach(x => x.remove());
           const holder = document.createElementNS(SVG_NS, 'g'); holder.setAttribute('class', 'cap-piece'); holder.setAttribute('pointer-events', 'none');
-          holder.appendChild(chessPiece($('mapDialog').querySelector('.realm-map'), 'castle', 0, 24, 56, fillCol));
+          holder.appendChild(chessPiece($('mapDialog').querySelector('.realm-map'), 'castle', 0, CITY_BASE, CITY_SIZE, fillCol));
           pop.insertBefore(holder, pop.querySelector('.cap-dot'));
         }
       }
@@ -561,20 +563,21 @@
     const planTarget = attackMode === 'navy' && warTargetId ? state.capitals.find(c => c.id === warTargetId) : null;
     if (planTarget && homeCap) { const r = seaPath(homeCap, planTarget); if (r) drawSeaRoute(r, true, false); }
     if (home) {
-      const ring = document.createElementNS(NS, 'circle'); ring.setAttribute('cx', home.x); ring.setAttribute('cy', home.y); ring.setAttribute('r', '44'); ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', color); ring.setAttribute('stroke-width', '8'); ring.setAttribute('stroke-dasharray', '14 10');
+      const ring = document.createElementNS(NS, 'circle'); ring.setAttribute('cx', home.x); ring.setAttribute('cy', home.y + CITY_BASE - CITY_SIZE * 0.5); ring.setAttribute('r', String(CITY_SIZE * 0.62)); ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', color); ring.setAttribute('stroke-width', '8'); ring.setAttribute('stroke-dasharray', '14 10');
       const rt = document.createElementNS(NS, 'title'); rt.textContent = 'You live here'; ring.appendChild(rt);
       layer.appendChild(ring);
-      // Troops at home: a small count chip per type beside the city piece (tap one to send that kind to war).
+      // Troops at home: one total count, bottom right of the city piece like every other piece (tap it to start sending troops).
       const kinds = [['infantry', h.infantry], ['navy', h.navy], ['dragons', h.dragons]].filter(([, n]) => n > 0);
-      kinds.forEach(([k, n], i) => {
-        const w = 52 + String(n).length * 18, ph = 38, x = home.x - 44 - w, y = home.y - 18 + i * (ph + 6);
-        const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'army-piece'); g.dataset.homeKind = k; g.setAttribute('pointer-events', 'all'); g.style.cursor = 'pointer';
-        const pill = pieceRect(x, y, w, ph, ph / 2, '#1b1208', '#f6edd2', 3);
-        const ic = img('./assets/' + ICON_FILE[k], x + 4, y + 3, 32); ic.setAttribute('filter', `url(#${tintFilter(svg, color, 40)})`);
-        const t = document.createElementNS(NS, 'text'); t.setAttribute('x', x + 40 + (w - 44) / 2); t.setAttribute('y', y + 28); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '26'); t.setAttribute('font-weight', '700'); t.setAttribute('fill', '#f3e6c2'); t.setAttribute('font-family', 'Georgia, serif'); t.textContent = String(n);
-        const ti = document.createElementNS(NS, 'title'); ti.textContent = `Your ${KIND_NAME[k]} at home: ${n}. Tap to send them to war.`;
-        g.append(pill, ic, t, ti); layer.appendChild(g);
-      });
+      const total = kinds.reduce((a, [, n]) => a + n, 0);
+      if (total > 0) {
+        const r = CITY_SIZE / 2, f = r / 50, ph = 48 * f, w = (30 + String(total).length * 26) * f;
+        const px = home.x + r * 0.62, py = home.y + CITY_BASE - r + r * 0.5;
+        const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'army-piece'); g.dataset.homeKind = kinds[0][0]; g.setAttribute('pointer-events', 'all'); g.style.cursor = 'pointer';
+        const pill = pieceRect(px, py, w, ph, ph / 2, '#1b1208', '#f6edd2', 4 * f);
+        const t = document.createElementNS(NS, 'text'); t.setAttribute('x', px + w / 2); t.setAttribute('y', py + 35 * f); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', 36 * f); t.setAttribute('font-weight', '700'); t.setAttribute('fill', '#f3e6c2'); t.setAttribute('font-family', 'Georgia, serif'); t.textContent = String(total);
+        const ti = document.createElementNS(NS, 'title'); ti.textContent = `Your troops at home: ${kinds.map(([k, n]) => `${n} ${KIND_NAME[k]}`).join(', ')}. Tap to send them to war.`;
+        g.append(pill, t, ti); layer.appendChild(g);
+      }
     }
     const marchShapes = [];
     for (const o of (h.marches || [])) {

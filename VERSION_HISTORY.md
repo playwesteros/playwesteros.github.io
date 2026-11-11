@@ -2,6 +2,10 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.4.4 (Nov 11, 2026)
+- **Bigger city pieces:** castles are larger on the map, with the name and house label moved clear of them.
+- **One troop count per city:** the three troop chips are replaced by a single total in the bottom right of your city piece, like every other piece. Hover it for the breakdown; tap it to start sending troops.
+
 ## v1.4.3 (Nov 11, 2026)
 - **Unchosen houses are gone from the map:** capitals of houses nobody picked are no longer drawn.
 - **Your own cities stay solid** while you pick a war target (they used to fade like the ones you cannot attack).
