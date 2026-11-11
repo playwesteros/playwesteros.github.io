@@ -2,6 +2,11 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.4.5 (Nov 11, 2026)
+- **"Have you played before?"** Straight after you enter your name, the game asks once whether this is your first time. The answer is remembered, so nobody is asked twice.
+- **A four-part tour for new players:** choosing *This is my first time* opens a tour covering the main menu (hosting, the PIN, the banner wall, and the header, round pill and footer in game) and then one lesson each for the **Money**, **Relations** and **Army** menus. Jump between the four with the rail at the top, the arrow keys, or Back/Next; Escape or Skip closes it.
+- **Reopen it any time:** *How to play* now sits in your settings menu under the sigil in the top left.
+
 ## v1.4.4 (Nov 11, 2026)
 - **Bigger city pieces:** castles are larger on the map, with the name and house label moved clear of them.
 - **One troop count per city:** the three troop chips are replaced by a single total in the bottom right of your city piece, like every other piece. Hover it for the breakdown; tap it to start sending troops.

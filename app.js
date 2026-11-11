@@ -8,6 +8,12 @@
   const savedPlayerName = () => { try { return localStorage.getItem(savedNameKey) || ''; } catch (e) { return ''; } };
   let enteredName = savedPlayerName();
   const roomCodeKey = 'warOfWesterosGamePin';
+  // Asked once, right after the name: 'new' (show the tour) or 'veteran' (skip it). Remembered so it is never asked twice.
+  const experienceKey = 'ironThroneExperience';
+  const savedExperience = () => { try { return localStorage.getItem(experienceKey) || ''; } catch (e) { return ''; } };
+  let experience = savedExperience();
+  let tutorialOpen = false;
+  let tutorialStep = 0;
   // House chosen on the throne screen before logging in. Claimed automatically right after login.
   const pickedHouseKey = 'ironThronePickedHouse';
   let pickedHouse = null;
@@ -1165,6 +1171,9 @@
     const needName = !loggedIn && !enteredName && !nameDismissed;
     $('nameScreen').hidden = !needName;
     if (needName && !$('nameEntryInput').dataset.filled) { $('nameEntryInput').value = savedPlayerName(); $('rememberNameInput').checked = Boolean(savedPlayerName()); $('nameEntryInput').dataset.filled = '1'; }
+    // Straight after the name, and only once ever: first time playing, or not?
+    const askExperience = !experience && !needName && (loggedIn || (Boolean(gameCode) && Boolean(pickedHouse)));
+    $('experienceScreen').hidden = !askExperience;
     const hostSetup = showHostSetup || (loggedIn && state?.phase === 'LOBBY' && state.isHost && !state.settings?.configured);
     const showThrone = changingLobbyHouse || !loggedIn;
     const waiting = loggedIn && state?.phase === 'LOBBY' && !hostSetup && !changingLobbyHouse;
@@ -1226,6 +1235,47 @@
     $('lobbyRememberInput').checked = Boolean(savedPlayerName());
     $('lobbyNameDialog').showModal();
     $('lobbyNameInput').focus();
+  }
+
+  // The four-part tour: main menu and the screen, then Money, Relations and Army.
+  const TUTORIAL_STEPS = [
+    ['THE FIRST STEPS', 'The main menu &amp; your screen'],
+    ['LESSON TWO', 'The Money menu'],
+    ['LESSON THREE', 'The Relations menu'],
+    ['LESSON FOUR', 'The Army menu']
+  ];
+  function setExperience(value) {
+    experience = value;
+    try { localStorage.setItem(experienceKey, value); } catch (e) { /* storage unavailable */ }
+  }
+  function renderTutorial() {
+    const total = TUTORIAL_STEPS.length;
+    tutorialStep = Math.min(Math.max(tutorialStep, 0), total - 1);
+    const [eyebrow, title] = TUTORIAL_STEPS[tutorialStep];
+    $('tutEyebrow').textContent = `${eyebrow} · ${tutorialStep + 1} OF ${total}`;
+    $('tutTitle').innerHTML = title;
+    $('tutBody').querySelectorAll('.tut-step').forEach(step => { step.hidden = Number(step.dataset.step) !== tutorialStep; });
+    $('tutRail').querySelectorAll('button').forEach(button => {
+      const step = Number(button.dataset.step);
+      button.classList.toggle('is-active', step === tutorialStep);
+      button.classList.toggle('is-done', step < tutorialStep);
+      button.setAttribute('aria-current', step === tutorialStep ? 'step' : 'false');
+    });
+    $('tutDots').innerHTML = TUTORIAL_STEPS.map((_, i) => `<i class="${i === tutorialStep ? 'is-on' : ''}"></i>`).join('');
+    $('tutBack').hidden = tutorialStep === 0;
+    $('tutNext').innerHTML = tutorialStep === total - 1 ? 'Take my seat <span>→</span>' : 'Next <span>→</span>';
+    $('tutBody').scrollTop = 0;
+  }
+  function openTutorial(step = 0) {
+    tutorialOpen = true;
+    tutorialStep = step;
+    $('tutorialOverlay').hidden = false;
+    renderTutorial();
+    $('tutNext').focus({ preventScroll: true });
+  }
+  function closeTutorial() {
+    tutorialOpen = false;
+    $('tutorialOverlay').hidden = true;
   }
 
   let editingBotId = null;
@@ -1957,6 +2007,13 @@
     screen.addEventListener('click', e => { if (e.target === screen && downOnBackdrop) close(); downOnBackdrop = false; });
     screen.querySelector('[data-screen-x]')?.addEventListener('click', close);
   });
+  // Escape closes the tour before anything else; arrow keys page through it.
+  document.addEventListener('keydown', e => {
+    if (!tutorialOpen) return;
+    if (e.key === 'Escape') { e.stopPropagation(); closeTutorial(); return; }
+    if (e.key === 'ArrowRight' && tutorialStep < TUTORIAL_STEPS.length - 1) { e.stopPropagation(); tutorialStep += 1; renderTutorial(); return; }
+    if (e.key === 'ArrowLeft' && tutorialStep > 0) { e.stopPropagation(); tutorialStep -= 1; renderTutorial(); }
+  }, true);
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     if (!$('nameScreen').hidden) closeNameScreen();
@@ -2090,6 +2147,16 @@
       return;
     }
     if (action === 'pm-name') { closePlayerMenu(); openNameEditor(); return; }
+    if (action === 'pm-tutorial') { closePlayerMenu(); openTutorial(0); return; }
+    if (action === 'exp-new') { setExperience('new'); render(); openTutorial(0); return; }
+    if (action === 'exp-veteran') { setExperience('veteran'); render(); return; }
+    if (action === 'tut-close') { closeTutorial(); return; }
+    if (action === 'tut-go') { tutorialStep = Number(button.dataset.step) || 0; renderTutorial(); return; }
+    if (action === 'tut-back') { tutorialStep -= 1; renderTutorial(); return; }
+    if (action === 'tut-next') {
+      if (tutorialStep >= TUTORIAL_STEPS.length - 1) return closeTutorial();
+      tutorialStep += 1; renderTutorial(); return;
+    }
     if (action === 'pm-host') { closePlayerMenu(); openAdvanced('live'); return; }
     if (action === 'pm-leave') { closePlayerMenu(); if (window.confirm('Leave this game?')) $('logoutButton').click(); return; }
     if (action === 'adv-open-setup') { openAdvanced('setup'); return; }

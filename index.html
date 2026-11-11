@@ -43,7 +43,7 @@
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=2">
   <script>
     // The one place to bump on every change: it versions the stylesheet and scripts too, so browsers never reuse stale copies.
-    window.APP_VERSION = '1.4.4';
+    window.APP_VERSION = '1.4.5';
     if (!window.PHONE_SHELL) document.write('<link rel="stylesheet" href="./style.css?v=' + APP_VERSION + '">');
   </script>
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
@@ -99,6 +99,141 @@
     </section>
   </main>
 
+  <main id="experienceScreen" class="realm-screen" hidden>
+    <section class="realm-card panel experience-card">
+      <p class="eyebrow">BEFORE YOU TAKE YOUR SEAT</p>
+      <h1>Have you played before?</h1>
+      <p class="muted">War of Westeros takes a few minutes to learn. We can walk you through it, or leave you to it.</p>
+      <div class="experience-choices">
+        <button class="experience-choice" type="button" data-action="exp-new">
+          <img src="./assets/ui-letter.png?v=3" alt="">
+          <strong>This is my first time</strong>
+          <small>A short tour of the main menu and the three round menus.</small>
+        </button>
+        <button class="experience-choice" type="button" data-action="exp-veteran">
+          <img src="./assets/game-throne.png?v=3" alt="">
+          <strong>I know what I’m doing</strong>
+          <small>Skip straight to the game.</small>
+        </button>
+      </div>
+      <p class="muted small-text">You can reopen the tour at any time from your settings, under the sigil in the top left.</p>
+    </section>
+  </main>
+
+  <div id="tutorialOverlay" class="tut-overlay" role="dialog" aria-modal="true" aria-labelledby="tutTitle" hidden>
+    <div class="tut-backdrop" data-action="tut-close"></div>
+    <section class="tut-sheet">
+      <header class="tut-head">
+        <div><p class="eyebrow" id="tutEyebrow">LESSON 1 OF 4</p><h2 id="tutTitle">The main menu &amp; your screen</h2></div>
+        <button class="button button-quiet button-small" type="button" data-action="tut-close">Skip</button>
+      </header>
+      <ol class="tut-rail" id="tutRail">
+        <li><button type="button" data-action="tut-go" data-step="0"><span>1</span>Main menu</button></li>
+        <li><button type="button" data-action="tut-go" data-step="1"><span>2</span>Money</button></li>
+        <li><button type="button" data-action="tut-go" data-step="2"><span>3</span>Relations</button></li>
+        <li><button type="button" data-action="tut-go" data-step="3"><span>4</span>Army</button></li>
+      </ol>
+      <div class="tut-body" id="tutBody">
+
+        <article class="tut-step" data-step="0" hidden>
+          <p class="tut-lede">Everything before the first round happens on the throne screen, and everything during a round hangs off the bar at the top.</p>
+          <div class="tut-block">
+            <h3><img src="./assets/game-castle.png?v=3" alt="">Hosting or joining</h3>
+            <p><b>HOST GAME</b> opens a new game and gives you a four-character PIN, shown in the top bar as <b>Room PIN</b>. Read it out; everyone else taps <b>JOIN GAME</b> and types it in. Only the host sets up the match: the game type (<b>Classic</b>, <b>Teams</b> or <b>Last Dragon</b>), the player limit, and whether friendly fire is allowed. <b>Advanced settings…</b> holds the rest — alliances on or off, the Hand of the King, house buffs, which houses are in play, how the ready buttons work, the round timer, and which popups everyone sees.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/iron-throne-icon.png?v=2" alt="">Choosing your house</h3>
+            <p>Next comes the banner wall. One player holds each house (in Teams, a few of you share one), so a house already taken is greyed out and a house the host switched off is gone entirely. Each banner shows its motto and, if house buffs are on, the advantage and weakness that come with it. Confirm the house, enter your name, and you land in the Great Hall — the lobby — where you can still swap house or rename yourself until the host begins.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/game-coins.png?v=3" alt="">The header, in game</h3>
+            <p>The sigil on the <b>left</b> is your own settings menu: change your name, pick a colour scheme, switch the interface style or screen layout, control which popups interrupt you, reopen this tour, or leave the game.</p>
+            <p>The <b>middle</b> is your house at a glance — your gold and your total army, and in Last Dragon also the rounds left and how many Targaryens survive. A throne icon appears if you are the King (tap it to forfeit the crown) and a hand icon if you are the Hand.</p>
+            <p>On the <b>right</b> sit the connection pill, the phase timer if the host set one, and the <b>round pill</b>. That pill is the most important button on the screen: as a player it is your <b>READY</b> toggle, telling the host you are done; as the host it is what moves the round forward.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/ui-hourglass.png?v=3" alt="">How a round runs</h3>
+            <p>Every round has three phases. In <b>Actions</b> you recruit, buy intelligence and order marches. In <b>Court</b> you talk — alliances, ravens, tribute, and one royal decree. In <b>Resolution</b> the host closes the round: battles that are due are fought, income is collected, and the chronicle is written. The three big menus below the header — <b>Money</b>, <b>Relations</b> and <b>Army</b> — are where all of it happens.</p>
+          </div>
+          <div class="tut-block">
+            <h3>The footer</h3>
+            <p>Mostly flavour: the build name and a reminder of what the game is about. Outside a game it also carries the version tag and a small dot that turns green once the game server is awake — worth a glance if hosting seems slow.</p>
+          </div>
+        </article>
+
+        <article class="tut-step" data-step="1" hidden>
+          <p class="tut-lede">Gold buys soldiers, spies and loyalty. The Money menu is your treasury, your post and your accounts.</p>
+          <div class="tut-block">
+            <h3><img src="./assets/game-coins.png?v=3" alt="">The tile itself</h3>
+            <p>Before you even open it, the Money button shows your gold, your income minus your upkeep for the round, and how many capitals you hold. Open it and the gold panel at the top breaks the same figures down.</p>
+          </div>
+          <div class="tut-block">
+            <h3>Income and upkeep</h3>
+            <p>Capitals pay you at the end of every round. Every unit you own costs <b>1 gold a round</b> in upkeep, taken automatically — and that is the <i>only</i> gold that ever leaves your treasury on its own. A large army sitting at home will quietly bankrupt you, so disband what you are not using (that is in the Army menu). If income is below upkeep, the panel says so in the negative.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/game-handshake.png?v=3" alt="">Send money &amp; troops</h3>
+            <p>Pick any player, enter gold, infantry and ships in any combination, and attach a note. It arrives immediately and <b>cannot be taken back</b>, so it is a promise you have already kept — useful for buying an ally, paying off an invader, or reinforcing a friend mid-siege.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/ui-letter.png?v=3" alt="">Reports</h3>
+            <p>Three records live here. <b>War councils &amp; spoils</b> covers shared battles and what you were owed from them. The <b>Ledger</b> is the full account of every coin, soldier and event that touched your house — filter it by kind and read the running totals. <b>Battles</b> is the realm's record of every fight, yours or not. The number on the Reports button is how much is new since you last looked.</p>
+          </div>
+        </article>
+
+        <article class="tut-step" data-step="2" hidden>
+          <p class="tut-lede">Nothing in this menu is enforced by the game. That is the whole point of it.</p>
+          <div class="tut-block">
+            <h3><img src="./assets/game-handshake.png?v=3" alt="">Alliances</h3>
+            <p>Offer an alliance to any house, <b>public</b> or <b>secret</b>. A public alliance is a statement to the whole realm — it warns off attackers and paints a target on both of you. A secret alliance is known only to the two of you, which is how you keep a second set of friends. Offers you have sent and received sit in the list underneath, waiting to be accepted or refused, and either side can break one later.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/game-raven.png?v=3" alt="">Messages</h3>
+            <p>Ravens. Private notes to any house at court, where the deals actually get made. The game never checks whether you meant it.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/ui-letter.png?v=3" alt="">Pay taxes &amp; tribute</h3>
+            <p>A treaty: gold, troops or ships sent with a message attached. This is how you answer a royal decree, buy peace from a neighbour, or quietly fund someone else's war.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/game-throne.png?v=3" alt="">Decrees — if you are King</h3>
+            <p>The King gets one decree per round: addressed to a single house, with an optional demand for gold, infantry or ships. Refusal costs nothing mechanically and everything politically. The King also appoints a new <b>Hand</b> here, reads the <b>Traitors</b> list that only he can see, reviews the decrees he has issued, and may <b>forfeit the crown</b> — which sends him home from King's Landing and leaves the throne to the Hand, or to the first army to reach it.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/game-hand.png?v=3" alt="">The Hand's Ledger</h3>
+            <p>If you are the Hand of the King, this page shows the subsidies and decrees nobody else gets to see.</p>
+          </div>
+        </article>
+
+        <article class="tut-step" data-step="3" hidden>
+          <p class="tut-lede">Armies are the only thing that actually takes a city. They are also slow, expensive and visible once they move.</p>
+          <div class="tut-block">
+            <h3><img src="./assets/ui-map.png?v=3" alt="">The war map</h3>
+            <p>Tap a city to make it your target, choose whether you are sending <b>soldiers</b>, <b>ships</b> or <b>dragons</b>, enter the numbers, and march. Only house capitals can be marched on. Armies do not teleport: each order appears in your march list with what it carries and the round it <b>arrives</b>, and while it is still the Actions phase you can <b>call it back</b>. Fleets follow sea routes around the coast, so a target across the map takes longer by water. Tap one of your own marching armies on the map to change or recall its orders. If you are already laying siege to a city, the panel under the map lets you withdraw.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/ui-army.png?v=4" alt="">Recruit &amp; disband</h3>
+            <p>Buy infantry and navy at the prices printed on the card (4 and 5 gold by default; house buffs can change them). Disbanding sends units home and stops their upkeep immediately — the cheapest way out of a treasury that is bleeding.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/game-spy.png?v=3" alt="">Spies</h3>
+            <p>Choose a target house and a mission — <b>Wealth</b>, <b>Messages</b> or <b>War</b> — then stake between 2 and 20 gold. More gold means better odds, and the odds readout updates as you type. A caught spy is not a secret.</p>
+          </div>
+          <div class="tut-block">
+            <h3><img src="./assets/game-swords.png?v=3" alt="">What the others cannot see</h3>
+            <p>Army sizes stay hidden from enemy houses, which is why spying matters: without it you are guessing at what you are marching into, and so is everyone marching at you. Plan in Actions, talk in Court, and find out in Resolution.</p>
+          </div>
+        </article>
+
+      </div>
+      <footer class="tut-foot">
+        <button id="tutBack" class="button button-quiet button-small" type="button" data-action="tut-back" hidden>← Back</button>
+        <span id="tutDots" class="tut-dots" aria-hidden="true"></span>
+        <button id="tutNext" class="button button-primary button-small" type="button" data-action="tut-next">Next <span>→</span></button>
+      </footer>
+    </section>
+  </div>
+
   <main id="hostSetupScreen" class="realm-screen" hidden>
     <section class="realm-card panel host-setup-card">
       <button class="screen-x" type="button" data-screen-x="host" aria-label="Close">×</button>
@@ -151,6 +286,7 @@
     <div class="pm-head"><strong id="pmName"></strong><small id="pmHouse"></small></div>
     <div class="pm-scroll">
     <button class="pm-item" type="button" role="menuitem" data-action="pm-name">Change name</button>
+    <button class="pm-item" type="button" role="menuitem" data-action="pm-tutorial">How to play</button>
     <div class="pm-field"><label for="pmScheme">Colour scheme</label><select id="pmScheme"></select></div>
     <div class="pm-field"><label for="pmStyle">Interface style</label><select id="pmStyle"><option value="medieval">Medieval</option><option value="original">Original</option></select></div>
     <div class="pm-field"><label for="pmView">Screen layout</label><select id="pmView"><option value="normal">Normal</option><option value="phone">Phone view</option></select></div>
