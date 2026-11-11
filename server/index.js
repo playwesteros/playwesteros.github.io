@@ -1244,6 +1244,7 @@ io.on('connection', socket => {
     const target = findCapital(String(payload.targetCapitalId || ''));
     if (!target || target.contested || (!target.ownerHouseId && !target.vacant)) return fail('Choose a city held by someone else.');
     if (target.ownerPlayerId === player.id) return fail('That city is already yours.');
+    if (!target.vacant && ![...players.values()].some(p => !p.left && p.houseId === target.ownerHouseId)) return fail('Nobody chose that house, so its city cannot be attacked.');
     const sameHouse = target.ownerHouseId === h.id, allyTarget = !sameHouse && areAllied(h.id, target.ownerHouseId);
     const isRelief = Boolean(target.siege) && (sameHouse || allyTarget);
     if (!isRelief && sameHouse && !gameSettings.friendlyFire) return fail('Friendly fire is off: you cannot attack a city held by your own house.');

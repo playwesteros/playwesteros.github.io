@@ -298,6 +298,7 @@
   function warTargetProblem(capital) {
     const mine = state.myHouse;
     if (capital.contested) return `${capital.name} is contested between two victorious allies. Wait until they settle who rules it.`;
+    if (!capital.vacant) { const owner = state.houses.find(x => x.id === capital.ownerHouseId); if (!owner || !(owner.players || []).some(p => !p.left)) return `${capital.name} belongs to a house nobody chose, so it cannot be attacked.`; }
     if (capital.vacant) return '';
     if (capital.siege && capital.ownerHouseId && capital.ownerPlayerId !== state.me?.id && (capital.ownerHouseId === mine.id || alliesOf(mine.id).includes(capital.ownerHouseId))) return '';
     if (!capital.ownerHouseId || capital.ownerPlayerId === state.me?.id) return `${capital.name} is already yours.`;
@@ -386,6 +387,54 @@
 
   // Map: owner colours, contested capitals, and target picking.
   const normName = text => String(text || '').toLowerCase().replace(/[^a-z]/g, '');
+  // Pieces: the game's own icons (units and castles) recoloured to a house colour and set on a chess-piece base, so they stand out on land and sea.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const ICON_FILE = { infantry: 'ui-spear.png?v=3', navy: 'ui-ship.png?v=3', dragons: 'ui-dragon.png?v=3', castle: 'game-castle.png?v=3' };
+  const KIND_NAME = { infantry: 'infantry', navy: 'ships', dragons: 'dragons' };
+  const mixHex = (hex, other, t) => {
+    const p = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+    const a = p(/^#[0-9a-f]{6}$/i.test(hex) ? hex : '#c8a45c'), b = p(other);
+    return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('');
+  };
+  // One recolour filter per colour and size: grey the icon, map it onto dark-to-light shades of the colour, add a dark edge and a cream halo.
+  function tintFilter(svg, fill, size) {
+    const k = Math.max(0.3, size / 100), id = `tint${fill.replace('#', '')}${Math.round(k * 10)}`;
+    if (svg.querySelector('#' + id)) return id;
+    let defs = svg.querySelector('#pieceDefs');
+    if (!defs) { defs = document.createElementNS(SVG_NS, 'defs'); defs.id = 'pieceDefs'; svg.insertBefore(defs, svg.firstChild); }
+    const lo = mixHex(fill, '#1b1208', 0.5), hi = mixHex(fill, '#ffffff', 0.5), mid = mixHex(lo, fill, 0.5);
+    const ch = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255);
+    const [l, md, m, h2] = [ch(lo), ch(mid), ch(fill), ch(hi)];
+    const tbl = i => `${l[i].toFixed(3)} ${md[i].toFixed(3)} ${m[i].toFixed(3)} ${h2[i].toFixed(3)}`;
+    const f = document.createElementNS(SVG_NS, 'filter');
+    f.id = id; f.setAttribute('x', '-15%'); f.setAttribute('y', '-15%'); f.setAttribute('width', '130%'); f.setAttribute('height', '130%'); f.setAttribute('color-interpolation-filters', 'sRGB');
+    f.innerHTML = `<feMorphology in="SourceAlpha" operator="dilate" radius="${(6 * k).toFixed(2)}" result="d1"/><feFlood flood-color="#f6edd2"/><feComposite in2="d1" operator="in" result="halo"/>
+      <feMorphology in="SourceAlpha" operator="dilate" radius="${(3 * k).toFixed(2)}" result="d2"/><feFlood flood-color="#1b1208"/><feComposite in2="d2" operator="in" result="edge"/>
+      <feColorMatrix in="SourceGraphic" type="matrix" values="0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0 0 0 1 0" result="gray"/>
+      <feComponentTransfer in="gray" result="tint"><feFuncR type="table" tableValues="${tbl(0)}"/><feFuncG type="table" tableValues="${tbl(1)}"/><feFuncB type="table" tableValues="${tbl(2)}"/></feComponentTransfer>
+      <feMerge><feMergeNode in="halo"/><feMergeNode in="edge"/><feMergeNode in="tint"/></feMerge>`;
+    defs.appendChild(f);
+    return id;
+  }
+  const pieceRect = (x, y, w, h, rx, fill, stroke, sw) => { const r = document.createElementNS(SVG_NS, 'rect'); r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', w); r.setAttribute('height', h); r.setAttribute('rx', rx); r.setAttribute('fill', fill); r.setAttribute('stroke', stroke); r.setAttribute('stroke-width', sw); return r; };
+  // A chess-piece stand (wide base, narrow collar, shine) with the recoloured icon standing on it. (cx, baseY) is the bottom centre.
+  function chessPiece(svg, kind, cx, baseY, size, fill) {
+    const g = document.createElementNS(SVG_NS, 'g'), k = Math.max(0.3, size / 100);
+    const bw = size * 0.92, bh = size * 0.17, cw = size * 0.66, chh = size * 0.08, edge = 3.5 * Math.max(0.45, k), halo = 5 * Math.max(0.45, k);
+    const dark = mixHex(fill, '#1b1208', 0.55), light = mixHex(fill, '#ffffff', 0.28);
+    g.appendChild(pieceRect(cx - bw / 2 - halo, baseY - bh - halo, bw + halo * 2, bh + halo * 2, bh / 2 + halo, '#f6edd2', '#f6edd2', 0));
+    const icon = document.createElementNS(SVG_NS, 'image'), isz = size * 0.92;
+    icon.setAttribute('href', './assets/' + ICON_FILE[kind]); icon.setAttribute('x', cx - isz / 2); icon.setAttribute('y', baseY - bh - chh - size * 0.84); icon.setAttribute('width', isz); icon.setAttribute('height', isz);
+    icon.setAttribute('filter', `url(#${tintFilter(svg, fill, size)})`);
+    g.appendChild(icon);
+    g.appendChild(pieceRect(cx - cw / 2, baseY - bh - chh, cw, chh + 2, chh / 3, fill, '#1b1208', edge * 0.85));
+    g.appendChild(pieceRect(cx - bw / 2, baseY - bh, bw, bh, bh / 2, fill, '#1b1208', edge));
+    for (const [yy, col] of [[0.62, light], [0.2, dark]]) {
+      const ln = document.createElementNS(SVG_NS, 'path'); ln.setAttribute('d', `M${cx - bw / 2 + bh * 0.6} ${baseY - bh * yy}H${cx + bw / 2 - bh * 0.6}`); ln.setAttribute('stroke', col); ln.setAttribute('stroke-width', Math.max(1.2, bh * 0.16)); ln.setAttribute('stroke-linecap', 'round');
+      g.appendChild(ln);
+    }
+    return g;
+  }
   function renderMap() {
     if (!state?.capitals) return;
     const byName = new Map(state.capitals.map(c => [normName(c.name), c]));
@@ -417,12 +466,15 @@
         const flagImg = flag.querySelector('image');
         flagImg.setAttribute('x', String(-col * 328)); flagImg.setAttribute('y', String(-row * 380));
       } else if (flag) flag.remove();
-      if (pop && !pop.querySelector('.cap-icon')) {
-        const NS = 'http://www.w3.org/2000/svg', anchor = pop.querySelector('.cap-dot');
-        const disk = document.createElementNS(NS, 'circle'); disk.setAttribute('class', 'cap-disk'); disk.setAttribute('r', '19');
-        const icon = document.createElementNS(NS, 'image'); icon.setAttribute('class', 'cap-icon'); icon.setAttribute('href', './assets/game-castle.png?v=3');
-        icon.setAttribute('x', '-14'); icon.setAttribute('y', '-14'); icon.setAttribute('width', '28'); icon.setAttribute('height', '28');
-        pop.insertBefore(disk, anchor); pop.insertBefore(icon, anchor);
+      if (pop) {
+        const fillCol = idle ? '#8d8d8d' : (owner?.color || '#7d2a14');
+        if (pop.dataset.pieceColor !== fillCol) {
+          pop.dataset.pieceColor = fillCol;
+          pop.querySelectorAll('.cap-piece').forEach(x => x.remove());
+          const holder = document.createElementNS(SVG_NS, 'g'); holder.setAttribute('class', 'cap-piece'); holder.setAttribute('pointer-events', 'none');
+          holder.appendChild(chessPiece($('mapDialog').querySelector('.realm-map'), 'castle', 0, 24, 56, fillCol));
+          pop.insertBefore(holder, pop.querySelector('.cap-dot'));
+        }
       }
       const sub = el.querySelector('.cap-sub');
       if (sub) sub.textContent = cap.vacant ? 'Empty throne' : cap.contested ? 'Contested' : owner ? `House ${capName(owner.name)}` : '';
@@ -450,52 +502,10 @@
     for (const c of state.capitals) { const p = pos.get(c.id); if (!c.siege || !p) continue; layer.appendChild(img('./assets/game-swords.png?v=3', p.x + 26, p.y - 74, 52)); layer.appendChild(tag(p.x + 52, p.y - 78, 'SIEGE', '#e8a79c')); }
     const home = pos.get(h.cityId);
     const color = (state.houses.find(x => x.id === h.id) || {}).color || '#c8a45c';
-    // Troops are the game's own unit icons recoloured to the house colour and set on a chess-piece base, so they stand out on land and sea.
-    const ICON_FILE = { infantry: 'ui-spear.png?v=3', navy: 'ui-ship.png?v=3', dragons: 'ui-dragon.png?v=3' };
-    const KIND_NAME = { infantry: 'infantry', navy: 'ships', dragons: 'dragons' };
-    const mixHex = (hex, other, t) => {
-      const p = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
-      const a = p(/^#[0-9a-f]{6}$/i.test(hex) ? hex : '#c8a45c'), b = p(other);
-      return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('');
-    };
-    const tintFilter = fill => {
-      const id = 'troopTint' + fill.replace('#', ''), lo = mixHex(fill, '#1b1208', 0.5), hi = mixHex(fill, '#ffffff', 0.5), mid = mixHex(lo, fill, 0.5);
-      if (layer.querySelector('#' + id)) return id;
-      const ch = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255);
-      const [l, md, m, h2] = [ch(lo), ch(mid), ch(fill), ch(hi)];
-      const tbl = i => `${l[i].toFixed(3)} ${md[i].toFixed(3)} ${m[i].toFixed(3)} ${h2[i].toFixed(3)}`;
-      const defs = document.createElementNS(NS, 'defs');
-      defs.innerHTML = `<filter id="${id}" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
-        <feMorphology in="SourceAlpha" operator="dilate" radius="6" result="d1"/><feFlood flood-color="#f6edd2"/><feComposite in2="d1" operator="in" result="halo"/>
-        <feMorphology in="SourceAlpha" operator="dilate" radius="3" result="d2"/><feFlood flood-color="#1b1208"/><feComposite in2="d2" operator="in" result="edge"/>
-        <feColorMatrix in="SourceGraphic" type="matrix" values="0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0 0 0 1 0" result="gray"/>
-        <feComponentTransfer in="gray" result="tint"><feFuncR type="table" tableValues="${tbl(0)}"/><feFuncG type="table" tableValues="${tbl(1)}"/><feFuncB type="table" tableValues="${tbl(2)}"/></feComponentTransfer>
-        <feMerge><feMergeNode in="halo"/><feMergeNode in="edge"/><feMergeNode in="tint"/></feMerge></filter>`;
-      layer.appendChild(defs);
-      return id;
-    };
-    const rectEl = (x, y, w, h, rx, fill, stroke, sw) => { const r = document.createElementNS(NS, 'rect'); r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', w); r.setAttribute('height', h); r.setAttribute('rx', rx); r.setAttribute('fill', fill); r.setAttribute('stroke', stroke); r.setAttribute('stroke-width', sw); return r; };
-    // A chess-piece stand: a wide base and a narrow collar in the house colour, with the recoloured unit icon standing on it.
-    const piece = (kind, cx, baseY, size, fill) => {
-      const g = document.createElementNS(NS, 'g');
-      const bw = size * 0.92, bh = size * 0.17, cw = size * 0.66, ch = size * 0.08;
-      const dark = mixHex(fill, '#1b1208', 0.55), light = mixHex(fill, '#ffffff', 0.28);
-      g.appendChild(rectEl(cx - bw / 2 - 5, baseY - bh - 5, bw + 10, bh + 10, bh / 2 + 5, '#f6edd2', '#f6edd2', 0));
-      const icon = img('./assets/' + ICON_FILE[kind], cx - size * 0.46, baseY - bh - ch - size * 0.9 + size * 0.06, size * 0.92);
-      icon.setAttribute('filter', `url(#${tintFilter(fill)})`);
-      g.appendChild(icon);
-      g.appendChild(rectEl(cx - cw / 2, baseY - bh - ch, cw, ch + 2, ch / 3, fill, '#1b1208', 3));
-      g.appendChild(rectEl(cx - bw / 2, baseY - bh, bw, bh, bh / 2, fill, '#1b1208', 3.5));
-      const shine = document.createElementNS(NS, 'path'); shine.setAttribute('d', `M${cx - bw / 2 + bh * 0.6} ${baseY - bh * 0.62}H${cx + bw / 2 - bh * 0.6}`); shine.setAttribute('stroke', light); shine.setAttribute('stroke-width', Math.max(2, bh * 0.16)); shine.setAttribute('stroke-linecap', 'round');
-      g.appendChild(shine);
-      const under = document.createElementNS(NS, 'path'); under.setAttribute('d', `M${cx - bw / 2 + bh * 0.6} ${baseY - bh * 0.2}H${cx + bw / 2 - bh * 0.6}`); under.setAttribute('stroke', dark); under.setAttribute('stroke-width', Math.max(2, bh * 0.16)); under.setAttribute('stroke-linecap', 'round');
-      g.appendChild(under);
-      return g;
-    };
     // A badge: the piece with its unit count in a dark pill.
     const badge = (cx, cy, r, count, label, kind = 'infantry') => {
       const g = document.createElementNS(NS, 'g');
-      g.appendChild(piece(kind, cx, cy + r, r * 2, color));
+      g.appendChild(chessPiece(svg, kind, cx, cy + r, r * 2, color));
       const w = 30 + String(count).length * 26, ph = 48;
       const pill = document.createElementNS(NS, 'rect'); pill.setAttribute('x', cx + r * 0.62); pill.setAttribute('y', cy + r * 0.5); pill.setAttribute('width', w); pill.setAttribute('height', ph); pill.setAttribute('rx', ph / 2); pill.setAttribute('fill', '#1b1208'); pill.setAttribute('stroke', '#f6edd2'); pill.setAttribute('stroke-width', '4');
       g.appendChild(pill);
@@ -527,14 +537,14 @@
     const drawSeaRoute = (route, planned, returning) => {
       const g = document.createElementNS(NS, 'g');
       const d = smoothD(route.sea);
-      g.appendChild(pathEl(d, '#f6edd2', 20, '', '.85'));
-      g.appendChild(pathEl(d, planned ? '#1b1208' : color, planned ? 6 : 9, planned ? '4 18' : returning ? '8 18' : '', ''));
+      g.appendChild(pathEl(d, '#f6edd2', planned ? 8 : 10, '', planned ? '.35' : '.45'));
+      g.appendChild(pathEl(d, planned ? '#1b1208' : color, planned ? 3 : 4, planned ? '3 14' : returning ? '4 12' : '10 8', planned ? '.55' : '.8'));
       const first = route.all[0], hs = route.sea[0], last = route.all[route.all.length - 1], hb = route.sea[route.sea.length - 1];
       for (const [x1, y1, x2, y2] of [[first[0], first[1], hs[0], hs[1]], [hb[0], hb[1], last[0], last[1]]]) {
-        const walk = document.createElementNS(NS, 'line'); walk.setAttribute('x1', x1); walk.setAttribute('y1', y1); walk.setAttribute('x2', x2); walk.setAttribute('y2', y2); walk.setAttribute('stroke', '#1b1208'); walk.setAttribute('stroke-width', '6'); walk.setAttribute('stroke-dasharray', '10 10'); walk.setAttribute('stroke-linecap', 'round');
+        const walk = document.createElementNS(NS, 'line'); walk.setAttribute('x1', x1); walk.setAttribute('y1', y1); walk.setAttribute('x2', x2); walk.setAttribute('y2', y2); walk.setAttribute('stroke', '#1b1208'); walk.setAttribute('stroke-width', '3'); walk.setAttribute('stroke-dasharray', '6 9'); walk.setAttribute('opacity', '.5'); walk.setAttribute('stroke-linecap', 'round');
         g.appendChild(walk);
       }
-      const beach = document.createElementNS(NS, 'circle'); beach.setAttribute('cx', hb[0]); beach.setAttribute('cy', hb[1]); beach.setAttribute('r', '17'); beach.setAttribute('fill', '#f6edd2'); beach.setAttribute('stroke', color); beach.setAttribute('stroke-width', '8');
+      const beach = document.createElementNS(NS, 'circle'); beach.setAttribute('cx', hb[0]); beach.setAttribute('cy', hb[1]); beach.setAttribute('r', '9'); beach.setAttribute('fill', '#f6edd2'); beach.setAttribute('stroke', color); beach.setAttribute('stroke-width', '4'); beach.setAttribute('opacity', '.9');
       const bt = document.createElementNS(NS, 'title'); bt.textContent = 'Landing beach'; beach.appendChild(bt); g.appendChild(beach);
       layer.appendChild(g);
     };
@@ -573,10 +583,10 @@
         marchShapes.push({ x: at.x, y: at.y, n, label, kind });
         continue;
       }
-      for (const [w, stroke] of [[18, '#1b1208'], [9, color]]) {
+      for (const [w, stroke] of [[8, '#f6edd2'], [4, color]]) {
         const line = document.createElementNS(NS, 'line');
         line.setAttribute('x1', from.x); line.setAttribute('y1', from.y); line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
-        line.setAttribute('stroke', stroke); line.setAttribute('stroke-width', w); line.setAttribute('stroke-dasharray', o.returning ? '8 18' : '26 16'); line.setAttribute('stroke-linecap', 'round');
+        line.setAttribute('stroke', stroke); line.setAttribute('stroke-width', w); line.setAttribute('stroke-dasharray', o.returning ? '4 12' : '10 8'); line.setAttribute('stroke-linecap', 'round'); line.setAttribute('opacity', stroke === color ? '.8' : '.4');
         layer.appendChild(line);
       }
       marchShapes.push({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, n, label, kind });

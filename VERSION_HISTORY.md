@@ -2,6 +2,11 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.4.2 (Nov 11, 2026)
+- **City markers match the unit pieces:** each capital is the castle icon recoloured to its owner's colour (grey if nobody chose that house) standing on the same chess-piece base.
+- **No attacking houses nobody chose:** capitals of houses with no active player can no longer be targeted, on the map and on the server.
+- **Subtler march paths:** thinner, fainter lines and a smaller landing beach for armies and fleets.
+
 ## v1.4.1 (Nov 11, 2026)
 - **Ship routes on the map:** ships now sail through open water only, kept off the shoreline, and land on the beach nearest their target. Choosing Ships and a target city previews the planned route (with a ringed landing beach); ships on the march travel along it. Rounds of travel still come from the server.
 - **Chess-piece troops:** on the map, infantry, ships and dragons use the game's own unit icons, recoloured to your house colour (cream halo and dark outline so they stand out on land and sea) and standing on a chess-piece base. Your troops at home show one piece per type with its count; marches show the piece with a count badge. The army table and battle dice keep their original icons.
