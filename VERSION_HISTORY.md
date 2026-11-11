@@ -2,6 +2,12 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.4.3 (Nov 11, 2026)
+- **Unchosen houses are gone from the map:** capitals of houses nobody picked are no longer drawn.
+- **Your own cities stay solid** while you pick a war target (they used to fade like the ones you cannot attack).
+- **Army counts sit by the city:** troops at home show as small count chips beside your city piece instead of separate pieces. Tap a chip to start sending that kind of force.
+- **Tap armies to change orders:** tap a marching army on the map. If it has not left yet, its order is withdrawn and the war panel opens with the same target and amount ready to change; if it is already on the road you can call it back home.
+
 ## v1.4.2 (Nov 11, 2026)
 - **City markers match the unit pieces:** each capital is the castle icon recoloured to its owner's colour (grey if nobody chose that house) standing on the same chess-piece base.
 - **No attacking houses nobody chose:** capitals of houses with no active player can no longer be targeted, on the map and on the server.

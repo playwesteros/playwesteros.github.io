@@ -444,11 +444,13 @@
       if (!cap) return;
       const owner = state.houses.find(h => h.id === cap.ownerHouseId);
       el.dataset.capital = cap.id;
+      el.classList.toggle('is-mine', Boolean(state.myHouse && cap.ownerHouseId === state.myHouse.id));
       el.style.setProperty('--cap-color', owner?.color || '#7d2a14');
       el.classList.toggle('is-contested', Boolean(cap.contested));
       const idle = !owner || !(owner.players || []).some(p => !p.left);
       el.classList.toggle('is-idle', idle);
       if (idle) el.style.setProperty('--cap-color', '#8d8d8d');
+      el.style.display = idle && !cap.vacant ? 'none' : ''; // houses nobody chose are not on the map
       const pos = !idle && owner ? HOUSE_SPRITE_POSITION[owner.id] : null;
       const pop = el.querySelector('.cap-pop');
       let flag = el.querySelector('.cap-banner');
@@ -562,9 +564,17 @@
       const ring = document.createElementNS(NS, 'circle'); ring.setAttribute('cx', home.x); ring.setAttribute('cy', home.y); ring.setAttribute('r', '44'); ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', color); ring.setAttribute('stroke-width', '8'); ring.setAttribute('stroke-dasharray', '14 10');
       const rt = document.createElementNS(NS, 'title'); rt.textContent = 'You live here'; ring.appendChild(rt);
       layer.appendChild(ring);
+      // Troops at home: a small count chip per type beside the city piece (tap one to send that kind to war).
       const kinds = [['infantry', h.infantry], ['navy', h.navy], ['dragons', h.dragons]].filter(([, n]) => n > 0);
-      const side = home.x < 340 ? 1 : -1; // keep the row on the map when the city sits near the left edge
-      kinds.forEach(([k, n], i) => layer.appendChild(badge(home.x + side * (78 + i * 132), home.y - 36, 38, n, `Your ${KIND_NAME[k]} at home: ${n}`, k)));
+      kinds.forEach(([k, n], i) => {
+        const w = 52 + String(n).length * 18, ph = 38, x = home.x - 44 - w, y = home.y - 18 + i * (ph + 6);
+        const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'army-piece'); g.dataset.homeKind = k; g.setAttribute('pointer-events', 'all'); g.style.cursor = 'pointer';
+        const pill = pieceRect(x, y, w, ph, ph / 2, '#1b1208', '#f6edd2', 3);
+        const ic = img('./assets/' + ICON_FILE[k], x + 4, y + 3, 32); ic.setAttribute('filter', `url(#${tintFilter(svg, color, 40)})`);
+        const t = document.createElementNS(NS, 'text'); t.setAttribute('x', x + 40 + (w - 44) / 2); t.setAttribute('y', y + 28); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '26'); t.setAttribute('font-weight', '700'); t.setAttribute('fill', '#f3e6c2'); t.setAttribute('font-family', 'Georgia, serif'); t.textContent = String(n);
+        const ti = document.createElementNS(NS, 'title'); ti.textContent = `Your ${KIND_NAME[k]} at home: ${n}. Tap to send them to war.`;
+        g.append(pill, ic, t, ti); layer.appendChild(g);
+      });
     }
     const marchShapes = [];
     for (const o of (h.marches || [])) {
@@ -580,7 +590,7 @@
       if (route) {
         drawSeaRoute(route, false, o.returning);
         const at = alongPath(route.all, t);
-        marchShapes.push({ x: at.x, y: at.y, n, label, kind });
+        marchShapes.push({ x: at.x, y: at.y, n, label, kind, id: o.id });
         continue;
       }
       for (const [w, stroke] of [[8, '#f6edd2'], [4, color]]) {
@@ -589,9 +599,39 @@
         line.setAttribute('stroke', stroke); line.setAttribute('stroke-width', w); line.setAttribute('stroke-dasharray', o.returning ? '4 12' : '10 8'); line.setAttribute('stroke-linecap', 'round'); line.setAttribute('opacity', stroke === color ? '.8' : '.4');
         layer.appendChild(line);
       }
-      marchShapes.push({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, n, label, kind });
+      marchShapes.push({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, n, label, kind, id: o.id });
     }
-    for (const m of marchShapes) layer.appendChild(badge(m.x, m.y, 50, m.n, m.label, m.kind));
+    for (const m of marchShapes) { const b = badge(m.x, m.y, 50, m.n, m.label + (m.id ? '. Tap to change.' : ''), m.kind); b.setAttribute('class', 'army-piece'); b.dataset.marchId = m.id || ''; b.setAttribute('pointer-events', 'all'); b.style.cursor = 'pointer'; layer.appendChild(b); }
+  }
+  // Tap one of your armies on the map: home troops start a new order; an army that has not left yet is pulled back so you can change where and how many; one on the road can be called home.
+  function armyClicked(data) {
+    const h = state?.myHouse; if (!h) return;
+    const sendKind = (kind, count, targetId) => {
+      attackMode = kind; applyAttackMode();
+      const field = { infantry: 'attackInfantry', navy: 'attackNavy', dragons: 'attackDragons' }[kind];
+      setTimeout(() => {
+        if (field && count) $(field).value = String(count);
+        const t = targetId && state.capitals.find(c => c.id === targetId);
+        warTargetId = t && !warTargetProblem(t) ? t.id : null;
+        renderWarTarget(); startPick(); updateAttackLock(); renderMapUnits();
+        showMapHint(`Choose where to send your ${KIND_NAME[kind]}, set how many, then declare war.`);
+      }, 250);
+    };
+    if (data.homeKind) {
+      const block = warBlockReason();
+      if (block) return showMapHint(block);
+      return sendKind(data.homeKind, 0, null);
+    }
+    const m = (h.marches || []).find(x => x.id === data.marchId);
+    if (!m) return;
+    if (m.returning) return showMapHint('That army is already marching home.');
+    if (state.phase !== 'ACTION') return showMapHint('Orders can only be changed during the action phase.');
+    const kind = m.units.navy > 0 ? 'navy' : m.units.dragons > 0 ? 'dragons' : 'infantry';
+    if (m.orderedRound === state.round) {
+      emitAction('cancel-march', { marchId: m.id }, () => sendKind(kind, m.units[kind], m.targetCapitalId));
+    } else if (window.confirm(`That army is already on the road to ${m.targetName}. Call it back home?`)) {
+      emitAction('cancel-march', { marchId: m.id });
+    }
   }
   function showMapHint(text) {
     const hint = $('mapHint');
@@ -1982,6 +2022,8 @@
   // Clicking the dimmed backdrop closes the map.
   $('mapDialog').addEventListener('click', event => {
     if (event.target === event.currentTarget) return setMapOpen(false);
+    const armyEl = event.target.closest('.army-piece');
+    if (armyEl) return armyClicked(armyEl.dataset);
     if (pickingTarget) {
       const pick = event.target.closest('.map-cap');
       if (pick) {

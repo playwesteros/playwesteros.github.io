@@ -1132,3 +1132,6 @@ html.style-med body.mobile-device .action-hub { min-height: 0; height: auto; gri
 
 /* v1.3.7 phone view: never show the rotate message inside the laptop phone frame */
 html.phone-frame .orientation-lock { display: none !important; }
+
+/* v1.4.3 your own cities never fade out while you pick a target */
+.map-dialog.pick-mode .map-cap.is-mine { opacity: 1; }
