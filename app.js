@@ -1237,46 +1237,456 @@
     $('lobbyNameInput').focus();
   }
 
-  // The four-part tour: main menu and the screen, then Money, Relations and Army.
-  const TUTORIAL_STEPS = [
-    ['THE FIRST STEPS', 'The main menu &amp; your screen'],
-    ['LESSON TWO', 'The Money menu'],
-    ['LESSON THREE', 'The Relations menu'],
-    ['LESSON FOUR', 'The Army menu']
+  // ---- The interactive tour ----------------------------------------------
+  // Everything below drives a practice board inside #tutorialOverlay: a mock topbar, the three
+  // menus and working forms. It never touches the real game, the socket or the server.
+  const TM_HOUSES = [
+    ['Stark', '#8d9aa6', 'Winter is coming'],
+    ['Lannister', '#c0373a', 'Hear me roar'],
+    ['Baratheon', '#d8b04a', 'Ours is the fury'],
+    ['Targaryen', '#9a5bb0', 'Fire and blood'],
+    ['Tyrell', '#6fa860', 'Growing strong'],
+    ['Greyjoy', '#3f6f86', 'We do not sow'],
+    ['Martell', '#d2772f', 'Unbowed, unbent'],
+    ['Arryn', '#5f8fc0', 'As high as honour']
   ];
-  function setExperience(value) {
-    experience = value;
-    try { localStorage.setItem(experienceKey, value); } catch (e) { /* storage unavailable */ }
+  const TM_CITIES = [['Casterly Rock', 'Lannister'], ['Highgarden', 'Tyrell'], ['Pyke', 'Greyjoy'], ['Sunspear', 'Martell']];
+  const TM_TAKEN = ['Baratheon', 'Targaryen'];
+  let tm = {};
+  function tmReset() {
+    tm = { gold: 120, infantry: 10, navy: 4, house: null, hosted: false, ready: false, alliances: 0,
+      ledger: [{ text: 'Round 1 · income from your capitals', amount: '+18 gold' }, { text: 'Round 1 · upkeep for 14 units', amount: '−14 gold' }],
+      done: {}, warTarget: null, warMode: 'infantry', pane: '', sub: 'root' };
+  }
+
+  function tmOther(exclude) { return TM_HOUSES.filter(h => h[0] !== (exclude || tm.house)).map(h => h[0]); }
+  function tmFillSelects() {
+    const options = tmOther().map(n => `<option value="${n}">House ${n}</option>`).join('');
+    ['tmGiftTarget', 'tmAllianceTarget', 'tmRavenTarget', 'tmTreatyTarget', 'tmSpyTarget'].forEach(id => {
+      const select = $(id);
+      if (!select) return;
+      const lead = id === 'tmTreatyTarget' ? '' : '<option value="">Choose a house…</option>';
+      select.innerHTML = lead + options;
+      if (id === 'tmTreatyTarget') select.value = 'Lannister';
+    });
+  }
+  function tmRenderBoard() {
+    $('tmGold').textContent = tm.gold;
+    $('tmArmy').textContent = tm.infantry + tm.navy;
+    const upkeep = tm.infantry + tm.navy;
+    document.querySelectorAll('.tm-hub-gold').forEach(el => { el.textContent = tm.gold; });
+    document.querySelectorAll('.tm-hub-army').forEach(el => { el.textContent = tm.infantry + tm.navy; });
+    $('tmArmyDetail').textContent = `${tm.infantry} infantry · ${tm.navy} ships`;
+    $('tmGoldBig').textContent = `${tm.gold} gold`;
+    $('tmGoldNote').textContent = `${18 - upkeep >= 0 ? '+' : '−'}${Math.abs(18 - upkeep)} a round · 18 income − ${upkeep} upkeep`;
+    $('tmAlliances').textContent = tm.alliances === 1 ? '1 alliance' : `${tm.alliances} alliances`;
+    $('tmRound').textContent = tm.ready ? 'READY ✓' : 'ROUND 1 · READY';
+    $('tmRound').classList.toggle('is-ready', tm.ready);
+    $('tmLedger').innerHTML = tm.ledger.map(e => `<div class="tm-ledger-row"><span>${escapeHtml(e.text)}</span><b>${escapeHtml(e.amount)}</b></div>`).join('');
+    $('tmHouses').innerHTML = TM_HOUSES.map(([name, colour, motto]) => {
+      const taken = TM_TAKEN.includes(name);
+      return `<button class="tm-house ${tm.house === name ? 'is-picked' : ''}" type="button" style="--hc:${colour}" data-tm-house="${name}"${taken ? ' disabled' : ''}><strong>${name}</strong><small>${taken ? 'Already claimed' : escapeHtml(motto)}</small></button>`;
+    }).join('');
+    $('tmMap').innerHTML = TM_CITIES.map(([city, house]) => `<button class="tm-city ${tm.warTarget === city ? 'is-target' : ''}" type="button" data-tm-city="${city}"><img src="./assets/game-castle.png?v=3" alt=""><strong>${city}</strong><small>House ${house}</small></button>`).join('');
+    $('tmWarTarget').textContent = tm.warTarget ? `Marching on ${tm.warTarget}` : 'No target chosen yet';
+    $('tmWarTarget').classList.toggle('is-empty', !tm.warTarget);
+    $('tmWarMode').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tmMode === tm.warMode)));
+    tmRecruitCost();
+    tmSpyOdds();
+  }
+  function tmRecruitCost() {
+    const unit = $('tmRecruitUnit').value;
+    const amount = Math.max(0, Number($('tmRecruitAmount').value) || 0);
+    const cost = amount * (unit === 'navy' ? 5 : 4);
+    $('tmRecruitCost').textContent = `${cost} gold — you have ${tm.gold}`;
+  }
+  function tmSpyOdds() {
+    const gold = Number($('tmSpyGold').value) || 0;
+    if (!$('tmSpyMission').value || gold < 2) { $('tmSpyOdds').textContent = 'Choose a mission and a stake of 2–20 gold.'; return; }
+    const odds = Math.min(90, 25 + Math.round(Math.min(gold, 20) * 3.25));
+    $('tmSpyOdds').textContent = `About a ${odds}% chance the report comes back good.`;
+  }
+  function tmScene(name) {
+    $('tmSceneEntry').hidden = name !== 'entry';
+    $('tmSceneGame').hidden = name !== 'game';
+    $('tmStats').hidden = name !== 'game';
+    $('tmPin').hidden = !tm.hosted;
+  }
+  function tmOpenPane(pane) {
+    tm.pane = pane; tm.sub = 'root';
+    const titles = { money: ['YOUR TREASURY', 'Money'], relations: ['THE ROYAL COURT', 'Relations'], army: ['YOUR FORCES', 'Army'] };
+    $('tmSheet').hidden = !pane;
+    if (!pane) return;
+    $('tmSheetEyebrow').textContent = titles[pane][0];
+    $('tmSheetTitle').textContent = titles[pane][1];
+    $('tmSheet').querySelectorAll('.tm-pane').forEach(p => { p.hidden = p.dataset.pane !== pane; });
+    tmOpenSub('root');
+  }
+  function tmOpenSub(sub) {
+    tm.sub = sub;
+    const pane = $('tmSheet').querySelector(`.tm-pane[data-pane="${tm.pane}"]`);
+    if (!pane) return;
+    pane.querySelector('.tm-submenu').hidden = sub !== 'root';
+    pane.querySelectorAll('.tm-subpage').forEach(p => { p.hidden = p.dataset.sub !== sub; });
+  }
+  function tmSay(id, message, bad) {
+    const box = $(id);
+    box.textContent = message;
+    box.classList.toggle('is-bad', Boolean(bad));
+    box.hidden = false;
+  }
+  // A learner can spend themselves into a corner on the practice board. Before a step that needs
+  // gold or troops, top them back up and show it as income, the way a real round would.
+  function tmEnsure(minGold, minTroops) {
+    if (minGold && tm.gold < minGold) {
+      const added = minGold + 20 - tm.gold;
+      tm.gold += added;
+      tm.ledger.unshift({ text: 'Round 2 · income from your capitals', amount: `+${added} gold` });
+    }
+    if (minTroops && tm.infantry + tm.navy < minTroops) {
+      const added = minTroops - (tm.infantry + tm.navy);
+      tm.infantry += added;
+      tm.ledger.unshift({ text: 'Round 2 · levies answered the call', amount: `+${added} infantry` });
+    }
+  }
+  const tmUnits = (gold, inf, navy) => [gold ? `${gold} gold` : '', inf ? `${inf} infantry` : '', navy ? `${navy} ships` : ''].filter(Boolean).join(', ');
+
+  // --- the script: four lessons, each a handful of spotlit steps ---
+  const TOUR_LESSONS = ['Main menu', 'Money', 'Relations', 'Army'];
+  const TOUR = [
+    // ---- 1. the main menu and the screen ----
+    { lesson: 0, target: '#tmEntryButtons', eyebrow: 'THE FIRST STEPS', title: 'Host or join',
+      body: '<p>This is a <b>practice board</b> — nothing here reaches a real game, so press whatever you like.</p><p><b>HOST GAME</b> opens a new game that you control. Everyone else taps <b>JOIN GAME</b> and types in your PIN.</p>',
+      task: { key: 'host', text: 'Press HOST GAME' }, enter: () => tmScene('entry') },
+    { lesson: 0, target: '#tmPin', eyebrow: 'THE FIRST STEPS', title: 'Your room PIN',
+      body: '<p>Hosting gives you a <b>four-character PIN</b>, shown in the top bar for as long as you are in the lobby. Read it out loud, message it, whatever — the others cannot join without it.</p>' },
+    { lesson: 0, target: '#tmSetup', eyebrow: 'HOST ONLY', title: 'Setting up the match',
+      body: '<p>Only the host sees this. Pick the <b>game type</b> — Classic, Teams, or Last Dragon, where hidden Targaryens must survive a set number of rounds — then the player limit and whether <b>friendly fire</b> is allowed.</p><p><b>Advanced settings…</b> holds the rest: alliances on or off, the Hand of the King, house buffs, which houses are in play, how the ready buttons work, the round timer, and which popups interrupt everyone.</p>',
+      enter: () => { $('tmSetup').hidden = false; $('tmHouses').hidden = true; } },
+    { lesson: 0, target: '#tmHouses', eyebrow: 'THE GREAT HOUSES', title: 'Choose your house',
+      body: '<p>One player holds each house — in Teams, a few of you share one — so a house already taken is greyed out, and a house the host switched off is gone entirely. Each banner carries its motto and, if house buffs are on, the advantage and weakness that come with it.</p>',
+      task: { key: 'house', text: 'Claim a house' }, enter: () => { $('tmSetup').hidden = true; $('tmHouses').hidden = false; } },
+    { lesson: 0, target: '#tmBrand', eyebrow: 'THE TOP BAR', title: 'The sigil is your settings',
+      body: '<p>In game, the sigil on the left opens your own menu: <b>change your name</b>, pick a colour scheme, switch the interface style or screen layout, choose which popups interrupt you, reopen this tutorial, or leave the game.</p>',
+      enter: () => { tmOpenPane(''); tmScene('game'); } },
+    { lesson: 0, target: '#tmStats', eyebrow: 'THE TOP BAR', title: 'Your house at a glance',
+      body: '<p>Your <b>gold</b> and your <b>total army</b> live here all game. In Last Dragon you also get the rounds left and how many Targaryens survive. A throne icon appears if you are the <b>King</b> — tap it to forfeit the crown — and a hand icon if you are the <b>Hand</b>.</p>' },
+    { lesson: 0, target: '#tmRound', eyebrow: 'THE TOP BAR', title: 'The round pill',
+      body: '<p>The most important button on the screen. As a player it is your <b>READY</b> toggle, telling the host you are done with the phase. As the host it is what moves the round forward.</p>',
+      task: { key: 'ready', text: 'Press READY' } },
+    { lesson: 0, target: '#tmHub', eyebrow: 'THE ROUND', title: 'Three menus, three phases',
+      body: '<p>Everything you do in a round happens in these three. Each round runs <b>Actions</b> (recruit, spy, order marches) → <b>Court</b> (talk, alliances, tribute, one royal decree) → <b>Resolution</b> (battles are fought, income collected).</p><p>The next three lessons take one menu each.</p>' },
+    { lesson: 0, target: '#tmFooter', eyebrow: 'THE ROUND', title: 'The footer',
+      body: '<p>Mostly flavour. Outside a game it also carries the version tag and a small dot that turns green once the game server is awake — worth a glance if hosting seems slow.</p>' },
+
+    // ---- 2. money ----
+    { lesson: 1, target: '#tmHubMoney', eyebrow: 'LESSON TWO', title: 'Open the Money menu',
+      body: '<p>Before you open it, the tile already tells you your gold, your income minus your upkeep, and how many capitals you hold.</p>',
+      task: { key: 'openMoney', text: 'Open Money' }, enter: () => { tmOpenPane(''); tmScene('game'); } },
+    { lesson: 1, target: '#tmGoldPanel', eyebrow: 'MONEY', title: 'Income and upkeep',
+      body: '<p>Capitals pay you at the end of every round. Every unit you own costs <b>1 gold a round</b> in upkeep, taken automatically — and that is the <i>only</i> gold that ever leaves your treasury on its own.</p><p>An army sitting at home quietly bankrupts you. Watch this number as you recruit in lesson four.</p>',
+      enter: () => { tmOpenPane('money'); } },
+    { lesson: 1, target: '[data-tm-sub="gift"]', eyebrow: 'MONEY', title: 'Sending things to people',
+      body: '<p>Gold, troops and ships can all be handed to any player at any time.</p>',
+      task: { key: 'openGift', text: 'Open Send money & troops' }, enter: () => { tmOpenPane('money'); } },
+    { lesson: 1, target: '#tmGiftForm', eyebrow: 'MONEY', title: 'Try it: buy a friend',
+      body: '<p>Pick a house, put a number in any of the three boxes, and add a note. It arrives <b>at once</b> and <b>cannot be taken back</b> — which is exactly why it works as a promise.</p>',
+      task: { key: 'gift', text: 'Send something to another house' },
+      enter: () => { tmEnsure(10, 0); tmOpenPane('money'); tmOpenSub('gift'); } },
+    { lesson: 1, target: '[data-tm-sub="reports"]', eyebrow: 'MONEY', title: 'Reports',
+      body: '<p>Three records live behind this button: war councils and spoils, the ledger, and every battle the realm has fought.</p>',
+      task: { key: 'openReports', text: 'Open Reports' }, enter: () => { tmOpenPane('money'); tmOpenSub('root'); } },
+    { lesson: 1, target: '#tmLedger', eyebrow: 'MONEY', title: 'The ledger remembers',
+      body: '<p>Every coin, soldier and event that touched your house, filterable with running totals — the gift you just sent is in there. The number on the Reports button is how much is new since you last looked.</p>',
+      enter: () => { tmOpenPane('money'); tmOpenSub('reports'); } },
+
+    // ---- 3. relations ----
+    { lesson: 2, target: '#tmHubRelations', eyebrow: 'LESSON THREE', title: 'Open the Relations menu',
+      body: '<p>Nothing in this menu is enforced by the game. That is the whole point of it.</p>',
+      task: { key: 'openRelations', text: 'Open Relations' }, enter: () => { tmOpenPane(''); tmScene('game'); } },
+    { lesson: 2, target: '#tmAllianceForm', eyebrow: 'RELATIONS', title: 'Try it: propose an alliance',
+      body: '<p>A <b>public</b> alliance is a statement to the whole realm: it warns off attackers and paints a target on both of you. A <b>secret</b> one is known only to the two of you, which is how you keep a second set of friends.</p><p>Either side can break it later, and offers you send sit in the list until they answer.</p>',
+      task: { key: 'alliance', text: 'Send an alliance offer' }, enter: () => { tmOpenPane('relations'); tmOpenSub('alliances'); } },
+    { lesson: 2, target: '#tmRavenForm', eyebrow: 'RELATIONS', title: 'Try it: send a raven',
+      body: '<p>Private messages to any house at court. This is where the deals actually get made — and the game never checks whether you meant a word of it.</p>',
+      task: { key: 'raven', text: 'Send a raven' }, enter: () => { tmOpenPane('relations'); tmOpenSub('messages'); } },
+    { lesson: 2, target: '#tmDecreeNote', eyebrow: 'RELATIONS', title: 'A decree has arrived',
+      body: '<p>The King may issue <b>one decree a round</b>, addressed to a single house, with an optional demand for gold, infantry or ships. Refusing costs you nothing mechanically — and everything politically.</p>',
+      enter: () => { tmOpenPane('relations'); tmOpenSub('treaties'); } },
+    { lesson: 2, target: '#tmTreatyForm', eyebrow: 'RELATIONS', title: 'Try it: pay the crown',
+      body: '<p>The crown asked for <b>20 gold and 5 infantry</b>. Send it — or send less and see what happens. The same form buys peace from a neighbour or quietly funds somebody else\'s war.</p>',
+      task: { key: 'treaty', text: 'Send a treaty to House Lannister' },
+      enter: () => { tmEnsure(24, 6); tmOpenPane('relations'); tmOpenSub('treaties'); } },
+    { lesson: 2, target: '.tm-locked', eyebrow: 'RELATIONS', title: 'What the King and the Hand see',
+      body: '<p>If you take the throne, this page gains the decree form, the <b>Traitors</b> list only you can read, the power to appoint a new <b>Hand</b>, and the option to forfeit the crown. The Hand gets a ledger of subsidies and decrees nobody else sees.</p>',
+      enter: () => { tmOpenPane('relations'); tmOpenSub('decrees'); } },
+
+    // ---- 4. army ----
+    { lesson: 3, target: '#tmHubArmy', eyebrow: 'LESSON FOUR', title: 'Open the Army menu',
+      body: '<p>Armies are the only thing that actually takes a city. They are also slow, expensive and visible once they move.</p>',
+      task: { key: 'openArmy', text: 'Open Army' }, enter: () => { tmOpenPane(''); tmScene('game'); } },
+    { lesson: 3, target: '#tmMap', eyebrow: 'ARMY', title: 'Try it: pick a target',
+      body: '<p>Tap a city to make it your target. Only <b>house capitals</b> can be marched on, and capitals of houses nobody picked are not on the map at all.</p>',
+      task: { key: 'target', text: 'Choose a city to march on' }, enter: () => { tmOpenPane('army'); tmOpenSub('map'); } },
+    { lesson: 3, target: '#tmWarForm', eyebrow: 'ARMY', title: 'Try it: send the army',
+      body: '<p>Choose <b>soldiers</b> or <b>ships</b>, enter how many, and march. Armies do not teleport: the order shows what it carries and the round it <b>arrives</b>, and while it is still the Actions phase you can call it back. Fleets follow sea routes around the coast, so a target across the map takes longer by water.</p>',
+      task: { key: 'march', text: 'March on your target' },
+      enter: () => { tmEnsure(0, 4); tmOpenPane('army'); tmOpenSub('map'); $('tmWarAmount').value = String(Math.max(1, Math.min(3, tm.warMode === 'navy' ? tm.navy : tm.infantry))); } },
+    { lesson: 3, target: '#tmRecruitForm', eyebrow: 'ARMY', title: 'Try it: recruit, and watch the cost',
+      body: '<p>Infantry costs 4 gold, navy 5, and each one then adds 1 gold a round to your upkeep. Recruit a few and watch the gold in the top bar move. <b>Disbanding</b> sends units home and stops their upkeep at once — the cheapest way out of a treasury that is bleeding.</p>',
+      task: { key: 'recruit', text: 'Recruit some units' },
+      enter: () => { tmEnsure(24, 0); tmOpenPane('army'); tmOpenSub('recruit'); $('tmRecruitAmount').value = '2'; } },
+    { lesson: 3, target: '#tmSpyForm', eyebrow: 'ARMY', title: 'Try it: buy some intelligence',
+      body: '<p>Pick a house and a mission — <b>Wealth</b>, <b>Messages</b> or <b>War</b> — then stake 2 to 20 gold. More gold means better odds, and the readout updates as you type. A caught spy is not a secret.</p>',
+      task: { key: 'spy', text: 'Send spies on a mission' },
+      enter: () => { tmEnsure(22, 0); tmOpenPane('army'); tmOpenSub('spies'); } },
+    { lesson: 3, target: '', eyebrow: 'THAT IS ALL OF IT', title: 'Now play it for real',
+      body: '<p>Army sizes stay hidden from enemy houses, which is why spying matters: without it you are guessing at what you are marching into — and so is everyone marching at you.</p><p>Plan in <b>Actions</b>, talk in <b>Court</b>, find out in <b>Resolution</b>. You can reopen this tutorial any time from <b>How to play</b> in the sigil menu.</p>',
+      enter: () => { tmOpenPane(''); tmScene('game'); } }
+  ];
+
+  const setExperience = value => { experience = value; try { localStorage.setItem(experienceKey, value); } catch (e) { /* storage unavailable */ } };
+
+  function tourLessonStart(lesson) { return TOUR.findIndex(s => s.lesson === lesson); }
+  function tourTaskDone(step) { return !step.task || Boolean(tm.done[step.task.key]); }
+
+  function tourPlaceSpot() {
+    const step = TOUR[tutorialStep];
+    if (!step) return;
+    const spot = $('tutSpot');
+    const coach = $('tutCoach');
+    const node = step.target ? $('tutStage').querySelector(step.target) : null;
+    if (!node || node.hidden || !node.offsetParent) {
+      spot.classList.remove('is-on');
+      spot.style.width = spot.style.height = '0px';
+      spot.style.top = '50%'; spot.style.left = '50%';
+      coach.style.top = ''; coach.style.bottom = '';
+      return;
+    }
+    const r = node.getBoundingClientRect();
+    const pad = 7;
+    spot.classList.add('is-on');
+    spot.style.top = `${Math.round(r.top - pad)}px`;
+    spot.style.left = `${Math.round(r.left - pad)}px`;
+    spot.style.width = `${Math.round(r.width + pad * 2)}px`;
+    spot.style.height = `${Math.round(r.height + pad * 2)}px`;
+    // On a wide screen the coach dodges the target; on a narrow one it stays docked to the bottom.
+    if (window.innerWidth > 760) {
+      const below = window.innerHeight - r.bottom;
+      if (below < coach.offsetHeight + 40 && r.top > coach.offsetHeight + 40) { coach.style.top = '18px'; coach.style.bottom = 'auto'; }
+      else { coach.style.top = 'auto'; coach.style.bottom = '18px'; }
+    } else { coach.style.top = ''; coach.style.bottom = ''; }
+  }
+  // Put the target in the band between the mock topbar and the coach. A target too tall for that
+  // band gets its top aligned instead of being centred, so the start of it is always on screen.
+  function tourScrollTo(step) {
+    const stage = $('tutStage');
+    if (!step.target) { stage.scrollTo({ top: 0, behavior: 'auto' }); return; }
+    const node = stage.querySelector(step.target);
+    if (!node || !node.offsetParent) return;
+    const bandTop = ($('tmTopbar').getBoundingClientRect().bottom || 56) + 14;
+    const bandBottom = window.innerHeight - $('tutCoach').offsetHeight - 18;
+    const band = Math.max(130, bandBottom - bandTop);
+    const r = node.getBoundingClientRect();
+    const want = r.height + 20 <= band ? bandTop + (band - r.height) / 2 : bandTop + 6;
+    const delta = r.top - want;
+    if (Math.abs(delta) > 12) stage.scrollTo({ top: Math.max(0, stage.scrollTop + delta), behavior: 'auto' });
+  }
+  // Re-check the current step's task after anything happens on the board.
+  function tourCheck() {
+    const step = TOUR[tutorialStep];
+    if (!step || !tutorialOpen) return;
+    const done = tourTaskDone(step);
+    $('tutTask').classList.toggle('is-done', done && Boolean(step.task));
+    $('tutNext').disabled = !done;
+    $('tutNext').title = done ? '' : 'Finish the step above first — or press Skip the tutorial.';
+    requestAnimationFrame(tourPlaceSpot);
   }
   function renderTutorial() {
-    const total = TUTORIAL_STEPS.length;
-    tutorialStep = Math.min(Math.max(tutorialStep, 0), total - 1);
-    const [eyebrow, title] = TUTORIAL_STEPS[tutorialStep];
-    $('tutEyebrow').textContent = `${eyebrow} · ${tutorialStep + 1} OF ${total}`;
-    $('tutTitle').innerHTML = title;
-    $('tutBody').querySelectorAll('.tut-step').forEach(step => { step.hidden = Number(step.dataset.step) !== tutorialStep; });
+    tutorialStep = Math.min(Math.max(tutorialStep, 0), TOUR.length - 1);
+    const step = TOUR[tutorialStep];
+    try { step.enter?.(); } catch (e) { /* a step that cannot set up still shows its text */ }
+    tmRenderBoard();
+    const inLesson = TOUR.filter(s => s.lesson === step.lesson);
+    const indexInLesson = inLesson.indexOf(step);
+    $('tutEyebrow').textContent = `${step.eyebrow} · ${indexInLesson + 1} OF ${inLesson.length}`;
+    $('tutTitle').textContent = step.title;
+    $('tutText').innerHTML = step.body;
+    $('tutTask').hidden = !step.task;
+    if (step.task) $('tutTaskText').textContent = step.task.text;
     $('tutRail').querySelectorAll('button').forEach(button => {
-      const step = Number(button.dataset.step);
-      button.classList.toggle('is-active', step === tutorialStep);
-      button.classList.toggle('is-done', step < tutorialStep);
-      button.setAttribute('aria-current', step === tutorialStep ? 'step' : 'false');
+      const lesson = Number(button.dataset.step);
+      button.classList.toggle('is-active', lesson === step.lesson);
+      button.classList.toggle('is-done', lesson < step.lesson);
+      button.setAttribute('aria-current', lesson === step.lesson ? 'step' : 'false');
     });
-    $('tutDots').innerHTML = TUTORIAL_STEPS.map((_, i) => `<i class="${i === tutorialStep ? 'is-on' : ''}"></i>`).join('');
+    $('tutDots').innerHTML = inLesson.map((_, i) => `<i class="${i === indexInLesson ? 'is-on' : ''}"></i>`).join('');
     $('tutBack').hidden = tutorialStep === 0;
-    $('tutNext').innerHTML = tutorialStep === total - 1 ? 'Take my seat <span>→</span>' : 'Next <span>→</span>';
-    $('tutBody').scrollTop = 0;
+    $('tutNext').innerHTML = tutorialStep === TOUR.length - 1 ? 'Take my seat <span>→</span>' : 'Next <span>→</span>';
+    $('tutCoach').scrollTop = 0;
+    $('tutText').parentElement.scrollTop = 0;
+    tourCheck();
+    requestAnimationFrame(() => {
+      // Reserve exactly as much room under the board as this step's coach actually takes, so
+      // scrolling to the bottom always clears it and no submit button hides behind the card.
+      $('tutStage').style.paddingBottom = `${$('tutCoach').offsetHeight + 30}px`;
+      tourScrollTo(step);
+      requestAnimationFrame(tourPlaceSpot);
+    });
   }
+  function tourGo(index) { tutorialStep = index; renderTutorial(); }
   function openTutorial(step = 0) {
     tutorialOpen = true;
-    tutorialStep = step;
+    tmReset();
+    tmScene('entry');
+    tmOpenPane('');
+    $('tmSetup').hidden = true;
+    $('tmHouses').hidden = true;
     $('tutorialOverlay').hidden = false;
-    renderTutorial();
+    document.body.classList.add('tutorial-open');
+    tmFillSelects();
+    $('tutorialOverlay').querySelectorAll('.tm-result').forEach(el => { el.hidden = true; });
+    tourGo(step);
     $('tutNext').focus({ preventScroll: true });
   }
   function closeTutorial() {
     tutorialOpen = false;
     $('tutorialOverlay').hidden = true;
+    document.body.classList.remove('tutorial-open');
   }
+  window.addEventListener('resize', () => { if (tutorialOpen) tourPlaceSpot(); }, { passive: true });
+  $('tutStage').addEventListener('scroll', () => { if (tutorialOpen) tourPlaceSpot(); }, { passive: true });
+
+  // --- the practice board's own buttons ---
+  $('tutStage').addEventListener('click', event => {
+    const house = event.target.closest('[data-tm-house]');
+    if (house && !house.disabled) { tm.house = house.dataset.tmHouse; tm.done.house = true; tmFillSelects(); tmRenderBoard(); return tourCheck(); }
+    const city = event.target.closest('[data-tm-city]');
+    if (city) { tm.warTarget = city.dataset.tmCity; tm.done.target = true; tmRenderBoard(); return tourCheck(); }
+    const mode = event.target.closest('[data-tm-mode]');
+    if (mode) { tm.warMode = mode.dataset.tmMode; $('tmWarAmount').value = String(Math.max(1, Math.min(3, tm.warMode === 'navy' ? tm.navy : tm.infantry))); tmRenderBoard(); return tourCheck(); }
+    const hub = event.target.closest('[data-tm-hub]');
+    if (hub) { tmOpenPane(hub.dataset.tmHub); tm.done[`open${hub.dataset.tmHub[0].toUpperCase()}${hub.dataset.tmHub.slice(1)}`] = true; return tourCheck(); }
+    const sub = event.target.closest('[data-tm-sub]');
+    if (sub) {
+      tmOpenSub(sub.dataset.tmSub);
+      if (sub.dataset.tmSub === 'gift') tm.done.openGift = true;
+      if (sub.dataset.tmSub === 'reports') tm.done.openReports = true;
+      return tourCheck();
+    }
+    const simple = event.target.closest('[data-tm]');
+    if (!simple) return;
+    const what = simple.dataset.tm;
+    if (what === 'host') { tm.hosted = true; tm.done.host = true; $('tmSetup').hidden = false; $('tmPin').hidden = false; $('tmJoin').classList.add('is-dim'); }
+    if (what === 'join') { tm.hosted = true; tm.done.host = true; $('tmPin').hidden = false; $('tmSetup').hidden = false; }
+    if (what === 'ready') { tm.ready = !tm.ready; tm.done.ready = true; }
+    if (what === 'brand') tm.done.brand = true;
+    if (what === 'close-sheet') tmOpenPane('');
+    if (what === 'sub-back') tmOpenSub('root');
+    tmRenderBoard();
+    tourCheck();
+  });
+  ['tmRecruitUnit', 'tmRecruitAmount'].forEach(id => $(id).addEventListener('input', tmRecruitCost));
+  ['tmSpyGold', 'tmSpyMission'].forEach(id => $(id).addEventListener('input', tmSpyOdds));
+
+  $('tmGiftForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const to = $('tmGiftTarget').value;
+    const gold = Math.max(0, Number($('tmGiftGold').value) || 0);
+    const inf = Math.max(0, Number($('tmGiftInf').value) || 0);
+    const navy = Math.max(0, Number($('tmGiftNavy').value) || 0);
+    if (!to) return tmSay('tmGiftResult', 'Choose a house to send it to first.', true);
+    if (!gold && !inf && !navy) return tmSay('tmGiftResult', 'Put a number in at least one box — gold, infantry or ships.', true);
+    if (gold > tm.gold) return tmSay('tmGiftResult', `You only have ${tm.gold} gold.`, true);
+    if (inf > tm.infantry || navy > tm.navy) return tmSay('tmGiftResult', `You only have ${tm.infantry} infantry and ${tm.navy} ships.`, true);
+    tm.gold -= gold; tm.infantry -= inf; tm.navy -= navy;
+    tm.ledger.unshift({ text: `Sent to House ${to}`, amount: `−${tmUnits(gold, inf, navy)}` });
+    tm.done.gift = true;
+    tmSay('tmGiftResult', `Sent ${tmUnits(gold, inf, navy)} to House ${to}. It has already arrived, and you cannot ask for it back.`);
+    tmRenderBoard(); tourCheck();
+  });
+  $('tmAllianceForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const to = $('tmAllianceTarget').value;
+    if (!to) return tmSay('tmAllianceResult', 'Choose a house to offer the alliance to.', true);
+    const secret = $('tmAllianceScope').value === 'secret';
+    tm.alliances += 1; tm.done.alliance = true;
+    $('tmOffers').textContent = '1 offer sent';
+    tmSay('tmAllianceResult', `${secret ? 'Secret' : 'Public'} alliance offered to House ${to}. ${secret ? 'Only the two of you can see it.' : 'The whole realm can see it.'} They can accept, refuse, or sit on it.`);
+    tmRenderBoard(); tourCheck();
+  });
+  $('tmRavenForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const to = $('tmRavenTarget').value;
+    if (!to) return tmSay('tmRavenResult', 'Choose who the raven is going to.', true);
+    if (!$('tmRavenText').value.trim()) return tmSay('tmRavenResult', 'Write something for the raven to carry.', true);
+    tm.done.raven = true;
+    tmSay('tmRavenResult', `The raven is away to House ${to}. Nobody else will ever see it — and nothing holds you to a word of it.`);
+    tourCheck();
+  });
+  $('tmTreatyForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const to = $('tmTreatyTarget').value;
+    const gold = Math.max(0, Number($('tmTreatyGold').value) || 0);
+    const inf = Math.max(0, Number($('tmTreatyInf').value) || 0);
+    const navy = Math.max(0, Number($('tmTreatyNavy').value) || 0);
+    if (!gold && !inf && !navy) return tmSay('tmTreatyResult', 'The crown asked for 20 gold and 5 infantry. Send something.', true);
+    if (gold > tm.gold) return tmSay('tmTreatyResult', `You only have ${tm.gold} gold.`, true);
+    if (inf > tm.infantry || navy > tm.navy) return tmSay('tmTreatyResult', `You only have ${tm.infantry} infantry and ${tm.navy} ships.`, true);
+    tm.gold -= gold; tm.infantry -= inf; tm.navy -= navy;
+    tm.ledger.unshift({ text: `Tribute to House ${to}`, amount: `−${tmUnits(gold, inf, navy)}` });
+    tm.done.treaty = true;
+    const enough = gold >= 20 && inf >= 5;
+    tmSay('tmTreatyResult', enough
+      ? `${tmUnits(gold, inf, navy)} sent to House ${to}. The decree is answered in full — and the court saw you answer it.`
+      : `${tmUnits(gold, inf, navy)} sent to House ${to}. That is less than the crown demanded. Nothing stops you, but the King will notice.`);
+    tmRenderBoard(); tourCheck();
+  });
+  $('tmWarForm').addEventListener('submit', event => {
+    event.preventDefault();
+    if (!tm.warTarget) return tmSay('tmWarResult', 'Tap a city on the map to choose a target first.', true);
+    const amount = Math.max(0, Number($('tmWarAmount').value) || 0);
+    const have = tm.warMode === 'navy' ? tm.navy : tm.infantry;
+    const word = tm.warMode === 'navy' ? 'ships' : 'infantry';
+    if (!amount) return tmSay('tmWarResult', `Enter how many ${word} to send.`, true);
+    if (amount > have) return tmSay('tmWarResult', `You only have ${have} ${word} to send.`, true);
+    if (tm.warMode === 'navy') tm.navy -= amount; else tm.infantry -= amount;
+    tm.done.march = true;
+    tm.ledger.unshift({ text: `Marched on ${tm.warTarget}`, amount: `${amount} ${word}` });
+    tmSay('tmWarResult', `${amount} ${word} are on the road to ${tm.warTarget}, arriving after Round ${tm.warMode === 'navy' ? 3 : 2}. Until the Actions phase ends you can still call them back.`);
+    tmRenderBoard(); tourCheck();
+  });
+  $('tmRecruitForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const unit = $('tmRecruitUnit').value;
+    const amount = Math.max(0, Number($('tmRecruitAmount').value) || 0);
+    const cost = amount * (unit === 'navy' ? 5 : 4);
+    if (!amount) return tmSay('tmRecruitResult', 'Choose how many to recruit.', true);
+    if (cost > tm.gold) return tmSay('tmRecruitResult', `That costs ${cost} gold and you have ${tm.gold}.`, true);
+    tm.gold -= cost;
+    if (unit === 'navy') tm.navy += amount; else tm.infantry += amount;
+    tm.ledger.unshift({ text: `Recruited ${amount} ${unit === 'navy' ? 'ships' : 'infantry'}`, amount: `−${cost} gold` });
+    tm.done.recruit = true;
+    tmSay('tmRecruitResult', `${amount} ${unit === 'navy' ? 'ships' : 'infantry'} recruited for ${cost} gold. Your upkeep is now ${tm.infantry + tm.navy} gold a round — check the Money tile.`);
+    tmRenderBoard(); tourCheck();
+  });
+  $('tmSpyForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const to = $('tmSpyTarget').value;
+    const mission = $('tmSpyMission').value;
+    const gold = Number($('tmSpyGold').value) || 0;
+    if (!to) return tmSay('tmSpyResult', 'Choose a house to spy on.', true);
+    if (!mission) return tmSay('tmSpyResult', 'Choose a mission: Wealth, Messages or War.', true);
+    if (gold < 2 || gold > 20) return tmSay('tmSpyResult', 'Stake between 2 and 20 gold.', true);
+    if (gold > tm.gold) return tmSay('tmSpyResult', `You only have ${tm.gold} gold.`, true);
+    tm.gold -= gold;
+    tm.ledger.unshift({ text: `Spies sent to House ${to} (${mission})`, amount: `−${gold} gold` });
+    tm.done.spy = true;
+    const report = { wealth: `House ${to} is sitting on far more gold than they let on.`, messages: `Your spies copied two ravens between House ${to} and a house you thought was yours.`, war: `House ${to} has an army already on the road — and not towards you.` }[mission];
+    tmSay('tmSpyResult', `${gold} gold spent. ${report} In a real game the odds decide whether the report is good, bad, or whether your spies are caught in the open.`);
+    tmRenderBoard(); tourCheck();
+  });
+
 
   let editingBotId = null;
   function openBotEditor(botId) {
@@ -2011,8 +2421,8 @@
   document.addEventListener('keydown', e => {
     if (!tutorialOpen) return;
     if (e.key === 'Escape') { e.stopPropagation(); closeTutorial(); return; }
-    if (e.key === 'ArrowRight' && tutorialStep < TUTORIAL_STEPS.length - 1) { e.stopPropagation(); tutorialStep += 1; renderTutorial(); return; }
-    if (e.key === 'ArrowLeft' && tutorialStep > 0) { e.stopPropagation(); tutorialStep -= 1; renderTutorial(); }
+    if (e.key === 'ArrowRight' && tutorialStep < TOUR.length - 1 && !$('tutNext').disabled) { e.stopPropagation(); tourGo(tutorialStep + 1); return; }
+    if (e.key === 'ArrowLeft' && tutorialStep > 0) { e.stopPropagation(); tourGo(tutorialStep - 1); }
   }, true);
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
@@ -2151,11 +2561,11 @@
     if (action === 'exp-new') { setExperience('new'); render(); openTutorial(0); return; }
     if (action === 'exp-veteran') { setExperience('veteran'); render(); return; }
     if (action === 'tut-close') { closeTutorial(); return; }
-    if (action === 'tut-go') { tutorialStep = Number(button.dataset.step) || 0; renderTutorial(); return; }
-    if (action === 'tut-back') { tutorialStep -= 1; renderTutorial(); return; }
+    if (action === 'tut-go') { tourGo(Math.max(0, tourLessonStart(Number(button.dataset.step) || 0))); return; }
+    if (action === 'tut-back') { tourGo(tutorialStep - 1); return; }
     if (action === 'tut-next') {
-      if (tutorialStep >= TUTORIAL_STEPS.length - 1) return closeTutorial();
-      tutorialStep += 1; renderTutorial(); return;
+      if (tutorialStep >= TOUR.length - 1) return closeTutorial();
+      tourGo(tutorialStep + 1); return;
     }
     if (action === 'pm-host') { closePlayerMenu(); openAdvanced('live'); return; }
     if (action === 'pm-leave') { closePlayerMenu(); if (window.confirm('Leave this game?')) $('logoutButton').click(); return; }

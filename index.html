@@ -120,118 +120,204 @@
     </section>
   </main>
 
+  <!-- The interactive tour. Everything inside the stage is a practice board: no server, no real game state. -->
   <div id="tutorialOverlay" class="tut-overlay" role="dialog" aria-modal="true" aria-labelledby="tutTitle" hidden>
-    <div class="tut-backdrop" data-action="tut-close"></div>
-    <section class="tut-sheet">
-      <header class="tut-head">
-        <div><p class="eyebrow" id="tutEyebrow">LESSON 1 OF 4</p><h2 id="tutTitle">The main menu &amp; your screen</h2></div>
-        <button class="button button-quiet button-small" type="button" data-action="tut-close">Skip</button>
-      </header>
+    <div class="tut-stage" id="tutStage">
+
+      <div class="tm-topbar" id="tmTopbar">
+        <button class="tm-brand" id="tmBrand" type="button" data-tm="brand"><span class="tm-brand-mark"><img src="./assets/iron-throne-icon.png?v=2" alt=""></span><span><strong>WAR OF WESTEROS</strong><small>THE GREAT HOUSES</small></span></button>
+        <span class="tm-pin" id="tmPin" hidden>Room PIN <strong>KR7X</strong></span>
+        <div class="tm-stats" id="tmStats" hidden>
+          <span class="tm-stat"><img src="./assets/game-coins.png?v=3" alt="Gold"><b id="tmGold">120</b><small>gold</small></span>
+          <span class="tm-stat"><img src="./assets/game-swords.png?v=3" alt="Army"><b id="tmArmy">14</b><small>army</small></span>
+          <span class="tm-stat tm-role"><img src="./assets/game-hand.png?v=3" alt="Hand of the King"></span>
+        </div>
+        <button class="tm-round" id="tmRound" type="button" data-tm="ready">ROUND 1 · READY</button>
+      </div>
+
+      <div class="tm-scene" data-scene="entry" id="tmSceneEntry">
+        <h2 class="tm-wordmark">War of Westeros</h2>
+        <p class="tm-quote">“When you play the game of thrones, you win or you die.”</p>
+        <div class="tm-entry-buttons" id="tmEntryButtons">
+          <button class="tm-entry" id="tmHost" type="button" data-tm="host"><strong>HOST GAME</strong><small>Create a new game and invite players.</small></button>
+          <button class="tm-entry" id="tmJoin" type="button" data-tm="join"><strong>JOIN GAME</strong><small>Enter a four-character game PIN.</small></button>
+        </div>
+        <div class="tm-setup" id="tmSetup" hidden>
+          <p class="eyebrow">HOST ONLY · MATCH SETUP</p>
+          <div class="tm-setup-row"><label>Game type</label><select data-tm-noop><option>Classic</option><option>Teams</option><option>Last Dragon</option></select></div>
+          <div class="tm-setup-row"><label>Player limit</label><select data-tm-noop><option>6 players</option><option>8 players</option></select></div>
+          <div class="tm-setup-row"><label>Friendly fire</label><span class="tm-pill-on">On</span></div>
+          <p class="muted small-text">Advanced settings… holds alliances, the Hand of the King, house buffs, which houses are in play, ready buttons, the round timer and popups.</p>
+        </div>
+        <div class="tm-houses" id="tmHouses" hidden></div>
+      </div>
+
+      <div class="tm-scene" data-scene="game" id="tmSceneGame" hidden>
+        <div class="tm-welcome"><p class="eyebrow">ROUND ACTIONS</p><h3>Round 1: prepare your moves</h3><p class="muted small-text">Recruit forces, buy intelligence and plan an attack. Army sizes stay private from enemy houses.</p></div>
+        <div class="tm-hub" id="tmHub">
+          <button class="tm-hub-btn" id="tmHubMoney" type="button" data-tm-hub="money"><img src="./assets/game-coins.png?v=3" alt=""><h3>Money</h3><div><strong class="tm-hub-gold">120</strong><span>+18 income · −14 upkeep</span><span>2 capitals</span></div></button>
+          <button class="tm-hub-btn" id="tmHubRelations" type="button" data-tm-hub="relations"><img src="./assets/game-handshake.png?v=3" alt=""><h3>Relations</h3><div><strong id="tmAlliances">0 alliances</strong><span id="tmOffers">No offers waiting</span><span>You are the Hand</span></div></button>
+          <button class="tm-hub-btn" id="tmHubArmy" type="button" data-tm-hub="army"><img src="./assets/game-swords.png?v=3" alt=""><h3>Army</h3><div><strong class="tm-hub-army">14</strong><span id="tmArmyDetail">10 infantry · 4 ships</span><span>1 gold each per round</span></div></button>
+        </div>
+        <div class="tm-footer" id="tmFooter"><span>WAR OF WESTEROS · PROTOTYPE BUILD 0.1</span><span>Power is a game of information, timing, and trust.</span></div>
+      </div>
+
+      <div class="tm-sheet" id="tmSheet" hidden>
+        <header class="tm-sheet-head"><div><p class="eyebrow" id="tmSheetEyebrow"></p><h3 id="tmSheetTitle"></h3></div><button class="tm-x" type="button" data-tm="close-sheet">Close</button></header>
+        <div class="tm-sheet-body">
+
+          <div class="tm-pane" data-pane="money" hidden>
+            <div class="tm-submenu" data-sub="root">
+              <div class="tm-gold-panel" id="tmGoldPanel"><img src="./assets/game-coins.png?v=3" alt=""><div><strong id="tmGoldBig">120 gold</strong><small id="tmGoldNote">+4 a round · 18 income − 14 upkeep</small></div></div>
+              <button class="tm-sub-btn" type="button" data-tm-sub="gift"><img src="./assets/game-handshake.png?v=3" alt=""><h4>Send money &amp; troops</h4></button>
+              <button class="tm-sub-btn" type="button" data-tm-sub="reports"><img src="./assets/ui-letter.png?v=3" alt=""><h4>Reports</h4></button>
+            </div>
+            <div class="tm-subpage" data-sub="gift" hidden>
+              <button class="tm-back" type="button" data-tm="sub-back">← Back</button>
+              <form class="tm-form" id="tmGiftForm">
+                <p class="muted small-text">Send gold, troops or ships to any player with a note. It arrives at once and cannot be taken back.</p>
+                <label for="tmGiftTarget">Send to</label><select id="tmGiftTarget" required></select>
+                <div class="tm-cols-3">
+                  <div><label for="tmGiftGold">Gold</label><input id="tmGiftGold" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                  <div><label for="tmGiftInf">Infantry</label><input id="tmGiftInf" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                  <div><label for="tmGiftNavy">Ships</label><input id="tmGiftNavy" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                </div>
+                <label for="tmGiftNote">Note</label><input id="tmGiftNote" maxlength="80" placeholder="A few words to go with it…" autocomplete="off">
+                <button class="tm-primary" type="submit">Send</button>
+                <p class="tm-result" id="tmGiftResult" hidden></p>
+              </form>
+            </div>
+            <div class="tm-subpage" data-sub="reports" hidden>
+              <button class="tm-back" type="button" data-tm="sub-back">← Back</button>
+              <div class="tm-block"><p class="eyebrow">EVERY COIN, SOLDIER AND EVENT</p><h4>Ledger</h4><div class="tm-ledger" id="tmLedger"></div></div>
+              <div class="tm-block"><p class="eyebrow">THE REALM’S RECORD</p><h4>Battles</h4><div class="tm-ledger"><div class="tm-ledger-row"><span>Round 1 · no battles fought yet</span></div></div></div>
+            </div>
+          </div>
+
+          <div class="tm-pane" data-pane="relations" hidden>
+            <div class="tm-submenu" data-sub="root">
+              <button class="tm-sub-btn" type="button" data-tm-sub="alliances"><img src="./assets/game-handshake.png?v=3" alt=""><h4>Alliances</h4></button>
+              <button class="tm-sub-btn" type="button" data-tm-sub="messages"><img src="./assets/game-raven.png?v=3" alt=""><h4>Messages</h4></button>
+              <button class="tm-sub-btn" type="button" data-tm-sub="treaties"><img src="./assets/ui-letter.png?v=3" alt=""><h4>Pay Taxes &amp; Tribute</h4></button>
+              <button class="tm-sub-btn" type="button" data-tm-sub="decrees"><img src="./assets/game-throne.png?v=3" alt=""><h4>Decrees</h4></button>
+            </div>
+            <div class="tm-subpage" data-sub="alliances" hidden>
+              <button class="tm-back" type="button" data-tm="sub-back">← Back</button>
+              <form class="tm-form" id="tmAllianceForm">
+                <p class="muted small-text">A public alliance warns the realm off both of you. A secret one is known only to the two of you.</p>
+                <label for="tmAllianceTarget">House</label><select id="tmAllianceTarget" required></select>
+                <label for="tmAllianceScope">Visibility</label><select id="tmAllianceScope"><option value="public">Public alliance</option><option value="secret">Secret alliance</option></select>
+                <button class="tm-primary" type="submit">Send offer</button>
+                <p class="tm-result" id="tmAllianceResult" hidden></p>
+              </form>
+            </div>
+            <div class="tm-subpage" data-sub="messages" hidden>
+              <button class="tm-back" type="button" data-tm="sub-back">← Back</button>
+              <form class="tm-form" id="tmRavenForm">
+                <p class="muted small-text">Ravens are private. The game never checks whether you meant what you wrote.</p>
+                <label for="tmRavenTarget">To</label><select id="tmRavenTarget" required></select>
+                <label for="tmRavenText">Message</label><input id="tmRavenText" maxlength="120" placeholder="March with me on the Lannisters and the Rock is yours…" autocomplete="off">
+                <button class="tm-primary" type="submit">Send raven</button>
+                <p class="tm-result" id="tmRavenResult" hidden></p>
+              </form>
+            </div>
+            <div class="tm-subpage" data-sub="treaties" hidden>
+              <button class="tm-back" type="button" data-tm="sub-back">← Back</button>
+              <div class="tm-decree-note" id="tmDecreeNote"><img src="./assets/game-throne.png?v=3" alt=""><div><strong>Royal decree · House Lannister</strong><span>“The crown demands 20 gold and 5 infantry of you this round.”</span></div></div>
+              <form class="tm-form" id="tmTreatyForm">
+                <label for="tmTreatyTarget">House</label><select id="tmTreatyTarget" required></select>
+                <div class="tm-cols-3">
+                  <div><label for="tmTreatyGold">Gold</label><input id="tmTreatyGold" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                  <div><label for="tmTreatyInf">Infantry</label><input id="tmTreatyInf" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                  <div><label for="tmTreatyNavy">Ships</label><input id="tmTreatyNavy" type="number" min="0" placeholder="0" inputmode="numeric"></div>
+                </div>
+                <label for="tmTreatyNote">Message</label><input id="tmTreatyNote" maxlength="80" placeholder="As the crown commands…" autocomplete="off">
+                <button class="tm-primary" type="submit">Send treaty</button>
+                <p class="tm-result" id="tmTreatyResult" hidden></p>
+              </form>
+            </div>
+            <div class="tm-subpage" data-sub="decrees" hidden>
+              <button class="tm-back" type="button" data-tm="sub-back">← Back</button>
+              <div class="tm-block tm-locked">
+                <p class="eyebrow">THE CROWN</p><h4>Royal decrees</h4>
+                <p class="muted small-text">Only the King sees this page. One decree per round, to a single house, with an optional demand for gold, infantry or ships. The King also appoints the Hand, reads the Traitors list, and may forfeit the crown.</p>
+                <div class="tm-locked-strip"><img src="./assets/game-throne.png?v=3" alt="">You are not the King — this is what they see.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tm-pane" data-pane="army" hidden>
+            <div class="tm-submenu" data-sub="root">
+              <button class="tm-sub-btn" type="button" data-tm-sub="map"><img src="./assets/ui-map.png?v=3" alt=""><h4>War map</h4></button>
+              <button class="tm-sub-btn" type="button" data-tm-sub="recruit"><img src="./assets/ui-army.png?v=4" alt=""><h4>Recruit &amp; Disband</h4></button>
+              <button class="tm-sub-btn" type="button" data-tm-sub="spies"><img src="./assets/game-spy.png?v=3" alt=""><h4>Spies</h4></button>
+            </div>
+            <div class="tm-subpage" data-sub="map" hidden>
+              <button class="tm-back" type="button" data-tm="sub-back">← Back</button>
+              <p class="muted small-text">Tap a city to make it your target. Only house capitals can be marched on.</p>
+              <div class="tm-map" id="tmMap"></div>
+              <form class="tm-form tm-war" id="tmWarForm">
+                <div class="tm-target" id="tmWarTarget">No target chosen yet</div>
+                <div class="tm-seg" id="tmWarMode" role="group" aria-label="What to send">
+                  <button type="button" data-tm-mode="infantry" aria-pressed="true">Soldiers</button>
+                  <button type="button" data-tm-mode="navy" aria-pressed="false">Ships</button>
+                </div>
+                <label for="tmWarAmount">How many to send</label><input id="tmWarAmount" type="number" min="1" placeholder="0" inputmode="numeric">
+                <button class="tm-primary" type="submit">March</button>
+                <p class="tm-result" id="tmWarResult" hidden></p>
+              </form>
+            </div>
+            <div class="tm-subpage" data-sub="recruit" hidden>
+              <button class="tm-back" type="button" data-tm="sub-back">← Back</button>
+              <form class="tm-form" id="tmRecruitForm">
+                <p class="muted small-text">Infantry costs <b>4</b> gold each. Navy costs <b>5</b>. Every unit then costs 1 gold a round in upkeep.</p>
+                <label for="tmRecruitUnit">Unit type</label><select id="tmRecruitUnit"><option value="infantry">Infantry</option><option value="navy">Navy</option></select>
+                <label for="tmRecruitAmount">Quantity</label><input id="tmRecruitAmount" type="number" min="1" value="2" inputmode="numeric">
+                <p class="tm-cost" id="tmRecruitCost">8 gold</p>
+                <button class="tm-primary" type="submit">Recruit</button>
+                <p class="tm-result" id="tmRecruitResult" hidden></p>
+              </form>
+            </div>
+            <div class="tm-subpage" data-sub="spies" hidden>
+              <button class="tm-back" type="button" data-tm="sub-back">← Back</button>
+              <form class="tm-form" id="tmSpyForm">
+                <p class="muted small-text">More gold means better odds. A caught spy is not a secret.</p>
+                <label for="tmSpyTarget">Target house</label><select id="tmSpyTarget" required></select>
+                <label for="tmSpyMission">Mission</label><select id="tmSpyMission"><option value="">Choose a mission</option><option value="wealth">Wealth</option><option value="messages">Messages</option><option value="war">War</option></select>
+                <label for="tmSpyGold">Gold to spend (2–20)</label><input id="tmSpyGold" type="number" min="2" max="20" placeholder="2–20" inputmode="numeric">
+                <p class="tm-cost" id="tmSpyOdds">Choose a mission and a stake.</p>
+                <button class="tm-primary" type="submit">Send spies</button>
+                <p class="tm-result" id="tmSpyResult" hidden></p>
+              </form>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="tut-dim" id="tutDim" aria-hidden="true"><div class="tut-spot" id="tutSpot"></div></div>
+
+    <aside class="tut-coach" id="tutCoach">
       <ol class="tut-rail" id="tutRail">
         <li><button type="button" data-action="tut-go" data-step="0"><span>1</span>Main menu</button></li>
         <li><button type="button" data-action="tut-go" data-step="1"><span>2</span>Money</button></li>
         <li><button type="button" data-action="tut-go" data-step="2"><span>3</span>Relations</button></li>
         <li><button type="button" data-action="tut-go" data-step="3"><span>4</span>Army</button></li>
       </ol>
-      <div class="tut-body" id="tutBody">
-
-        <article class="tut-step" data-step="0" hidden>
-          <p class="tut-lede">Everything before the first round happens on the throne screen, and everything during a round hangs off the bar at the top.</p>
-          <div class="tut-block">
-            <h3><img src="./assets/game-castle.png?v=3" alt="">Hosting or joining</h3>
-            <p><b>HOST GAME</b> opens a new game and gives you a four-character PIN, shown in the top bar as <b>Room PIN</b>. Read it out; everyone else taps <b>JOIN GAME</b> and types it in. Only the host sets up the match: the game type (<b>Classic</b>, <b>Teams</b> or <b>Last Dragon</b>), the player limit, and whether friendly fire is allowed. <b>Advanced settings…</b> holds the rest — alliances on or off, the Hand of the King, house buffs, which houses are in play, how the ready buttons work, the round timer, and which popups everyone sees.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/iron-throne-icon.png?v=2" alt="">Choosing your house</h3>
-            <p>Next comes the banner wall. One player holds each house (in Teams, a few of you share one), so a house already taken is greyed out and a house the host switched off is gone entirely. Each banner shows its motto and, if house buffs are on, the advantage and weakness that come with it. Confirm the house, enter your name, and you land in the Great Hall — the lobby — where you can still swap house or rename yourself until the host begins.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/game-coins.png?v=3" alt="">The header, in game</h3>
-            <p>The sigil on the <b>left</b> is your own settings menu: change your name, pick a colour scheme, switch the interface style or screen layout, control which popups interrupt you, reopen this tour, or leave the game.</p>
-            <p>The <b>middle</b> is your house at a glance — your gold and your total army, and in Last Dragon also the rounds left and how many Targaryens survive. A throne icon appears if you are the King (tap it to forfeit the crown) and a hand icon if you are the Hand.</p>
-            <p>On the <b>right</b> sit the connection pill, the phase timer if the host set one, and the <b>round pill</b>. That pill is the most important button on the screen: as a player it is your <b>READY</b> toggle, telling the host you are done; as the host it is what moves the round forward.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/ui-hourglass.png?v=3" alt="">How a round runs</h3>
-            <p>Every round has three phases. In <b>Actions</b> you recruit, buy intelligence and order marches. In <b>Court</b> you talk — alliances, ravens, tribute, and one royal decree. In <b>Resolution</b> the host closes the round: battles that are due are fought, income is collected, and the chronicle is written. The three big menus below the header — <b>Money</b>, <b>Relations</b> and <b>Army</b> — are where all of it happens.</p>
-          </div>
-          <div class="tut-block">
-            <h3>The footer</h3>
-            <p>Mostly flavour: the build name and a reminder of what the game is about. Outside a game it also carries the version tag and a small dot that turns green once the game server is awake — worth a glance if hosting seems slow.</p>
-          </div>
-        </article>
-
-        <article class="tut-step" data-step="1" hidden>
-          <p class="tut-lede">Gold buys soldiers, spies and loyalty. The Money menu is your treasury, your post and your accounts.</p>
-          <div class="tut-block">
-            <h3><img src="./assets/game-coins.png?v=3" alt="">The tile itself</h3>
-            <p>Before you even open it, the Money button shows your gold, your income minus your upkeep for the round, and how many capitals you hold. Open it and the gold panel at the top breaks the same figures down.</p>
-          </div>
-          <div class="tut-block">
-            <h3>Income and upkeep</h3>
-            <p>Capitals pay you at the end of every round. Every unit you own costs <b>1 gold a round</b> in upkeep, taken automatically — and that is the <i>only</i> gold that ever leaves your treasury on its own. A large army sitting at home will quietly bankrupt you, so disband what you are not using (that is in the Army menu). If income is below upkeep, the panel says so in the negative.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/game-handshake.png?v=3" alt="">Send money &amp; troops</h3>
-            <p>Pick any player, enter gold, infantry and ships in any combination, and attach a note. It arrives immediately and <b>cannot be taken back</b>, so it is a promise you have already kept — useful for buying an ally, paying off an invader, or reinforcing a friend mid-siege.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/ui-letter.png?v=3" alt="">Reports</h3>
-            <p>Three records live here. <b>War councils &amp; spoils</b> covers shared battles and what you were owed from them. The <b>Ledger</b> is the full account of every coin, soldier and event that touched your house — filter it by kind and read the running totals. <b>Battles</b> is the realm's record of every fight, yours or not. The number on the Reports button is how much is new since you last looked.</p>
-          </div>
-        </article>
-
-        <article class="tut-step" data-step="2" hidden>
-          <p class="tut-lede">Nothing in this menu is enforced by the game. That is the whole point of it.</p>
-          <div class="tut-block">
-            <h3><img src="./assets/game-handshake.png?v=3" alt="">Alliances</h3>
-            <p>Offer an alliance to any house, <b>public</b> or <b>secret</b>. A public alliance is a statement to the whole realm — it warns off attackers and paints a target on both of you. A secret alliance is known only to the two of you, which is how you keep a second set of friends. Offers you have sent and received sit in the list underneath, waiting to be accepted or refused, and either side can break one later.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/game-raven.png?v=3" alt="">Messages</h3>
-            <p>Ravens. Private notes to any house at court, where the deals actually get made. The game never checks whether you meant it.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/ui-letter.png?v=3" alt="">Pay taxes &amp; tribute</h3>
-            <p>A treaty: gold, troops or ships sent with a message attached. This is how you answer a royal decree, buy peace from a neighbour, or quietly fund someone else's war.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/game-throne.png?v=3" alt="">Decrees — if you are King</h3>
-            <p>The King gets one decree per round: addressed to a single house, with an optional demand for gold, infantry or ships. Refusal costs nothing mechanically and everything politically. The King also appoints a new <b>Hand</b> here, reads the <b>Traitors</b> list that only he can see, reviews the decrees he has issued, and may <b>forfeit the crown</b> — which sends him home from King's Landing and leaves the throne to the Hand, or to the first army to reach it.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/game-hand.png?v=3" alt="">The Hand's Ledger</h3>
-            <p>If you are the Hand of the King, this page shows the subsidies and decrees nobody else gets to see.</p>
-          </div>
-        </article>
-
-        <article class="tut-step" data-step="3" hidden>
-          <p class="tut-lede">Armies are the only thing that actually takes a city. They are also slow, expensive and visible once they move.</p>
-          <div class="tut-block">
-            <h3><img src="./assets/ui-map.png?v=3" alt="">The war map</h3>
-            <p>Tap a city to make it your target, choose whether you are sending <b>soldiers</b>, <b>ships</b> or <b>dragons</b>, enter the numbers, and march. Only house capitals can be marched on. Armies do not teleport: each order appears in your march list with what it carries and the round it <b>arrives</b>, and while it is still the Actions phase you can <b>call it back</b>. Fleets follow sea routes around the coast, so a target across the map takes longer by water. Tap one of your own marching armies on the map to change or recall its orders. If you are already laying siege to a city, the panel under the map lets you withdraw.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/ui-army.png?v=4" alt="">Recruit &amp; disband</h3>
-            <p>Buy infantry and navy at the prices printed on the card (4 and 5 gold by default; house buffs can change them). Disbanding sends units home and stops their upkeep immediately — the cheapest way out of a treasury that is bleeding.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/game-spy.png?v=3" alt="">Spies</h3>
-            <p>Choose a target house and a mission — <b>Wealth</b>, <b>Messages</b> or <b>War</b> — then stake between 2 and 20 gold. More gold means better odds, and the odds readout updates as you type. A caught spy is not a secret.</p>
-          </div>
-          <div class="tut-block">
-            <h3><img src="./assets/game-swords.png?v=3" alt="">What the others cannot see</h3>
-            <p>Army sizes stay hidden from enemy houses, which is why spying matters: without it you are guessing at what you are marching into, and so is everyone marching at you. Plan in Actions, talk in Court, and find out in Resolution.</p>
-          </div>
-        </article>
-
+      <div class="tut-coach-body">
+        <p class="eyebrow" id="tutEyebrow"></p>
+        <h2 id="tutTitle"></h2>
+        <div id="tutText"></div>
+        <p class="tut-task" id="tutTask" hidden><i class="tut-tick"></i><span id="tutTaskText"></span></p>
       </div>
       <footer class="tut-foot">
         <button id="tutBack" class="button button-quiet button-small" type="button" data-action="tut-back" hidden>← Back</button>
         <span id="tutDots" class="tut-dots" aria-hidden="true"></span>
         <button id="tutNext" class="button button-primary button-small" type="button" data-action="tut-next">Next <span>→</span></button>
       </footer>
-    </section>
+      <button class="tut-skip" type="button" data-action="tut-close">Skip the tutorial</button>
+    </aside>
   </div>
 
   <main id="hostSetupScreen" class="realm-screen" hidden>

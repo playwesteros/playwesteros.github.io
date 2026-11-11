@@ -4,7 +4,9 @@ Updated whenever a major change ships. Newest first.
 
 ## v1.4.5 (Nov 11, 2026)
 - **"Have you played before?"** Straight after you enter your name, the game asks once whether this is your first time. The answer is remembered, so nobody is asked twice.
-- **A four-part tour for new players:** choosing *This is my first time* opens a tour covering the main menu (hosting, the PIN, the banner wall, and the header, round pill and footer in game) and then one lesson each for the **Money**, **Relations** and **Army** menus. Jump between the four with the rail at the top, the arrow keys, or Back/Next; Escape or Skip closes it.
+- **An interactive tutorial on a practice board:** choosing *This is my first time* opens a hands-on tour. Everything but the thing being explained is dimmed out, and a card beside it tells you what you are looking at. It runs on a mock board — a fake top bar, the three menus and working forms — so nothing touches a real game.
+- **You do it, not just read it.** The tour has you host a game, claim a house, press READY, send gold to another house, offer an alliance, send a raven, pay a royal decree, pick a city and march an army at it, recruit troops and watch your upkeep climb, and stake gold on a spy mission. Steps with a task hold *Next* until you have done it (or pressed *Skip the tutorial*), and the board tops your treasury back up so a task is never impossible.
+- **Four lessons:** the main menu (hosting, the PIN, host setup, the banner wall, and the header, round pill and footer in game), then one each for **Money**, **Relations** and **Army**. Jump between them with the rail, the arrow keys, or Back/Next; Escape closes it.
 - **Reopen it any time:** *How to play* now sits in your settings menu under the sigil in the top left.
 
 ## v1.4.4 (Nov 11, 2026)
