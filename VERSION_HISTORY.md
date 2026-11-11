@@ -2,6 +2,10 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.4.1 (Nov 11, 2026)
+- **Ship routes on the map:** ships now sail through open water only, kept off the shoreline, and land on the beach nearest their target. Choosing Ships and a target city previews the planned route (with a ringed landing beach); ships on the march travel along it. Rounds of travel still come from the server.
+- **Chess-piece troops:** on the map, infantry, ships and dragons use the game's own unit icons, recoloured to your house colour (cream halo and dark outline so they stand out on land and sea) and standing on a chess-piece base. Your troops at home show one piece per type with its count; marches show the piece with a count badge. The army table and battle dice keep their original icons.
+
 ## v1.3.9 (Nov 10, 2026)
 - **Phone view stays put:** the phone-only "tap to go full screen" behaviour was kicking in inside the laptop phone frame and blowing it up to the whole screen. It is now off in Phone view.
 

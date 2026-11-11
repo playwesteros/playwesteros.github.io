@@ -450,43 +450,138 @@
     for (const c of state.capitals) { const p = pos.get(c.id); if (!c.siege || !p) continue; layer.appendChild(img('./assets/game-swords.png?v=3', p.x + 26, p.y - 74, 52)); layer.appendChild(tag(p.x + 52, p.y - 78, 'SIEGE', '#e8a79c')); }
     const home = pos.get(h.cityId);
     const color = (state.houses.find(x => x.id === h.id) || {}).color || '#c8a45c';
-    // An army badge: a dark disc with the gold army icon and the unit count in a pill, readable on parchment.
-    const badge = (cx, cy, r, count, label) => {
+    // Troops are the game's own unit icons recoloured to the house colour and set on a chess-piece base, so they stand out on land and sea.
+    const ICON_FILE = { infantry: 'ui-spear.png?v=3', navy: 'ui-ship.png?v=3', dragons: 'ui-dragon.png?v=3' };
+    const KIND_NAME = { infantry: 'infantry', navy: 'ships', dragons: 'dragons' };
+    const mixHex = (hex, other, t) => {
+      const p = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+      const a = p(/^#[0-9a-f]{6}$/i.test(hex) ? hex : '#c8a45c'), b = p(other);
+      return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('');
+    };
+    const tintFilter = fill => {
+      const id = 'troopTint' + fill.replace('#', ''), lo = mixHex(fill, '#1b1208', 0.5), hi = mixHex(fill, '#ffffff', 0.5), mid = mixHex(lo, fill, 0.5);
+      if (layer.querySelector('#' + id)) return id;
+      const ch = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16) / 255);
+      const [l, md, m, h2] = [ch(lo), ch(mid), ch(fill), ch(hi)];
+      const tbl = i => `${l[i].toFixed(3)} ${md[i].toFixed(3)} ${m[i].toFixed(3)} ${h2[i].toFixed(3)}`;
+      const defs = document.createElementNS(NS, 'defs');
+      defs.innerHTML = `<filter id="${id}" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+        <feMorphology in="SourceAlpha" operator="dilate" radius="6" result="d1"/><feFlood flood-color="#f6edd2"/><feComposite in2="d1" operator="in" result="halo"/>
+        <feMorphology in="SourceAlpha" operator="dilate" radius="3" result="d2"/><feFlood flood-color="#1b1208"/><feComposite in2="d2" operator="in" result="edge"/>
+        <feColorMatrix in="SourceGraphic" type="matrix" values="0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0.3 0.59 0.11 0 0  0 0 0 1 0" result="gray"/>
+        <feComponentTransfer in="gray" result="tint"><feFuncR type="table" tableValues="${tbl(0)}"/><feFuncG type="table" tableValues="${tbl(1)}"/><feFuncB type="table" tableValues="${tbl(2)}"/></feComponentTransfer>
+        <feMerge><feMergeNode in="halo"/><feMergeNode in="edge"/><feMergeNode in="tint"/></feMerge></filter>`;
+      layer.appendChild(defs);
+      return id;
+    };
+    const rectEl = (x, y, w, h, rx, fill, stroke, sw) => { const r = document.createElementNS(NS, 'rect'); r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', w); r.setAttribute('height', h); r.setAttribute('rx', rx); r.setAttribute('fill', fill); r.setAttribute('stroke', stroke); r.setAttribute('stroke-width', sw); return r; };
+    // A chess-piece stand: a wide base and a narrow collar in the house colour, with the recoloured unit icon standing on it.
+    const piece = (kind, cx, baseY, size, fill) => {
       const g = document.createElementNS(NS, 'g');
-      const disc = document.createElementNS(NS, 'circle'); disc.setAttribute('cx', cx); disc.setAttribute('cy', cy); disc.setAttribute('r', r); disc.setAttribute('fill', '#1b1208'); disc.setAttribute('stroke', color); disc.setAttribute('stroke-width', '8');
-      g.appendChild(disc);
-      g.appendChild(img('./assets/ui-army.png?v=4', cx - r * 0.78, cy - r * 0.78, r * 1.56));
+      const bw = size * 0.92, bh = size * 0.17, cw = size * 0.66, ch = size * 0.08;
+      const dark = mixHex(fill, '#1b1208', 0.55), light = mixHex(fill, '#ffffff', 0.28);
+      g.appendChild(rectEl(cx - bw / 2 - 5, baseY - bh - 5, bw + 10, bh + 10, bh / 2 + 5, '#f6edd2', '#f6edd2', 0));
+      const icon = img('./assets/' + ICON_FILE[kind], cx - size * 0.46, baseY - bh - ch - size * 0.9 + size * 0.06, size * 0.92);
+      icon.setAttribute('filter', `url(#${tintFilter(fill)})`);
+      g.appendChild(icon);
+      g.appendChild(rectEl(cx - cw / 2, baseY - bh - ch, cw, ch + 2, ch / 3, fill, '#1b1208', 3));
+      g.appendChild(rectEl(cx - bw / 2, baseY - bh, bw, bh, bh / 2, fill, '#1b1208', 3.5));
+      const shine = document.createElementNS(NS, 'path'); shine.setAttribute('d', `M${cx - bw / 2 + bh * 0.6} ${baseY - bh * 0.62}H${cx + bw / 2 - bh * 0.6}`); shine.setAttribute('stroke', light); shine.setAttribute('stroke-width', Math.max(2, bh * 0.16)); shine.setAttribute('stroke-linecap', 'round');
+      g.appendChild(shine);
+      const under = document.createElementNS(NS, 'path'); under.setAttribute('d', `M${cx - bw / 2 + bh * 0.6} ${baseY - bh * 0.2}H${cx + bw / 2 - bh * 0.6}`); under.setAttribute('stroke', dark); under.setAttribute('stroke-width', Math.max(2, bh * 0.16)); under.setAttribute('stroke-linecap', 'round');
+      g.appendChild(under);
+      return g;
+    };
+    // A badge: the piece with its unit count in a dark pill.
+    const badge = (cx, cy, r, count, label, kind = 'infantry') => {
+      const g = document.createElementNS(NS, 'g');
+      g.appendChild(piece(kind, cx, cy + r, r * 2, color));
       const w = 30 + String(count).length * 26, ph = 48;
-      const pill = document.createElementNS(NS, 'rect'); pill.setAttribute('x', cx + r * 0.35); pill.setAttribute('y', cy + r * 0.25); pill.setAttribute('width', w); pill.setAttribute('height', ph); pill.setAttribute('rx', ph / 2); pill.setAttribute('fill', '#1b1208'); pill.setAttribute('stroke', color); pill.setAttribute('stroke-width', '5');
+      const pill = document.createElementNS(NS, 'rect'); pill.setAttribute('x', cx + r * 0.62); pill.setAttribute('y', cy + r * 0.5); pill.setAttribute('width', w); pill.setAttribute('height', ph); pill.setAttribute('rx', ph / 2); pill.setAttribute('fill', '#1b1208'); pill.setAttribute('stroke', '#f6edd2'); pill.setAttribute('stroke-width', '4');
       g.appendChild(pill);
-      const t = document.createElementNS(NS, 'text'); t.setAttribute('x', cx + r * 0.35 + w / 2); t.setAttribute('y', cy + r * 0.25 + 35); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '36'); t.setAttribute('font-weight', '700'); t.setAttribute('fill', '#f3e6c2'); t.setAttribute('font-family', 'Georgia, serif'); t.textContent = String(count);
+      const t = document.createElementNS(NS, 'text'); t.setAttribute('x', cx + r * 0.62 + w / 2); t.setAttribute('y', cy + r * 0.5 + 35); t.setAttribute('text-anchor', 'middle'); t.setAttribute('font-size', '36'); t.setAttribute('font-weight', '700'); t.setAttribute('fill', '#f3e6c2'); t.setAttribute('font-family', 'Georgia, serif'); t.textContent = String(count);
       g.appendChild(t);
       const title = document.createElementNS(NS, 'title'); title.textContent = label; g.appendChild(title);
       return g;
     };
+    // Ship routes: open water only, kept off the shore, from the sailing grid (sea-routes.js). Walk to the harbour, sail, land on the beach nearest the target.
+    const capAt = (x, y) => state.capitals.find(c => c.x === x && c.y === y);
+    const seaPath = (fromCap, toCap) => {
+      const sea = window.SEA_ROUTES?.[`${fromCap?.id}>${toCap?.id}`];
+      return sea && fromCap && toCap ? { sea, all: [[fromCap.x, fromCap.y], ...sea, [toCap.x, toCap.y]] } : null;
+    };
+    const smoothD = pts => {
+      if (pts.length < 3) return 'M' + pts.map(q => q.join(' ')).join('L');
+      let d = `M${pts[0][0]} ${pts[0][1]}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+        d += `C${p1[0] + (p2[0] - p0[0]) / 6} ${p1[1] + (p2[1] - p0[1]) / 6} ${p2[0] - (p3[0] - p1[0]) / 6} ${p2[1] - (p3[1] - p1[1]) / 6} ${p2[0]} ${p2[1]}`;
+      }
+      return d;
+    };
+    const pathEl = (d, stroke, w, dash, opacity) => {
+      const el = document.createElementNS(NS, 'path'); el.setAttribute('d', d); el.setAttribute('fill', 'none'); el.setAttribute('stroke', stroke); el.setAttribute('stroke-width', w); el.setAttribute('stroke-linecap', 'round'); el.setAttribute('stroke-linejoin', 'round');
+      if (dash) el.setAttribute('stroke-dasharray', dash); if (opacity) el.setAttribute('opacity', opacity);
+      return el;
+    };
+    const drawSeaRoute = (route, planned, returning) => {
+      const g = document.createElementNS(NS, 'g');
+      const d = smoothD(route.sea);
+      g.appendChild(pathEl(d, '#f6edd2', 20, '', '.85'));
+      g.appendChild(pathEl(d, planned ? '#1b1208' : color, planned ? 6 : 9, planned ? '4 18' : returning ? '8 18' : '', ''));
+      const first = route.all[0], hs = route.sea[0], last = route.all[route.all.length - 1], hb = route.sea[route.sea.length - 1];
+      for (const [x1, y1, x2, y2] of [[first[0], first[1], hs[0], hs[1]], [hb[0], hb[1], last[0], last[1]]]) {
+        const walk = document.createElementNS(NS, 'line'); walk.setAttribute('x1', x1); walk.setAttribute('y1', y1); walk.setAttribute('x2', x2); walk.setAttribute('y2', y2); walk.setAttribute('stroke', '#1b1208'); walk.setAttribute('stroke-width', '6'); walk.setAttribute('stroke-dasharray', '10 10'); walk.setAttribute('stroke-linecap', 'round');
+        g.appendChild(walk);
+      }
+      const beach = document.createElementNS(NS, 'circle'); beach.setAttribute('cx', hb[0]); beach.setAttribute('cy', hb[1]); beach.setAttribute('r', '17'); beach.setAttribute('fill', '#f6edd2'); beach.setAttribute('stroke', color); beach.setAttribute('stroke-width', '8');
+      const bt = document.createElementNS(NS, 'title'); bt.textContent = 'Landing beach'; beach.appendChild(bt); g.appendChild(beach);
+      layer.appendChild(g);
+    };
+    const alongPath = (pts, t) => {
+      const seg = []; let len = 0;
+      for (let i = 0; i < pts.length - 1; i++) { const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]); seg.push(l); len += l; }
+      let want = len * t;
+      for (let i = 0; i < seg.length; i++) { if (want <= seg[i] || i === seg.length - 1) { const f = seg[i] ? Math.min(1, want / seg[i]) : 0; return { x: pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, y: pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f }; } want -= seg[i]; }
+      return { x: pts[0][0], y: pts[0][1] };
+    };
+    const homeCap = state.capitals.find(c => c.id === h.cityId);
+    const planTarget = attackMode === 'navy' && warTargetId ? state.capitals.find(c => c.id === warTargetId) : null;
+    if (planTarget && homeCap) { const r = seaPath(homeCap, planTarget); if (r) drawSeaRoute(r, true, false); }
     if (home) {
       const ring = document.createElementNS(NS, 'circle'); ring.setAttribute('cx', home.x); ring.setAttribute('cy', home.y); ring.setAttribute('r', '44'); ring.setAttribute('fill', 'none'); ring.setAttribute('stroke', color); ring.setAttribute('stroke-width', '8'); ring.setAttribute('stroke-dasharray', '14 10');
       const rt = document.createElementNS(NS, 'title'); rt.textContent = 'You live here'; ring.appendChild(rt);
       layer.appendChild(ring);
-      const troops = h.infantry + h.navy + h.dragons;
-      if (troops > 0) layer.appendChild(badge(home.x - 86, home.y - 40, 40, troops, `Your troops at home: ${troops}`));
+      const kinds = [['infantry', h.infantry], ['navy', h.navy], ['dragons', h.dragons]].filter(([, n]) => n > 0);
+      const side = home.x < 340 ? 1 : -1; // keep the row on the map when the city sits near the left edge
+      kinds.forEach(([k, n], i) => layer.appendChild(badge(home.x + side * (78 + i * 132), home.y - 36, 38, n, `Your ${KIND_NAME[k]} at home: ${n}`, k)));
     }
+    const marchShapes = [];
     for (const o of (h.marches || [])) {
       const from = { x: o.fromX, y: o.fromY }, to = { x: o.toX, y: o.toY };
       if (!Number.isFinite(from.x) || !Number.isFinite(to.x)) continue;
       const step = (state.round - o.orderedRound) * 2 + ['ACTION', 'COURT', 'RESOLUTION'].indexOf(state.phase);
       const total = Math.max(2, (o.resolveRound - o.orderedRound) * 2);
       const t = Math.min(0.85, 0.15 + 0.7 * Math.min(1, step / total));
+      const kind = o.units.navy > 0 ? 'navy' : o.units.dragons > 0 ? 'dragons' : 'infantry';
+      const n = o.units[kind];
+      const label = o.returning ? `Your ${KIND_NAME[kind]} marching home` : `Your ${KIND_NAME[kind]} marching on ${o.targetName}`;
+      const route = kind === 'navy' ? seaPath(capAt(from.x, from.y), capAt(to.x, to.y)) : null;
+      if (route) {
+        drawSeaRoute(route, false, o.returning);
+        const at = alongPath(route.all, t);
+        marchShapes.push({ x: at.x, y: at.y, n, label, kind });
+        continue;
+      }
       for (const [w, stroke] of [[18, '#1b1208'], [9, color]]) {
         const line = document.createElementNS(NS, 'line');
         line.setAttribute('x1', from.x); line.setAttribute('y1', from.y); line.setAttribute('x2', to.x); line.setAttribute('y2', to.y);
         line.setAttribute('stroke', stroke); line.setAttribute('stroke-width', w); line.setAttribute('stroke-dasharray', o.returning ? '8 18' : '26 16'); line.setAttribute('stroke-linecap', 'round');
         layer.appendChild(line);
       }
-      const x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t;
-      const n = o.units.infantry + o.units.navy + o.units.dragons;
-      layer.appendChild(badge(x, y, 50, n, o.returning ? 'Your army marching home' : `Your army marching on ${o.targetName}`));
+      marchShapes.push({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, n, label, kind });
     }
+    for (const m of marchShapes) layer.appendChild(badge(m.x, m.y, 50, m.n, m.label, m.kind));
   }
   function showMapHint(text) {
     const hint = $('mapHint');
@@ -1888,6 +1983,7 @@
         showMapHint('War map: tap a highlighted city to march on it.');
         renderWarTarget();
         updateAttackLock();
+        renderMapUnits();
         $('warPanel').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         return;
       }
@@ -1969,13 +2065,13 @@
     if (action === 'close-announce') { closeAnnouncement(); return; }
     if (action === 'toggle-traitor') { emitAction('mark-traitor', { playerId: button.dataset.playerId, traitor: button.dataset.traitor === 'true' }); return; }
     if (action === 'gold-info') return;
-    if (action === 'attack-mode') { attackMode = button.dataset.v || 'infantry'; applyAttackMode(); updateAttackLock(); return; }
+    if (action === 'attack-mode') { attackMode = button.dataset.v || 'infantry'; applyAttackMode(); updateAttackLock(); renderMapUnits(); return; }
     if (action === 'ledger-filter') { ledgerFilter = button.dataset.filter || 'all'; renderHub(); return; }
     if (action === 'toggle-ledger') { ledgerAll = !ledgerAll; renderHub(); return; }
     if (action === 'close-decree-popup') { $('decreeOverlay').hidden = true; return; }
     if (action === 'cancel-march') { emitAction('cancel-march', { marchId: button.dataset.marchId }); return; }
     if (action === 'withdraw-army') { emitAction('withdraw-army', { capitalId: warTargetId }); return; }
-    if (action === 'war-cancel') { warTargetId = null; renderWarTarget(); updateAttackLock(); return; }
+    if (action === 'war-cancel') { warTargetId = null; renderWarTarget(); updateAttackLock(); renderMapUnits(); return; }
     if (action === 'open-map') { setMapOpen(true); return; }
     if (action === 'forfeit-crown') { if (window.confirm('Forfeit the crown? You return to your home city. The Hand may take the throne, or the first army to reach King’s Landing will take it unopposed.')) emitAction('forfeit-crown'); return; }
     if (action === 'crown-take') { $('crownDialog').close(); emitAction('crown-choice', { accept: true }); return; }
