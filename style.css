@@ -1151,13 +1151,19 @@ html.phone-frame .orientation-lock { display: none !important; }
 .tut-overlay[hidden] { display: none; }
 .tut-dim { position: absolute; inset: 0; pointer-events: none; }
 /* A hole with a big soft shadow: the rest of the screen is shaded, not hidden. */
-.tut-spot { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(6, 7, 9, .38); transition: top .28s cubic-bezier(.4, 0, .2, 1), left .28s cubic-bezier(.4, 0, .2, 1), width .28s cubic-bezier(.4, 0, .2, 1), height .28s cubic-bezier(.4, 0, .2, 1); }
-.tut-spot.is-on { outline: 2px solid var(--gold); box-shadow: 0 0 0 100vmax rgba(6, 7, 9, .38), 0 0 26px 3px rgba(237, 212, 162, .34); }
+.tut-spot { position: absolute; top: 50%; left: 50%; width: 0; height: 0; border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(6, 7, 9, .56); transition: top .2s cubic-bezier(.4, 0, .2, 1), left .2s cubic-bezier(.4, 0, .2, 1), width .2s cubic-bezier(.4, 0, .2, 1), height .2s cubic-bezier(.4, 0, .2, 1), opacity .16s linear; }
+.tut-spot.is-on { outline: 2px solid var(--gold); box-shadow: 0 0 0 100vmax rgba(6, 7, 9, .56), 0 0 26px 3px rgba(237, 212, 162, .34); }
+/* While the screen is changing the ring fades out instead of sliding across to its next home. */
+.tut-spot.is-moving { opacity: 0; transition: opacity .14s linear; }
+.tut-spot.is-moving::after { display: none; }
 .tut-spot.is-on::after { content: ''; position: absolute; inset: -5px; border-radius: inherit; border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent); animation: tutPulse 1.9s ease-out infinite; }
 @keyframes tutPulse { 0% { opacity: .9; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.05); } }
 
-.tut-coach { pointer-events: auto; position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); width: min(420px, calc(100% - 24px)); display: flex; flex-direction: column; border: 1px solid var(--line-bright); border-top: 2px solid var(--gold); border-radius: 12px; background: linear-gradient(160deg, #232220, #12151a); box-shadow: 0 20px 60px #000c; transition: top .22s ease, bottom .22s ease, left .22s ease; }
-.tut-rail { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--line); background: rgba(0, 0, 0, .2); border-radius: 11px 11px 0 0; overflow: hidden; }
+.tut-coach { pointer-events: auto; position: absolute; left: 50%; bottom: 16px; top: auto; transform: translateX(-50%); width: min(420px, calc(100% - 24px)); display: flex; flex-direction: column; border: 1px solid var(--line-bright); border-top: 2px solid var(--gold); border-radius: 12px; background: linear-gradient(160deg, #232220, #12151a); box-shadow: 0 20px 60px #000c; }
+.tut-coach.is-top { top: 16px; bottom: auto; }
+.tut-coach.is-right { left: auto; right: 16px; top: 50%; bottom: auto; transform: translateY(-50%); }
+.tut-coach.is-left { left: 16px; right: auto; top: 50%; bottom: auto; transform: translateY(-50%); }
+.tut-rail { display: grid; grid-template-columns: repeat(4, 1fr); margin: 0; padding: 0 34px 0 0; list-style: none; border-bottom: 1px solid var(--line); background: rgba(0, 0, 0, .2); border-radius: 11px 11px 0 0; overflow: hidden; }
 .tut-rail li { display: flex; }
 .tut-rail button { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 8px 4px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: 600 10px Inter, system-ui, sans-serif; letter-spacing: .07em; text-transform: uppercase; cursor: pointer; transition: color .18s ease, border-color .18s ease; }
 .tut-rail button span { display: grid; place-items: center; width: 17px; height: 17px; border: 1px solid currentColor; border-radius: 50%; font-size: 9px; letter-spacing: 0; }
@@ -1191,7 +1197,10 @@ html.phone-frame .orientation-lock { display: none !important; }
 body.tutorial-open .version-tag { display: none; }
 
 @media (max-width: 760px) {
-  .tut-coach { left: 0; right: 0; bottom: 0; width: 100%; transform: none; border-radius: 12px 12px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .tut-coach { left: 0; right: 0; bottom: 0; top: auto; width: 100%; transform: none; border-radius: 12px 12px 0 0; border-left: 0; border-right: 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom); }
+  .tut-coach.is-top { top: 0; bottom: auto; border-radius: 0 0 12px 12px; border-top: 0; border-bottom: 2px solid var(--gold); padding-bottom: 0; padding-top: env(safe-area-inset-top); }
+  .tut-coach.is-top .tut-rail { order: 3; border-bottom: 0; border-top: 1px solid var(--line); border-radius: 0; }
+  .tut-coach.is-top .tut-skip { order: 4; border-radius: 0 0 11px 11px; }
   .tut-coach-body { max-height: 26vh; padding: 11px 14px 2px; }
   .tut-coach-body h2 { font-size: 15.5px; }
   .tut-coach-body p { font-size: 13px; }
@@ -1201,3 +1210,29 @@ body.tutorial-open .version-tag { display: none; }
 }
 
 body.tutorial-open { overflow: hidden; }
+
+/* The coach is docked over the game, so give whatever scrolls room to clear it. */
+body.tutorial-open.tut-coach-bottom .hub-sheet-body,
+body.tutorial-open.tut-coach-bottom .game-screen { padding-bottom: calc(var(--tut-coach-h, 220px) + 20px); }
+body.tutorial-open.tut-coach-top .hub-sheet-body,
+body.tutorial-open.tut-coach-top .game-screen { padding-top: calc(var(--tut-coach-h, 220px) + 16px); }
+body.tutorial-open .war-panel { padding-bottom: 8px; }
+@media (max-width: 760px) {
+  body.tutorial-open.tut-coach-bottom .hub-overlay { bottom: 0; }
+  body.tutorial-open.tut-coach-bottom .hub-sheet-body { padding-bottom: calc(var(--tut-coach-h, 240px) + 24px); }
+}
+
+/* Collapse the card to a single line so it never sits on a control you need. */
+.tut-min { position: absolute; top: 6px; right: 8px; z-index: 3; width: 30px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; cursor: pointer; }
+.tut-min span { display: block; width: 11px; height: 11px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: translateY(-2px) rotate(45deg); transition: transform .18s ease, border-color .18s ease; }
+.tut-min:hover span { border-color: var(--gold); }
+.tut-coach.is-min .tut-min span { transform: translateY(2px) rotate(-135deg); }
+.tut-coach.is-min .tut-rail,
+.tut-coach.is-min .tut-foot,
+.tut-coach.is-min .tut-skip,
+.tut-coach.is-min .tut-coach-body > .eyebrow,
+.tut-coach.is-min .tut-coach-body > #tutText,
+.tut-coach.is-min .tut-coach-body > .tut-task { display: none; }
+.tut-coach.is-min .tut-coach-body { max-height: none; padding: 9px 44px 9px 15px; overflow: visible; }
+.tut-coach.is-min .tut-coach-body h2 { margin: 0; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tut-coach.is-min { box-shadow: 0 10px 30px #000a; }

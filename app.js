@@ -1246,6 +1246,7 @@
   // It runs a real practice game: the real screen, the real menus, the real forms, filled with
   // bots. Every button behaves exactly as it does in a live game — actions are resolved here on
   // the client instead of being sent to the server, so nothing touches the room you are in.
+  let coachMin = false, coachMinByHand = false;   // the coach card collapsed to one line
   let tutBots = {};   // bot strength, kept out of state.houses so it stays hidden like a real game
   const BOT_NAMES = ['Ser Davos', 'Lady Olenna', 'Bronn', 'Maester Luwin', 'Podrick', 'Yara', 'Gendry'];
 
@@ -1622,32 +1623,82 @@
     const want = dialog?.open ? dialog : document.body;
     if (overlay.parentElement !== want) want.appendChild(overlay);
   }
+  // Where the coach sits decides how much room the screen below it needs; both are published as
+  // body classes and a CSS variable so the real game can pad itself clear of the card.
+  function tourCoachPlace(targetRect) {
+    const coach = $('tutCoach');
+    const w = coach.offsetWidth, h = coach.offsetHeight;
+    const vw = window.innerWidth, vh = window.innerHeight, M = 16;
+    const narrow = vw <= 760;
+    // Try every edge the card could dock to and keep the one that covers the target least.
+    const spots = narrow
+      ? [['bottom', 0, vh - h, vw, h], ['top', 0, 0, vw, h]]
+      : [['bottom', (vw - w) / 2, vh - h - M, w, h], ['top', (vw - w) / 2, M, w, h],
+         ['right', vw - w - M, (vh - h) / 2, w, h], ['left', M, (vh - h) / 2, w, h]];
+    const covered = ([, x, y, cw, ch]) => {
+      if (!targetRect) return 0;
+      const ox = Math.max(0, Math.min(targetRect.right, x + cw) - Math.max(targetRect.left, x));
+      const oy = Math.max(0, Math.min(targetRect.bottom, y + ch) - Math.max(targetRect.top, y));
+      return ox * oy;
+    };
+    let best = spots[0], bestArea = covered(spots[0]);
+    spots.slice(1).forEach(spot => { const a = covered(spot); if (a < bestArea - 500) { best = spot; bestArea = a; } });
+    // Some targets are simply too big to dodge — a map, a long form. Fold the card down to a
+    // single line rather than sit on controls the player has to reach.
+    // Only fold down on steps the player advances by acting on the game: a step that needs the
+    // Next button must keep it on screen.
+    if (!coachMinByHand && targetRect && TOUR[tutorialStep]?.until) {
+      const area = targetRect.width * targetRect.height;
+      // Too big to dodge, or taller than half the screen: fold down rather than sit on it.
+      const shouldMin = area > 0 && (bestArea / area > 0.22 || targetRect.height > vh * 0.55);
+      if (shouldMin !== coachMin) { coachMin = shouldMin; coach.classList.toggle('is-min', coachMin); return tourCoachPlace(targetRect); }
+    }
+    coach.classList.toggle('is-min', coachMin);
+    const mode = best[0];
+    ['top', 'right', 'left'].forEach(m => coach.classList.toggle(`is-${m}`, mode === m));
+    document.body.classList.toggle('tut-coach-top', mode === 'top');
+    document.body.classList.toggle('tut-coach-bottom', mode === 'bottom');
+    document.body.style.setProperty('--tut-coach-h', `${mode === 'top' || mode === 'bottom' ? h : 0}px`);
+  }
   function tourPlaceSpot() {
     tourHost();
     const step = TOUR[tutorialStep];
     if (!step || !tutorialOpen) return;
     const spot = $('tutSpot');
-    const coach = $('tutCoach');
     const node = step.target ? document.querySelector(step.target) : null;
     const r = node && node.getBoundingClientRect();
     if (!node || !r.width || !r.height) {
       spot.classList.remove('is-on');
       spot.style.width = spot.style.height = '0px';
       spot.style.top = spot.style.left = '50%';
-      coach.style.top = ''; coach.style.bottom = '';
+      tourCoachPlace(null);
       return;
     }
     const pad = 7;
-    spot.classList.add('is-on');
     spot.style.top = `${Math.round(r.top - pad)}px`;
     spot.style.left = `${Math.round(r.left - pad)}px`;
     spot.style.width = `${Math.round(r.width + pad * 2)}px`;
     spot.style.height = `${Math.round(r.height + pad * 2)}px`;
-    if (window.innerWidth > 760) {
-      const room = window.innerHeight - r.bottom;
-      if (room < coach.offsetHeight + 30 && r.top > coach.offsetHeight + 30) { coach.style.top = '16px'; coach.style.bottom = 'auto'; }
-      else { coach.style.top = 'auto'; coach.style.bottom = '16px'; }
-    } else { coach.style.top = ''; coach.style.bottom = ''; }
+    spot.classList.add('is-on');
+    tourCoachPlace(r);
+  }
+  // Menus open, sheets scroll and panels appear a frame or two after the click, so one measurement
+  // is never enough: keep re-measuring briefly until the target stops moving.
+  let settleTimer = 0;
+  function tourSettle(ms = 700) {
+    clearTimeout(settleTimer);
+    const started = Date.now();
+    let last = '';
+    const beat = () => {
+      if (!tutorialOpen) return;
+      tourPlaceSpot();
+      const spot = $('tutSpot');
+      const now = `${spot.style.top}|${spot.style.left}|${spot.style.width}|${spot.style.height}`;
+      const moved = now !== last;
+      last = now;
+      if (Date.now() - started < ms || moved) settleTimer = setTimeout(() => requestAnimationFrame(beat), moved ? 40 : 90);
+    };
+    requestAnimationFrame(beat);
   }
   function tourScrollTo(step) {
     if (!step.target) return;
@@ -1655,11 +1706,12 @@
     if (!node) return;
     const r = node.getBoundingClientRect();
     const coachH = $('tutCoach').offsetHeight + 24;
-    const top = 70, bottom = window.innerHeight - coachH;
+    const coachTop = $('tutCoach').classList.contains('is-top');
+    const top = coachTop ? coachH : 70;
+    const bottom = window.innerHeight - (coachTop ? 20 : coachH);
     if (r.top >= top && r.bottom <= bottom) return;
     node.scrollIntoView({ block: r.height > bottom - top ? 'start' : 'center', behavior: 'smooth' });
   }
-
   // Called after anything happens: advances the moment the step's job is done.
   let tourAdvancing = false;
   function tourTick() {
@@ -1671,15 +1723,31 @@
     $('tutTask').classList.toggle('is-done', done && Boolean(step.task));
     if (done && step.until && tutorialStep < TOUR.length - 1) {
       tourAdvancing = true;
-      setTimeout(() => { tourAdvancing = false; if (tutorialOpen && TOUR[tutorialStep] === step) tourGo(tutorialStep + 1); }, 620);
+      $('tutSpot').classList.add('is-moving');
+      setTimeout(() => { tourAdvancing = false; if (tutorialOpen && TOUR[tutorialStep] === step) tourGo(tutorialStep + 1); }, 340);
       return;
     }
-    requestAnimationFrame(tourPlaceSpot);
+    tourSettle(260);
   }
 
+  // Close whatever the player left open if this step points at something behind it, so the ring
+  // never lands on a button hidden under a menu.
+  function tourStageFor(step) {
+    const node = step.target ? document.querySelector(step.target) : null;
+    const dialog = $('mapDialog');
+    if (dialog?.open) {
+      if (node && dialog.contains(node)) return;   // this step works inside the war map
+      setMapOpen(false);
+    }
+    const overlay = $('hubOverlay');
+    if (!overlay.hidden && (!node || !overlay.contains(node))) closeHub();
+  }
   function renderTutorial() {
     tutorialStep = Math.min(Math.max(tutorialStep, 0), TOUR.length - 1);
     const step = TOUR[tutorialStep];
+    coachMin = false; coachMinByHand = false;
+    $('tutCoach').classList.remove('is-min');
+    try { tourStageFor(step); } catch (e) { /* worst case the step just shows its text */ }
     try { step.enter?.(); } catch (e) { /* a step that cannot set itself up still shows its text */ }
     const inLesson = TOUR.filter(s => s.lesson === step.lesson);
     const at = inLesson.indexOf(step);
@@ -1700,10 +1768,16 @@
     $('tutNext').hidden = Boolean(step.until) && !last;
     $('tutNext').innerHTML = last ? 'Finish <span>→</span>' : 'Next <span>→</span>';
     $('tutCoach').querySelector('.tut-coach-body').scrollTop = 0;
-    requestAnimationFrame(() => { tourScrollTo(step); setTimeout(tourPlaceSpot, 240); });
+    $('tutSpot').classList.add('is-moving');
+    requestAnimationFrame(() => {
+      tourCoachPlace(null);
+      tourScrollTo(step);
+      // Let the menu this step opened actually lay out before the ring reappears on it.
+      setTimeout(() => { $('tutSpot').classList.remove('is-moving'); tourSettle(800); }, 180);
+    });
     tourTick();
   }
-  function tourGo(index) { tutorialStep = index; renderTutorial(); }
+  function tourGo(index) { tutorialStep = index; renderTutorial(); window.__TUT_TARGET = TOUR[tutorialStep]?.target || ''; }
 
   function openTutorial(step = 0) {
     if (!state) { showToast('Still connecting — try the tutorial again in a moment.', 'error'); return; }
@@ -1716,14 +1790,19 @@
   function closeTutorial() {
     if (!tutorialOpen) return;
     tutorialOpen = false;
+    clearTimeout(settleTimer);
     const overlay = $('tutorialOverlay');
     overlay.hidden = true;
     if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
+    document.body.classList.remove('tut-coach-top', 'tut-coach-bottom');
+    document.body.style.removeProperty('--tut-coach-h');
+    $('tutCoach').classList.remove('is-min', 'is-top', 'is-right', 'is-left');
     if (tutorialLive) tutorialEndGame();
   }
-  window.addEventListener('resize', () => { if (tutorialOpen) tourPlaceSpot(); }, { passive: true });
+  window.addEventListener('resize', () => { if (tutorialOpen) tourSettle(300); }, { passive: true });
   window.addEventListener('scroll', () => { if (tutorialOpen) tourPlaceSpot(); }, { passive: true, capture: true });
-  document.addEventListener('click', () => { if (tutorialOpen) setTimeout(tourTick, 60); }, true);
+  // Any tap can open a menu or swap a panel, so re-measure as the screen settles afterwards.
+  document.addEventListener('click', () => { if (!tutorialOpen) return; setTimeout(tourTick, 50); tourSettle(500); }, true);
 
 
   let editingBotId = null;
@@ -2203,6 +2282,7 @@
   function render() {
     updateScreens();
     applyTheme();
+    if (tutorialOpen) tourSettle(400);
     if (!state) return;
     applyRuleVisibility();
     tickPhaseTimer();
@@ -2603,6 +2683,7 @@
     if (action === 'exp-new') { setExperience('new'); render(); openTutorial(0); return; }
     if (action === 'exp-veteran') { setExperience('veteran'); render(); return; }
     if (action === 'tut-close') { closeTutorial(); return; }
+    if (action === 'tut-min') { coachMin = !coachMin; coachMinByHand = true; $('tutCoach').classList.toggle('is-min', coachMin); tourSettle(400); return; }
     if (action === 'tut-go') { tourGo(Math.max(0, tourLessonStart(Number(button.dataset.step) || 0))); return; }
     if (action === 'tut-back') { tourGo(tutorialStep - 1); return; }
     if (action === 'tut-next') {

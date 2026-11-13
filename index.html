@@ -43,7 +43,7 @@
   <link rel="icon" type="image/png" href="./assets/iron-throne-fire-icon-tab.png?v=2">
   <script>
     // The one place to bump on every change: it versions the stylesheet and scripts too, so browsers never reuse stale copies.
-    window.APP_VERSION = '1.4.5';
+    window.APP_VERSION = '1.4.6';
     if (!window.PHONE_SHELL) document.write('<link rel="stylesheet" href="./style.css?v=' + APP_VERSION + '">');
   </script>
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer></script>
@@ -125,6 +125,7 @@
   <div id="tutorialOverlay" class="tut-overlay" hidden>
     <div class="tut-dim" id="tutDim" aria-hidden="true"><div class="tut-spot" id="tutSpot"></div></div>
     <aside class="tut-coach" id="tutCoach" role="dialog" aria-modal="false" aria-labelledby="tutTitle">
+      <button class="tut-min" id="tutMin" type="button" data-action="tut-min" aria-label="Collapse the tutorial card" title="Collapse"><span></span></button>
       <ol class="tut-rail" id="tutRail">
         <li><button type="button" data-action="tut-go" data-step="0"><span>1</span>Basics</button></li>
         <li><button type="button" data-action="tut-go" data-step="1"><span>2</span>Money</button></li>

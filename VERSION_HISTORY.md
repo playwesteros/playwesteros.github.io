@@ -2,6 +2,14 @@
 
 Updated whenever a major change ships. Newest first.
 
+## v1.4.6 (Nov 13, 2026)
+Tutorial polish, all from playing it:
+- **Darker wash** outside the spotlight, so the lit control reads as the only live thing on screen.
+- **The ring no longer lags.** It fades out while a menu opens and fades back in once the new screen has settled, instead of sliding across from where it used to be, and it keeps re-measuring until the target stops moving.
+- **Steps wait for the screen.** A step pointing at something behind an open menu now closes that menu first, so the tutorial never rings a button you cannot see.
+- **Finishing a task moves on by itself**, roughly twice as fast as before.
+- **The card gets out of the way.** It docks to whichever edge covers the target least — including the sides on a wide screen — and folds down to a single line when a target is too big to dodge, which is what was hiding buttons on a phone. A chevron collapses and expands it by hand at any time.
+
 ## v1.4.5 (Nov 13, 2026)
 - **"Have you played before?"** Asked once, straight after your name. The answer is remembered.
 - **The tutorial is a real practice game.** Choosing *This is my first time* seats you in a round against bots on the actual game screen — the real top bar, the real three menus, the real forms and the real war map. Actions are resolved on your own device, so nothing touches the game you joined, and the real game carries on untouched behind it.
