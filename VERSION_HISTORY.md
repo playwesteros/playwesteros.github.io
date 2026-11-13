@@ -2,12 +2,13 @@
 
 Updated whenever a major change ships. Newest first.
 
-## v1.4.5 (Nov 11, 2026)
-- **"Have you played before?"** Straight after you enter your name, the game asks once whether this is your first time. The answer is remembered, so nobody is asked twice.
-- **An interactive tutorial on a practice board:** choosing *This is my first time* opens a hands-on tour. Everything but the thing being explained is dimmed out, and a card beside it tells you what you are looking at. It runs on a mock board — a fake top bar, the three menus and working forms — so nothing touches a real game.
-- **You do it, not just read it.** The tour has you host a game, claim a house, press READY, send gold to another house, offer an alliance, send a raven, pay a royal decree, pick a city and march an army at it, recruit troops and watch your upkeep climb, and stake gold on a spy mission. Steps with a task hold *Next* until you have done it (or pressed *Skip the tutorial*), and the board tops your treasury back up so a task is never impossible.
-- **Four lessons:** the main menu (hosting, the PIN, host setup, the banner wall, and the header, round pill and footer in game), then one each for **Money**, **Relations** and **Army**. Jump between them with the rail, the arrow keys, or Back/Next; Escape closes it.
-- **Reopen it any time:** *How to play* now sits in your settings menu under the sigil in the top left.
+## v1.4.5 (Nov 13, 2026)
+- **"Have you played before?"** Asked once, straight after your name. The answer is remembered.
+- **The tutorial is a real practice game.** Choosing *This is my first time* seats you in a round against bots on the actual game screen — the real top bar, the real three menus, the real forms and the real war map. Actions are resolved on your own device, so nothing touches the game you joined, and the real game carries on untouched behind it.
+- **You play it, you don't click through it.** Pressing Money opens the Money menu, because it is the Money menu. You pick the house and type the amount yourself to send a gift, offer a public or secret alliance, answer the King's decree, recruit and watch upkeep climb, stake gold on spies, and march on a city you choose off the map. Each step moves on by itself the moment you do the thing.
+- **The spotlight shades, it does not black out.** The rest of the screen stays readable behind a light wash while the step's control is ringed in gold.
+- **Leaving puts you straight back** into your own game, wherever it has got to.
+- **Reopen it any time** from *How to play*, under the sigil in the top left.
 
 ## v1.4.4 (Nov 11, 2026)
 - **Bigger city pieces:** castles are larger on the map, with the name and house label moved clear of them.
